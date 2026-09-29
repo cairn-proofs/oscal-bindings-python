@@ -1,0 +1,34 @@
+# Build artifacts
+/build/
+/dist/
+*.egg-info/
+
+# Hatch / venv
+/.hatch/
+.venv/
+
+# Coverage
+.coverage
+.coverage.*
+/htmlcov/
+/coverage.xml
+/junit.xml
+
+# Python
+__pycache__/
+*.py[cod]
+.mypy_cache
+.ruff_cache
+.pytest_cache
+
+# Property-based testing: remote corpus cache and Hypothesis example database
+/tests/.corpus_cache/
+.hypothesis/
+
+# Kiro: per-machine editor settings and spec execution history. Specs
+# (requirements/design/tasks) and steering are committed.
+/.kiro/settings/
+/.kiro/specs/**/tasks.meta.json
+
+.DS_Store
+tmp

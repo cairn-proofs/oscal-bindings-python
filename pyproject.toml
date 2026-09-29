@@ -1,0 +1,193 @@
+[build-system]
+# Exact pin: build isolation fetches the backend fresh, and no lockfile covers it.
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+# Distribution name matches the import package (`oscal_bindings`). The repo carries
+# the language suffix (oscal-bindings-python) because sibling bindings in other
+# languages share the cairn-proofs org; package registries don't need it.
+name = "oscal-bindings"
+version = "0.1.0"
+description = "Typed Python data bindings for OSCAL, generated from the NIST JSON Schema"
+readme = "README.md"
+# PEP 639 license expression; no License :: classifier alongside it.
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+# Name only, no email: published metadata can't be edited after upload, and
+# contact goes through [project.urls] (issues).
+authors = [{ name = "Fritz Kunstler" }]
+keywords = ["oscal", "nist", "compliance", "security-controls", "fedramp", "pydantic"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+requires-python = ">=3.11"
+dependencies = ["pydantic[email]>=2.0"]
+
+[project.urls]
+Homepage = "https://github.com/cairn-proofs/oscal-bindings-python"
+Source = "https://github.com/cairn-proofs/oscal-bindings-python"
+Issues = "https://github.com/cairn-proofs/oscal-bindings-python/issues"
+
+[project.optional-dependencies]
+codegen = ["datamodel-code-generator[http]==0.59.0"]
+
+# Every Hatch env installs from a hatch-pip-compile lockfile (requirements.txt for
+# default, requirements/requirements-<env>.txt otherwise). Hatch re-locks when an
+# env's declared dependencies change; upgrade deliberately with
+# `PIP_COMPILE_UPGRADE=1 hatch env run --env <env> -- python --version`
+# (hatch-test: upgrade default first, since it constrains). Transitive pins matter
+# here: datamodel-code-generator formats its output with black and isort, so an
+# unlocked env can change v1/models.py without any change in this repo.
+[tool.hatch.envs.default]
+type = "pip-compile"
+pip-compile-resolver = "uv"
+pip-compile-installer = "uv"
+pip-compile-hashes = true
+python = "3.12"
+# pytest is deliberately absent: tests run in hatch-test (`hatch test`), whose
+# built-in pytest range is Hatch's to choose.
+dependencies = ["mypy", "datamodel-code-generator[http]==0.59.0", "pdoc", "ruff==0.16.8"]
+
+[tool.hatch.envs.default.scripts]
+generate = "datamodel-codegen --input ./schemas/1.2.3/oscal_complete_schema.json --output src/oscal_bindings/v1/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --collapse-root-models --use-annotated --field-constraints --reuse-model --target-python-version 3.11 --use-schema-description --disable-timestamp && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models src/oscal_bindings/v1/models.py"
+docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
+# No --install-types: it would pip-install stubs at run time, outside the lockfile.
+# Add any stub packages mypy needs to `dependencies` above instead.
+typing = "mypy src/oscal_bindings"
+lint = [
+    "ruff check .",
+    "ruff format --check .",
+]
+release = ["generate", "lint", "typing", "hatch test --all --cover", "docs"]
+
+[tool.hatch.envs.hatch-test]
+type = "pip-compile"
+pip-compile-resolver = "uv"
+pip-compile-installer = "uv"
+pip-compile-hashes = true
+# Resolve shared deps (pydantic, pytest, ...) to the same versions as default.
+pip-compile-constraint = "default"
+parallel = true
+extra-dependencies = ["hypothesis"]
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.11", "3.12"]
+
+[tool.pytest.ini_options]
+addopts = ["--durations=5", "--color=yes", "--junitxml=junit.xml"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source_pkgs = ["oscal_bindings"]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+# Top-level so both the linter and the formatter honor it; `extend-exclude`
+# (not `exclude`) keeps Ruff's default exclusion list intact.
+extend-exclude = ["./build", ".hatch", "src/oscal_bindings/v1/models.py", "*.md"]
+# Honor exclusions even when a path is named explicitly on the command line,
+# so the generated module is never rewritten by a targeted invocation.
+force-exclude = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+isort.known-first-party = ["oscal_bindings"]
+select = [
+  "F", "E", "W",        # pyflakes, pycodestyle
+  "I",                  # isort
+  "N",                  # pep8-naming
+  "UP",                 # pyupgrade
+  "B",                  # flake8-bugbear
+  "A",                  # flake8-builtins
+  "C4",                 # flake8-comprehensions
+  "DTZ",                # flake8-datetimez
+  "EM",                 # flake8-errmsg        <- keeps EM101 active
+  "EXE", "FA", "ICN", "ISC", "PIE", "PYI", "PT", "RSE", "RET", "SLF", "SIM",
+  "INP",                # flake8-no-pep420     <- keeps INP001 active
+  "T20",                # flake8-print         <- keeps T201 active
+  "TID",                # flake8-tidy-imports  <- keeps TID252 active
+  "TC",                 # flake8-type-checking
+  "S",                  # flake8-bandit        <- keeps S101 active
+  "ARG", "PTH", "PGH", "FLY", "PERF", "FURB", "RUF",
+  "PL",                 # pylint               <- keeps PLR2004, PLC0415 active
+  "TRY",                # tryceratops          <- keeps TRY003 active
+]
+ignore = ["ISC001"]     # implicit-str-concat: documented formatter conflict
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"tests/**/*" = ["PLR2004", "S101", "TID252", "PLC0415", "INP001"]
+# Build/codegen scripts report progress and errors on stdout/stderr. scripts/ is
+# intentionally not a package (like tests/), so INP001 does not apply.
+"scripts/**/*" = ["T201", "INP001"]
+# collapse_scalar_root_models() is a single-pass line scanner: its branches are the
+# cases of one state machine over the generated source, sharing one cursor (`i`).
+# Splitting it would scatter that shared cursor state across helpers.
+"scripts/postprocess_models.py" = ["PLR0912", "PLR0915"]
+# Inline exception messages. A deferral, not a blessing: these findings flag a
+# real API weakness (typed parsers raise a flat OscalParseError on a document-type
+# mismatch), to be fixed with a dedicated WrongDocumentTypeError.
+"src/oscal_bindings/v1/**" = ["EM101", "EM102", "TRY003"]
+# PEP 484 explicit re-export idiom (`import X as X`) — correct in a compat shim
+"src/oscal_bindings/__init__.py" = ["PLC0414"]
+
+[tool.hatch.build]
+directory = "./build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oscal_bindings"]
+
+# Explicit allowlist: without it Hatch ships every non-gitignored file, including
+# untracked ones. The sdist holds what's needed to build the wheel, regenerate
+# models, and run the tests under the locked envs. Repo-only material (.kiro/,
+# .agents/, AGENTS.md, mise.toml) and inactive schema bundles stay out. Keep the
+# schema path in step with ACTIVE_SCHEMA_RELEASE in scripts/postprocess_models.py.
+# pyproject.toml and PKG-INFO are always added; declared license-files are
+# added automatically.
+[tool.hatch.build.targets.sdist]
+only-include = [
+  "src",
+  "tests",
+  "scripts",
+  "schemas/1.2.3",
+  "requirements.txt",
+  "requirements",
+  "README.md",
+  "DEVELOPING.md",
+]
+
+[tool.hatch.envs.hatch-build]
+type = "pip-compile"
+pip-compile-resolver = "uv"
+pip-compile-installer = "uv"
+pip-compile-hashes = true
+
+[tool.hatch.env]
+requires = ["hatch-pip-compile==1.11.8"]
+
+[tool.uv.workspace]
