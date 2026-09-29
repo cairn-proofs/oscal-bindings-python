@@ -3,8 +3,12 @@
 ## Workspace Setup
 
 ```bash
-hatch run release   # generates models, runs tests, builds docs
+mise install --locked python uv pypi:hatch   # toolchain from mise.toml / mise.lock
+hatch run release                            # generates models, runs tests, builds docs
 ```
+
+Hatch comes only from mise (see "Locked Environments"). If you have Hatch from pip,
+pipx, or brew, uninstall it so there's a single Hatch on the machine.
 
 ## Development Workflow
 
@@ -43,6 +47,14 @@ a new black release could change `v1/models.py` with no change in this repo.
 - To upgrade on purpose: `PIP_COMPILE_UPGRADE=1 hatch env run --env default -- python --version`,
   then the same with `--env hatch-test`. Afterwards, run `hatch run generate` and
   review any `models.py` diff as formatter drift.
+- Hatch itself comes from mise, pinned in `mise.toml` together with the
+  `hatch-pip-compile` plugin and locked with its full dependency graph in `mise.lock`
+  and `.mise/locks/`. CI installs from the same files. Don't install Hatch any other
+  way (pip, pipx, brew). To bump it, edit the version in `mise.toml` and run
+  `mise lock` and then `mise install --locked python uv pypi:hatch`. The `hatch-test`
+  lockfiles depend on the Hatch version, because Hatch supplies that env's default
+  pytest/coverage ranges, so also run `hatch test --all` and commit the re-locked
+  `requirements-hatch-test.*.txt` files.
 - Do not add `mypy --install-types`: it installs stubs at run time, outside the lock.
   Declare any stub packages mypy needs in the default env's `dependencies`.
 

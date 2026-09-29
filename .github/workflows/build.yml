@@ -1,14 +1,26 @@
 name: CI
 
-# Every push (branches and tags) runs CI. A push of a `v*` tag additionally
-# creates a draft GitHub release carrying the wheel and sdist built here;
-# publishing that draft triggers release.yml, which uploads those exact files
-# to PyPI. Nothing downstream rebuilds.
+# CI runs once per PR update (on GitHub's trial merge into main), on every push
+# to main, and on `v*` tags. Branches without a PR can be run by hand
+# (workflow_dispatch). A `v*` tag additionally creates a draft GitHub release
+# carrying the wheel and sdist built here; publishing that draft triggers
+# release.yml, which uploads those exact files to PyPI. Nothing downstream
+# rebuilds.
 on:
   push:
+    branches: ["main"]
+    # Required: once `branches` is set, tag pushes no longer trigger the
+    # workflow unless listed, and draft-release would silently never run.
+    tags: ["v*"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+# A newer push to the same PR cancels its superseded run. Runs for main and
+# tags are never cancelled, so a release build can't be killed mid-flight.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -19,13 +31,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
 
-      # Pinned like every other tool in the repo; bump deliberately.
-      - name: Install Hatch
-        run: pip install hatch==1.15.1
+      # Python, uv, and Hatch (with hatch-pip-compile) from mise.toml, installed
+      # from mise.lock and its .mise/locks sidecar (the action adds --locked when a
+      # lockfile is present). Same pins as a developer machine; nothing
+      # re-resolves. mise itself is pinned; the action is pinned by commit.
+      - name: Install toolchain (mise)
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5  # v5.0.0
+        with:
+          version: 2026.9.15
 
       # Fail before the expensive steps if a release tag disagrees with the
       # version the packages would be stamped with.

@@ -45,7 +45,7 @@ Managed through Hatch environments (`[tool.hatch.envs.default.dependencies]`) ra
 | Hatch (`hatchling` backend) | Build backend + environment/script management. Wheel packages `src/oscal_bindings`; build output goes to `./build`. |
 | `hatch-pip-compile` (`==1.11.8`) | Env type for `default`, `hatch-test`, `hatch-build`; writes hashed lockfiles `requirements.txt` and `requirements/requirements-hatch-{test.py3.11,test.py3.12,build}.txt`. `hatch-test` is constrained by `default`. |
 | `uv` | Resolver and installer behind `hatch-pip-compile`. No `uv.lock`: the pip-compile lockfiles are the single lock system. `[tool.uv.workspace]` is still declared. |
-| `mise` | Pins the local Python toolchain to 3.12 (`mise.toml`). |
+| `mise` | Sole installer of the toolchain, locally and in CI (`jdx/mise-action`): Python 3.12, uv, and Hatch 1.18.1 with `hatch-pip-compile` injected, locked with hashes in `mise.lock` + `.mise/locks/`. |
 
 ## Python Version Support
 
