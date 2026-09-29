@@ -4,7 +4,7 @@
 
 `oscal-bindings` provides typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Security Controls Assessment Language) release 1.2.3. The Pydantic v2 models are generated from the official NIST JSON Schema using `datamodel-code-generator`, then post-processed to give classes clean, ergonomic names. A thin runtime layer adds parsing/serialization/validation utilities, and a hand-written `extensions` package layers uniform accessors, back-matter builders, and element-level validation on top of the generated models.
 
-The implementation lives in a **major-version package**, `oscal_bindings.v1`. The top-level `oscal_bindings` is a pure re-export compatibility shim, so both `from oscal_bindings.v1 import ...` (preferred for new code) and the flat `from oscal_bindings import ...` resolve to the same objects.
+The implementation lives in a **major-version package**, `oscal_bindings.v1`. The top-level `oscal_bindings` re-exports it, so both `from oscal_bindings.v1 import ...` (preferred for new code) and the flat `from oscal_bindings import ...` resolve to the same objects.
 
 - **Package name:** `oscal-bindings` (import as `oscal_bindings`, or `oscal_bindings.v1`)
 - **Repository:** `cairn-proofs/oscal-bindings-python`. The `-python` suffix is for the repo only: sibling bindings in other languages live in `oscal-bindings-<lang>` repos, while each registry package uses that ecosystem's native name.
@@ -44,7 +44,7 @@ No other programming languages are present. There are no compiled extensions, no
 ```
 oscal-bindings-python/
 ├── src/oscal_bindings/
-│   ├── __init__.py              # Compat shim — pure re-exports from .v1, defines nothing
+│   ├── __init__.py              # Pure re-exports from .v1, defines nothing
 │   ├── models.py                # Alias module → oscal_bindings.v1.models (NOT generated)
 │   ├── parser.py                # Alias module → oscal_bindings.v1.parser
 │   ├── extensions/
@@ -67,7 +67,7 @@ oscal-bindings-python/
 │       └── oscal_complete_schema.json   # The single schema fed to datamodel-codegen
 ├── tests/                       # pytest suite (one file per source module)
 │   └── support/                 # Importable test helpers (not collected)
-│       ├── version_package.py   # Pre-move surface snapshot + schema $id helpers
+│       ├── version_package.py   # Public-surface snapshot + schema $id helpers
 │       └── corpus.py            # Remote OSCAL corpus fetcher for property tests
 ├── requirements.txt             # default-env lockfile (hatch-pip-compile output)
 ├── requirements/                # hatch-test (per Python) + hatch-build lockfiles
@@ -98,12 +98,12 @@ graph TD
             VAL["validate_element.py"]
         end
     end
-    subgraph Shim["src/oscal_bindings (compat shim)"]
+    subgraph Shim["src/oscal_bindings (top-level re-exports)"]
         TOP["__init__.py"]
         ALIAS["models.py / parser.py<br/>extensions/__init__.py<br/>(alias modules)"]
     end
     NEW["from oscal_bindings.v1 import ... (preferred)"]
-    OLD["from oscal_bindings import ... (still supported)"]
+    OLD["from oscal_bindings import ... (equivalent)"]
 
     SCHEMA --> DCG --> MODELS
     SCHEMA --> PP
@@ -145,10 +145,10 @@ graph TD
 - **Document wrapper names are schema-derived, not positional** — the post-processor identifies each wrapper by its `$schema` field and names it from its single body field, so reordering or adding document types cannot silently mis-name a class.
 - **Re-export-only packages** — neither `v1/__init__.py` nor the top-level `__init__.py` defines symbols; the full API is visible in one place.
 - **Major-version namespace** — the binding namespace is scoped to the OSCAL *major* version (`v1`), because OSCAL is backward-compatible within a major version. A minor/patch refresh regenerates `v1` in place and never changes consumer import paths; OSCAL 2.0 would be the trigger for a second version package (see `DEVELOPING.md` Key Design Decisions).
-- **Non-breaking compatibility shim** — the flat pre-`v1` import paths (`oscal_bindings`, `oscal_bindings.models`, `oscal_bindings.parser`, `oscal_bindings.extensions`) all still resolve, to the *identical* objects, via explicit alias modules (not `sys.modules` tricks).
+- **Top-level re-exports** — the top-level import paths (`oscal_bindings`, `oscal_bindings.models`, `oscal_bindings.parser`, `oscal_bindings.extensions`) resolve to the *identical* objects as their `v1` counterparts, via explicit alias modules (not `sys.modules` tricks).
 
 ## Testing
 
-- `pytest`, `testpaths = ["tests"]`, one test module per source module plus an import/back-compat smoke test (`test_oscal_bindings.py`), post-processor tests (`test_postprocess.py`), Hypothesis property tests (`test_prop_postprocess.py`), and shared helpers in `tests/support/` (`version_package.py`, `corpus.py`).
+- `pytest`, `testpaths = ["tests"]`, one test module per source module plus an import smoke test with top-level/v1 parity checks (`test_oscal_bindings.py`), post-processor tests (`test_postprocess.py`), Hypothesis property tests (`test_prop_postprocess.py`), and shared helpers in `tests/support/` (`version_package.py`, `corpus.py`).
 - Matrix runs across Python 3.11 and 3.12 (`hatch test --all`), parallelized.
 - Reports: `junit.xml` (JUnit), `coverage.xml` (Cobertura), `htmlcov/` (HTML). All git-ignored.

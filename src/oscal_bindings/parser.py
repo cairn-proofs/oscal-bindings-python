@@ -1,14 +1,14 @@
-"""Legacy module path for the OSCAL parser helpers.
+"""Top-level module path for the OSCAL parser helpers.
 
-The parser now lives in :mod:`oscal_bindings.v1.parser`; this module re-exports
-its public surface so that ``from oscal_bindings.parser import parse_oscal``
-keeps resolving. Re-export binds the same objects, so type identity holds across
+The parser lives in :mod:`oscal_bindings.v1.parser`; this module re-exports its
+public surface so that ``from oscal_bindings.parser import parse_oscal``
+resolves. Re-export binds the same objects, so type identity holds across
 both paths.
 
 An explicit alias module rather than ``sys.modules`` aliasing: it is greppable
 and survives static analysis, ``mypy``, and ``pdoc`` without special cases.
 
-Unlike the ``extensions`` and top-level shims, the names are listed explicitly
+Unlike the ``extensions`` and top-level re-exports, the names are listed explicitly
 here because :mod:`oscal_bindings.v1.parser` declares no ``__all__`` of its own —
 a star-import would drag in its module-level imports alongside the API.
 """

@@ -1,10 +1,10 @@
 # Components
 
-The library has five source components inside the version package `src/oscal_bindings/v1/` (plus the top-level compatibility shim, the code-generation script, and the test suite). Each maps to one file. All paths below are relative to `src/oscal_bindings/` unless noted.
+The library has five source components inside the version package `src/oscal_bindings/v1/` (plus the top-level re-export package, the code-generation script, and the test suite). Each maps to one file. All paths below are relative to `src/oscal_bindings/` unless noted.
 
 ```mermaid
 graph LR
-    SHIM["oscal_bindings/__init__.py<br/>+ alias modules<br/>(compat shim)"] --> INIT
+    SHIM["oscal_bindings/__init__.py<br/>+ alias modules<br/>(re-exports)"] --> INIT
     INIT["v1/__init__.py<br/>Public API"] --> PARSER
     INIT --> EXT
     PARSER["v1/parser.py"] --> MODELS["v1/models.py<br/>(generated)"]
@@ -85,9 +85,9 @@ graph LR
 - `__oscal_schema_version__ = "1.2.3"` — the full OSCAL release the vendored bundle (and therefore the models) came from. A literal by design; a test asserts it against the release element of the bundle's schema `$id`.
 - `__all__` is the curated ~35-name surface (wrappers, parsers, facade, builders, validation, exceptions); the generated model names arrive via the star-import and are intentionally *not* in `__all__`.
 
-## 7. Compatibility shim — `oscal_bindings/` top level
+## 7. Top-level re-exports — `oscal_bindings/`
 
-**Responsibility:** Keep every pre-`v1` import path resolving, to the identical objects. Four hand-written files, none of them generated:
+**Responsibility:** Expose the `v1` surface at the top level (`oscal_bindings`, `.models`, `.parser`, `.extensions`), resolving to the identical objects. Four hand-written files, none of them generated:
 
 | File | Behavior |
 |------|----------|
@@ -114,16 +114,16 @@ Notable symbols:
 | `report_wrapper_count_mismatch` | stderr report naming both the derived and expected counts |
 | `find_duplicate_class_definitions` / `report_collisions` | Accumulate *all* duplicate class definitions after renaming and report the complete list; the file is not written |
 | `collapse_scalar_root_models`, `fix_email_str_patterns`, `fix_non_string_patterns`, `rename_classes`, `rename_root_model`, `build_namespace_renames` | The transform phases |
-| `PRESERVE_AS_ROOTMODEL`, `COLLISION_OVERRIDES`, `VARIANT_RENAMES` | Rename policy tables (the positional `DOCUMENT_RENAMES` dict is gone) |
+| `PRESERVE_AS_ROOTMODEL`, `COLLISION_OVERRIDES`, `VARIANT_RENAMES` | Rename policy tables |
 
 ## 9. `tests/` — test suite
 
 | Module | Covers |
 |--------|--------|
 | `test_parser.py`, `test_document.py`, `test_builders.py`, `test_validate_element.py` | One per source component; test classes group scenarios (`TestAssessmentPeriod`, `TestMakeResource`, `TestTypedParsers`) |
-| `test_oscal_bindings.py` | Import smoke test **and** back-compatibility: every pre-move public name imports from `oscal_bindings`, all three legacy module paths resolve, type identity holds across paths, and `__oscal_schema_version__` is semver-shaped and matches the bundle `$id` |
-| `test_postprocess.py` | Post-processor units: content-based derivation against shuffled ordinals, the ambiguity/count/collision guards, CLI argument combinations, and a parity gate asserting the derivation reproduces the published eight names against the retained 1.2.2 bundle |
+| `test_oscal_bindings.py` | Import smoke test **and** top-level parity: every name in the public-surface snapshot imports from `oscal_bindings`, all three top-level module paths resolve, type identity holds across paths, and `__oscal_schema_version__` is semver-shaped and matches the bundle `$id` |
+| `test_postprocess.py` | Post-processor units: content-based derivation against shuffled ordinals, the ambiguity/count/collision guards, CLI argument combinations, and a parity gate asserting the derivation reproduces the published eight names from the committed `v1/models.py` |
 | `test_prop_postprocess.py` | Hypothesis property tests for the build-time derivation and guards (position-independence; collision accumulation) |
-| `test_prop_version_package.py` | Properties 3–6: published-surface round trip, type identity across the shim, version-constant consistency, namespace stability |
-| `support/version_package.py` | Pre-move `__all__` snapshot and schema `$id` helpers shared by the back-compat tests |
+| `test_prop_version_package.py` | Properties 3–6: published-surface round trip, type identity across the top-level and `v1` paths, version-constant consistency, namespace stability |
+| `support/version_package.py` | Public-surface `__all__` snapshot and schema `$id` helpers shared by the import-path tests |
 | `support/corpus.py` | Shared fixtures/corpus helpers |

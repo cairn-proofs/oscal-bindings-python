@@ -101,13 +101,13 @@ changes only for a new OSCAL **major** version.
 - **Hand-written extensions, not patched generated code** — uniform accessors (`OscalDoc`) and back-matter builders live under `extensions/` rather than being injected into `models.py`. This keeps the codegen pipeline a pristine `datamodel-codegen` run + a rename-only post-pass; convenience layers can evolve without touching generated output.
 - **Major-version namespace** — the bindings live in `oscal_bindings.v1`, named for the OSCAL major version with no minor or patch component. OSCAL is backward-compatible within a major version (newer schemas accept older documents; minor bumps have not added required fields), so the compatibility boundary is the major version and one binding set covers every 1.x producer. A minor-version namespace (`v1_2`, `v1_3`) was considered and rejected: it would encode a break at each routine refresh that does not exist. `__oscal_schema_version__` records the exact release the models were generated from. This mirrors NIST's own schema `$id` (`ns/oscal/1.0/1.2.2/...`), which scopes the namespace to the major line and hangs the release off it. OSCAL 2.0 is the trigger for a second version package; nothing is factored out between version packages before then, because the seam is unknowable until 2.0's differences are in hand.
 - **Strict models tie coverage to the vendored release** — every model carries `extra='forbid'`, so bindings generated from 1.2.3 reject a later 1.x document that uses a new field. "Supports OSCAL 1.x" therefore means "supports the vendored release and earlier"; `__oscal_schema_version__` makes that gap visible. `extra='ignore'` was rejected because `serialize_oscal` would silently drop unknown fields. An opt-in lenient mode is deferred, not rejected.
-- **Top level is a compatibility shim** — `oscal_bindings/__init__.py` and the alias modules `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py` are pure re-exports from their `v1` counterparts. Names reached through either path are the same objects, so pre-`v1` imports keep working unchanged.
+- **Top level re-exports the version package** — `oscal_bindings/__init__.py` and the alias modules `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py` are pure re-exports from their `v1` counterparts. Names reached through either path are the same objects, so `oscal_bindings.X` and `oscal_bindings.v1.X` are interchangeable.
 
 ## File Structure
 
 ```
 src/oscal_bindings/
-  __init__.py              # Compat shim — re-exports oscal_bindings.v1
+  __init__.py              # Re-exports oscal_bindings.v1
   models.py                # Alias module → v1.models
   parser.py                # Alias module → v1.parser
   extensions/__init__.py   # Alias module → v1.extensions
@@ -130,7 +130,7 @@ tests/
   test_document.py         # OscalDoc facade tests
   test_builders.py         # back-matter builder tests
   test_validate_element.py # validate_element tests
-  test_oscal_bindings.py   # Import smoke + back-compat path tests
+  test_oscal_bindings.py   # Import smoke + top-level/v1 path parity tests
   test_postprocess.py      # Post-processor derivation and guard tests
   test_prop_postprocess.py # Property tests for derivation and guards
 ```
@@ -144,10 +144,10 @@ Hand-written helpers go under `src/oscal_bindings/v1/extensions/`:
 3. Re-export from `src/oscal_bindings/v1/__init__.py` so callers can `from oscal_bindings.v1 import ...`.
 4. Add tests under `tests/`.
 
-Nothing else is needed for the flat path: the top-level shim takes its `__all__` from
+Nothing else is needed for the top-level path: `oscal_bindings` takes its `__all__` from
 `oscal_bindings.v1.__all__`, so a name added to the version package surfaces at
 `from oscal_bindings import ...` automatically and the two surfaces cannot drift.
-Neither the version package nor the shim defines symbols of its own — that keeps the
+Neither the version package nor the top-level package defines symbols of its own — that keeps the
 public API auditable in one file.
 
 ## Testing

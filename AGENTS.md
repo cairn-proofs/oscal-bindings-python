@@ -17,14 +17,14 @@ Navigation guide for AI agents working in **oscal-bindings** — typed Python da
 <!-- meta: orientation -->
 ## Orientation
 
-A **data-binding library** (no server, no persistence). It converts OSCAL JSON ⇄ typed Python objects and adds convenience layers. The implementation lives in `oscal_bindings.v1`; the flat `oscal_bindings` root stays importable as a compatibility shim. Only runtime dependency is Pydantic v2. Supports all 8 OSCAL document types: Catalog, Profile, Component Definition, System Security Plan, Assessment Plan, Assessment Results, Plan of Action and Milestones, Mapping Collection.
+A **data-binding library** (no server, no persistence). It converts OSCAL JSON ⇄ typed Python objects and adds convenience layers. The implementation lives in `oscal_bindings.v1`; the top-level `oscal_bindings` package re-exports it, so both import paths resolve to the same objects. Only runtime dependency is Pydantic v2. Supports all 8 OSCAL document types: Catalog, Profile, Component Definition, System Security Plan, Assessment Plan, Assessment Results, Plan of Action and Milestones, Mapping Collection.
 
 <!-- meta: directory-map -->
 ## Directory & Component Map
 
 ```
 src/oscal_bindings/
-  __init__.py          # Compat shim — re-exports oscal_bindings.v1, defines nothing
+  __init__.py          # Re-exports oscal_bindings.v1, defines nothing
   models.py            # Alias module → v1.models
   parser.py            # Alias module → v1.parser
   extensions/
@@ -49,7 +49,7 @@ requirements.txt       # Lockfile for the default env (hatch-pip-compile output)
 requirements/          # Lockfiles for hatch-test (per Python) and hatch-build
 ```
 
-**Entry points to read first for a task:** `src/oscal_bindings/v1/__init__.py` (full API surface), then `v1/parser.py` or the relevant `v1/extensions/*.py`. The top-level `__init__.py` is a shim and tells you nothing about behavior.
+**Entry points to read first for a task:** `src/oscal_bindings/v1/__init__.py` (full API surface), then `v1/parser.py` or the relevant `v1/extensions/*.py`. The top-level `__init__.py` only re-exports and tells you nothing about behavior.
 
 <!-- meta: generated-code -->
 ## Critical Convention: `models.py` is generated
@@ -59,10 +59,10 @@ requirements/          # Lockfiles for hatch-test (per Python) and hatch-build
 <!-- meta: api-pattern -->
 ## Public API Pattern
 
-Neither `v1/__init__.py` nor the top-level shim defines symbols — both **only re-export**. The public surface is auditable in `v1/__all__`, which the shim reuses verbatim. To add a helper (see [DEVELOPING.md](DEVELOPING.md)):
+Neither `v1/__init__.py` nor the top-level `__init__.py` defines symbols — both **only re-export**. The public surface is auditable in `v1/__all__`, which the top level reuses verbatim. To add a helper (see [DEVELOPING.md](DEVELOPING.md)):
 1. Add `v1/extensions/foo.py`.
 2. Re-export its public symbols from `v1/extensions/__init__.py`.
-3. Re-export from `src/oscal_bindings/v1/__init__.py`. The flat path picks it up automatically — no shim edit needed.
+3. Re-export from `src/oscal_bindings/v1/__init__.py`. The top-level path picks it up automatically — no top-level edit needed.
 4. Add tests under `tests/`.
 
 <!-- meta: codegen -->
@@ -83,8 +83,8 @@ The post-processor (in order): collapses scalar `RootModel`s to `TypeAlias`es (k
 - **Models forbid extras and don't populate-by-name.** JSON aliases are kebab/camelCase (`media-type`, `oscal-version`, `document-ids`). `make_rlink` therefore builds via `Rlink.model_validate({"media-type": ...})`, and `make_resource` sets `document_ids` **post-construction** (the alias + `extra='forbid'` block passing it as a kwarg).
 - **`validate_element` type names are derived from model class names** (PascalCase → kebab-case, introspected at import). Use `get_supported_element_types()` for the live list; unknown types raise `OscalParseError`.
 - **Major-version namespace, single active release.** The implementation lives in `oscal_bindings.v1` — named for the OSCAL **major** version, no minor/patch component — and is generated from exactly one vendored release at a time (`__oscal_schema_version__`, currently `1.2.3`). A 1.x refresh regenerates `v1` in place; only OSCAL 2.0 justifies a second version package. Minor-version namespacing (`v1_2`) was considered and rejected — read the "Major-version namespace" and "Strict models" entries under Key Design Decisions in `DEVELOPING.md` before proposing either.
-- **Top level is a compat shim, not the implementation.** `oscal_bindings/__init__.py` plus the alias modules `oscal_bindings/models.py`, `parser.py`, `extensions/__init__.py` are pure re-exports of their `v1` counterparts (explicit modules, not `sys.modules` tricks). Edit the `v1` copies; the shim takes its `__all__` from `oscal_bindings.v1.__all__`, so the surfaces can't drift. Names reached through either path are the same objects.
-- **The wrapper rename map is schema-derived, not positional.** Don't reintroduce a hardcoded `Model1..8` → `*Document` dict. `POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT` in the post-processor is a frozen parity expectation for tests, not a live map.
+- **Top level re-exports; it is not the implementation.** `oscal_bindings/__init__.py` plus the alias modules `oscal_bindings/models.py`, `parser.py`, `extensions/__init__.py` are pure re-exports of their `v1` counterparts (explicit modules, not `sys.modules` tricks). Edit the `v1` copies; the top level takes its `__all__` from `oscal_bindings.v1.__all__`, so the surfaces can't drift. Names reached through either path are the same objects.
+- **The wrapper rename map is schema-derived, not positional.** Don't key renames on the generator's `Model1..8` ordinals. `POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT` in the post-processor is a frozen parity expectation for tests, not a live map.
 - **Extensions are never injected into generated code.** Convenience layers live in `extensions/` so the codegen output stays a pristine generate + rename pass.
 
 <!-- meta: config-facts -->

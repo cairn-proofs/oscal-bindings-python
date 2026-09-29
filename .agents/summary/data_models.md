@@ -89,7 +89,7 @@ These recur across document types:
 
 ## Name-Collision Handling
 
-Five element short-names appear in more than one document namespace. The post-processor's `COLLISION_OVERRIDES` gives each a module-prefixed name so both survive. Any collision *not* covered there is now a hard build failure: the post-processor scans the fully renamed source for duplicate class definitions, reports every one of them in a single report, and refuses to write the file.
+Five element short-names appear in more than one document namespace. The post-processor's `COLLISION_OVERRIDES` gives each a module-prefixed name so both survive. Any collision *not* covered there is a hard build failure: the post-processor scans the fully renamed source for duplicate class definitions, reports every one of them in a single report, and refuses to write the file.
 
 | Schema key (namespace : short-name) | Python class |
 |-------------------------------------|--------------|

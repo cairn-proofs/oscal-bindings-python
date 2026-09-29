@@ -251,7 +251,7 @@ class TestCollisionGuard:
         assert fake_models.read_text() == before
 
     def test_real_schema_output_has_no_collisions(self, pp: ModuleType):
-        """The committed 1.2.2 output must not trip the guard (no false positives)."""
+        """The committed models output must not trip the guard (no false positives)."""
         content = pp.DEFAULT_MODELS_PATH.read_text()
         assert pp.find_duplicate_class_definitions(content) == {}
 
@@ -455,7 +455,7 @@ class TestAmbiguityGuardFailsFast:
         assert fake_models.read_text() == before
 
     def test_real_bundle_output_is_unambiguous(self, pp: ModuleType):
-        """No false positives against the committed 1.2.2 output."""
+        """No false positives against the committed models output."""
         pp.derive_document_renames(pp.DEFAULT_MODELS_PATH.read_text())
 
 
@@ -525,7 +525,7 @@ class TestWrapperCountGuard:
 
 
 class TestParityWithPositionalMap:
-    """Req 3.7: against the 1.2.2 bundle, derivation reproduces the published eight.
+    """Req 3.7: against the active bundle, derivation reproduces the published eight.
 
     The committed ``models.py`` is *already* post-processed, so its wrappers are named
     ``CatalogDocument`` rather than ``Model1``. Deriving from it therefore cannot

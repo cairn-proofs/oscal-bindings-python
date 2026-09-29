@@ -62,7 +62,7 @@ def make_resource(
         uuid: Resource UUID. A fresh UUID4 is generated if not provided.
         document_ids: Optional list of `DocumentId`s recording document
             identities qualified by scheme. Omitted from the resource when
-            not provided (backward compatible).
+            not provided.
     """
     resource = Resource(
         uuid=uuid if uuid is not None else str(_uuid.uuid4()),

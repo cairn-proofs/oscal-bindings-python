@@ -1,10 +1,10 @@
-"""OSCAL Python data bindings — compatibility shim over :mod:`oscal_bindings.v1`.
+"""OSCAL Python data bindings — top-level re-export of :mod:`oscal_bindings.v1`.
 
 The implementation lives in the major-version package :mod:`oscal_bindings.v1`.
 This module defines no symbols of its own: it re-exports that package's public
-surface so the flat import paths that predate the ``v1`` namespace keep working
-unchanged, and it star-imports :mod:`oscal_bindings.v1.models` so every
-generated model name remains importable directly from ``oscal_bindings``.
+surface so callers can use the shorter ``oscal_bindings`` path, and it
+star-imports :mod:`oscal_bindings.v1.models` so every generated model name is
+importable directly from ``oscal_bindings``.
 
 Because these are re-exports rather than wrappers, a name reached through this
 module is the *same object* as the one reached through :mod:`oscal_bindings.v1`,
@@ -17,7 +17,7 @@ New code should prefer the explicit path::
 
     >>> from oscal_bindings.v1 import parse_oscal_file, serialize_oscal
 
-The flat path stays supported::
+The top-level path is equivalent::
 
     >>> from oscal_bindings import parse_oscal_file, serialize_oscal
     >>> doc = parse_oscal_file("catalog.json")

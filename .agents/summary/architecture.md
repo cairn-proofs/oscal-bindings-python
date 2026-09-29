@@ -27,7 +27,7 @@ graph TB
     subgraph L4["Layer 4 — Version package API"]
         I["v1/__init__.py (re-exports only<br/>+ __oscal_schema_version__)"]
     end
-    subgraph L5["Layer 5 — Compatibility shim"]
+    subgraph L5["Layer 5 — Top-level re-exports"]
         C["oscal_bindings/__init__.py<br/>+ alias modules models.py / parser.py /<br/>extensions/__init__.py"]
     end
     S -. codegen + postprocess .-> M
@@ -49,7 +49,7 @@ The binding namespace is scoped to the OSCAL **major** version, not the minor. O
 Consequences of that choice, as implemented:
 
 - A minor or patch schema refresh regenerates `oscal_bindings.v1` **in place**. Import paths do not move.
-- `__oscal_schema_version__` on `oscal_bindings.v1` records the exact release, since the package name deliberately no longer does.
+- `__oscal_schema_version__` on `oscal_bindings.v1` records the exact release, since the package name deliberately carries only the major version.
 - Because models are `extra='forbid'`, "covers OSCAL 1.x" is contingent on tracking the current release — a document using a field added after 1.2.3 is rejected, not ignored. `__oscal_schema_version__` is the introspection mechanism for reasoning about that.
 - OSCAL 2.0 is the trigger for a second version package. Until then there is deliberately no `v2`, no dispatch registry, and no shared abstraction layer between version packages.
 
@@ -67,10 +67,10 @@ Rather than hand-maintaining ~7000 lines of models, the library generates them a
 ### Re-export facade for the package
 `v1/__init__.py` and `v1/extensions/__init__.py` contain only imports and `__all__`. This makes the entire public surface auditable in one file and decouples callers from internal module layout.
 
-### Compatibility shim with explicit alias modules
+### Top-level re-exports with explicit alias modules
 The top-level `oscal_bindings/__init__.py` re-exports from `oscal_bindings.v1` and derives its `__all__` from `v1.__all__` rather than restating it, so the two surfaces cannot drift. It star-imports `oscal_bindings.v1.models` *directly* (not via `v1`) because `v1.__all__` would otherwise bound the star-import to the curated surface and drop the ~180 generated model names that line exists to carry.
 
-The legacy submodule paths get real files — `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py` — each re-exporting from its `v1` counterpart. Explicit alias modules rather than `sys.modules` aliasing: they are greppable and survive `mypy` and `pdoc` without special cases. Because everything is a re-export rather than a wrapper, a class reached through the shim **is** the same object as the one reached through `v1`, so `isinstance` agrees across paths.
+The top-level submodule paths get real files — `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py` — each re-exporting from its `v1` counterpart. Explicit alias modules rather than `sys.modules` aliasing: they are greppable and survive `mypy` and `pdoc` without special cases. Because everything is a re-export rather than a wrapper, a class reached through the top level **is** the same object as the one reached through `v1`, so `isinstance` agrees across paths.
 
 ## Code-Generation Architecture
 
@@ -94,7 +94,7 @@ The post-processor performs, in order:
 
 Document wrapper names are derived from the generated source's own **content**, never from the ordinal suffix `datamodel-codegen` assigns. A wrapper is identified by the `$schema` directive field it carries; its root key is the single remaining body field; the published name is that key in PascalCase plus a `Document` suffix (`catalog` → `CatalogDocument`, `system_security_plan` → `SystemSecurityPlanDocument`). A class carrying only the `$schema` field is the union root, not a wrapper.
 
-This replaced a hardcoded positional map (`Model1` → `CatalogDocument`, …), which would silently produce wrong names if a schema revision reordered or added document types. Three guards back the derivation:
+A positional map (`Model1` → `CatalogDocument`, …) would silently produce wrong names if a schema revision reordered or added document types. Three guards back the derivation:
 
 | Guard | Behavior |
 |-------|----------|
@@ -113,10 +113,10 @@ The asymmetry is deliberate: ambiguity invalidates the scan's own assumption, so
 | Collapse scalar RootModels to TypeAliases | Callers access `catalog.metadata.version` directly, no `.root` unwrapping |
 | Module-prefixed names for 5 collisions | Disambiguate e.g. `SspControlImplementation` vs `ComponentDefinitionControlImplementation` |
 | Major-version namespace (`oscal_bindings.v1`) | The compatibility boundary is the major version, matching NIST's `$id` split; minor-version namespacing rejected as it would force import churn on every routine refresh — see `DEVELOPING.md` Key Design Decisions |
-| Flat paths kept as a pure re-export shim | Relocation is non-breaking: existing consumer imports resolve to the identical objects |
+| Top level as a pure re-export of `v1` | Short import paths for callers who don't need to name the major version; both paths resolve to the identical objects |
 | Release-versioned schema bundles (`schemas/<release>/`) | The schema a binding set came from is unambiguous, and a refresh is a visible, reviewable change |
 | Wrapper names derived from content, not ordinals | A schema revision that reorders or adds document types cannot silently mis-name classes |
-| `__oscal_schema_version__` constant, written as a literal | The package name no longer carries the release; a literal avoids parsing a multi-megabyte schema at import time (and the bundle is not guaranteed to ship in the wheel). A test asserts it against the real `$id` |
+| `__oscal_schema_version__` constant, written as a literal | The package name carries only the major version; a literal avoids parsing a multi-megabyte schema at import time (and the bundle is not guaranteed to ship in the wheel). A test asserts it against the real `$id` |
 | `bytes`-accepting parsers | Skip a UTF-8 decode + one document-size allocation for byte-sources (HTTP/S3/file) |
 
 See `dependencies.md` for the external toolchain and `workflows.md` for the end-to-end generation and consumption flows.

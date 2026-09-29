@@ -148,7 +148,7 @@ flowchart LR
 ```
 
 - `hatch run typing` → mypy over `src/oscal_bindings` (which includes `v1`).
-- `hatch run docs` → `pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs` — both the shim and the version package are documented.
+- `hatch run docs` → `pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs` — both the top-level package and the version package are documented.
 - Coverage `source_pkgs = ["oscal_bindings"]`, which reaches `v1` as a subpackage.
 - The wheel packages `src/oscal_bindings`, so `v1` ships with it.
 - Test artifacts: `junit.xml`, `coverage.xml`, `htmlcov/` (all git-ignored).
@@ -160,4 +160,4 @@ flowchart LR
 3. Re-export from `src/oscal_bindings/v1/__init__.py`.
 4. Add tests under `tests/`.
 
-Nothing to do at the top level: the shim derives its `__all__` from `v1.__all__`, so a new name appears on the flat path automatically. Neither `__init__.py` ever defines new symbols.
+Nothing to do at the top level: the top-level `__all__` is derived from `v1.__all__`, so a new name appears on the top-level path automatically. Neither `__init__.py` ever defines new symbols.

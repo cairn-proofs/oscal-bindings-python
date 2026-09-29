@@ -6,10 +6,10 @@ The library is consumed as a Python import. Its "interface" is the set of public
 
 ```python
 from oscal_bindings.v1 import parse_oscal_file, serialize_oscal   # preferred for new code
-from oscal_bindings import parse_oscal_file, serialize_oscal      # still supported
+from oscal_bindings import parse_oscal_file, serialize_oscal      # equivalent
 ```
 
-Both resolve to the **same objects** — the top level is a pure re-export shim, not a wrapper layer, so `isinstance` agrees regardless of which path a class came from. The legacy submodule paths `oscal_bindings.models`, `oscal_bindings.parser`, and `oscal_bindings.extensions` also still resolve, via explicit alias modules.
+Both resolve to the **same objects** — the top level is a pure re-export, not a wrapper layer, so `isinstance` agrees regardless of which path a class came from. The top-level submodule paths `oscal_bindings.models`, `oscal_bindings.parser`, and `oscal_bindings.extensions` also resolve, via explicit alias modules.
 
 ```python
 from oscal_bindings.v1 import __oscal_schema_version__   # "1.2.3" — also on the top level
