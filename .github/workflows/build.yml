@@ -32,6 +32,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Releases come only from main: a v* tag on any other commit (e.g. an
+      # unmerged branch) would otherwise build a draft release. The checkout is
+      # shallow, so fetch main's full history before asking whether the tagged
+      # commit is reachable from it. Runs first, before any expensive step.
+      - name: Check tagged commit is on main
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $TAG points at $GITHUB_SHA, which is not on main. Tag a commit on main."
+            exit 1
+          fi
+
       # Python, uv, and Hatch (with hatch-pip-compile) from mise.toml, installed
       # from mise.lock and its .mise/locks sidecar (the action adds --locked when a
       # lockfile is present). Same pins as a developer machine; nothing
