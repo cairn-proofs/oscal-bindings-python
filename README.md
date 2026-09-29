@@ -23,7 +23,7 @@ pip install -e ../oscal-bindings-python
 To install directly from a Git tag, branch, or commit:
 
 ```bash
-pip install "git+https://github.com/cairn-proofs/oscal-bindings-python.git@v0.1.0"
+pip install "git+https://github.com/cairn-proofs/oscal-bindings-python.git@main"
 ```
 
 ## Import paths
@@ -34,10 +34,9 @@ The bindings live under a namespace scoped to the OSCAL **major** version:
 from oscal_bindings.v1 import parse_oscal, OscalDoc, Catalog
 ```
 
-The flat paths that predate the `v1` namespace remain fully supported — the top-level
-package is a re-export shim, so `from oscal_bindings import parse_oscal`,
-`oscal_bindings.models`, `oscal_bindings.parser`, and `oscal_bindings.extensions` all
-keep resolving, to the same objects:
+The top-level package re-exports the current major version, so `from oscal_bindings
+import parse_oscal` (and `oscal_bindings.models`, `oscal_bindings.parser`,
+`oscal_bindings.extensions`) resolves to the same objects:
 
 ```python
 import oscal_bindings
@@ -46,8 +45,8 @@ import oscal_bindings.v1
 oscal_bindings.Catalog is oscal_bindings.v1.models.Catalog   # True
 ```
 
-Examples below use the flat path. `oscal_bindings.v1` works identically and is the
-better choice for new code, since it says which major version you're binding against.
+Examples below use the shorter top-level path. Importing from `oscal_bindings.v1` is
+equivalent and states which OSCAL major version your code is written against.
 
 OSCAL is backward-compatible within a major version, so a routine 1.x schema refresh
 regenerates `v1` in place and never changes your imports. Only OSCAL 2.0 would
@@ -104,8 +103,8 @@ type used for JSON and schema validation failures.
 
 ```python
 catalog = parse_catalog(json_string)
-print(catalog.catalog.metadata.title)       # direct string access
-print(catalog.catalog.metadata.version)     # no .root needed
+print(catalog.catalog.metadata.title)       # plain str
+print(catalog.catalog.metadata.version)
 ```
 
 ### Accessors
@@ -215,21 +214,21 @@ Each OSCAL document type has a dedicated parser:
 
 ```bash
 hatch build
-hatch run release  # generate + test + coverage + docs
+hatch run release  # generate + lint + typing + test + coverage + docs
 ```
 
 ## Architecture
 
 - **Version package** (`src/oscal_bindings/v1/`) — everything below, scoped to the OSCAL major version. Exposes `__oscal_schema_version__`.
 - **Generated models** (`src/oscal_bindings/v1/models.py`) — Pydantic v2 `BaseModel` classes with `Annotated` field constraints, produced by `datamodel-code-generator` from the OSCAL JSON Schema.
-- **Post-processing** (`scripts/postprocess_models.py`) — renames classes from schema namespace paths to clean short names, deriving the document-wrapper names from the generated content rather than class ordering.
+- **Post-processing** (`scripts/postprocess_models.py`) — renames classes from schema namespace paths to clean short names and names each document wrapper after its root key (e.g. `CatalogDocument`).
 - **Vendored schemas** (`schemas/<release>/`) — one directory per OSCAL release; the active bundle is chosen by explicit path.
 - **Runtime** (`src/oscal_bindings/v1/parser.py`) — parse / serialize / validate utilities and per-type typed parsers.
 - **Extensions** (`src/oscal_bindings/v1/extensions/`) — hand-written helpers layered on top of the generated models:
   - `document.py` — `OscalDoc` facade (uniform `metadata` / `uuid` / `oscal_version` / `assessment_period()` accessors).
   - `builders.py` — `make_hash`, `make_rlink`, `make_resource` constructors for `back-matter` elements.
   - `validate_element.py` — element-level schema validation utilities.
-- **Compatibility shim** (`src/oscal_bindings/__init__.py` and the `models` / `parser` / `extensions` alias modules) — pure re-exports of the version package, keeping the flat import paths working.
+- **Top-level package** (`src/oscal_bindings/__init__.py` and the `models` / `parser` / `extensions` alias modules) — pure re-exports of the current version package.
 
 Public symbols are re-exported from `oscal_bindings.v1` and from the top-level `oscal_bindings` package, so callers don't need to know which submodule a name lives in.
 
