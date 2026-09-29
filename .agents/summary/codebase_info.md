@@ -37,7 +37,7 @@ No other programming languages are present. There are no compiled extensions, no
 | Static typing | `mypy` |
 | API docs | `pdoc` |
 | Linting / formatting | `ruff` (configured in `pyproject.toml`) |
-| Python version pinning | `mise.toml` (3.12) |
+| Toolchain pinning | `mise.toml` + `mise.lock` (Python 3.12, uv, Hatch + hatch-pip-compile) |
 
 ## Directory Structure
 
@@ -72,7 +72,7 @@ oscal-bindings-python/
 ├── requirements.txt             # default-env lockfile (hatch-pip-compile output)
 ├── requirements/                # hatch-test (per Python) + hatch-build lockfiles
 ├── pyproject.toml               # Build config, deps, hatch envs/scripts
-├── mise.toml                    # Python version pin (3.12)
+├── mise.toml / mise.lock        # Toolchain pins: Python 3.12, uv, Hatch (+ .mise/locks sidecar)
 ├── DEVELOPING.md                # Dev workflow + design-decision rationale
 └── README.md                    # User-facing usage guide
 ```

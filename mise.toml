@@ -1,2 +1,11 @@
 [tools]
 python = "3.12"
+# uv >= 0.12.10 lets mise lock pypi: tools' full dependency graph (hashes) in
+# mise.lock plus a sidecar under .mise/locks/.
+uv = "0.12.15"
+# Hatch plus the environment plugin pyproject.toml requires ([tool.hatch.env]
+# requires), locked together so neither re-resolves at install time. A bare
+# `pip install hatch==X` pins only hatch; that is how virtualenv 21 broke hatch
+# 1.15. Keep the hatch-pip-compile pin in step with pyproject.toml. Bumping hatch
+# also re-locks requirements/requirements-hatch-test.*.txt (see DEVELOPING.md).
+"pypi:hatch" = { version = "1.18.1", with = ["hatch-pip-compile==1.11.8"] }
