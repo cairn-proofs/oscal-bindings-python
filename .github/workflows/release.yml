@@ -1,0 +1,72 @@
+name: publish
+
+# Uploads the wheel and sdist attached to a GitHub release to PyPI. Those files
+# are the ones CI built and tested (build.yml's draft-release job); this
+# workflow never rebuilds.
+on:
+  release:
+    types: [published]
+
+  # Re-run a publish for an existing release, e.g. after a transient PyPI failure.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/oscal-bindings
+    permissions:
+      contents: read   # download release assets
+      id-token: write  # mandatory for trusted publishing
+
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            -D dist/ \
+            --pattern "*.whl" \
+            --pattern "*.tar.gz"
+
+      # Guard against a release whose attached files were swapped or hand-edited:
+      # exactly one wheel and one sdist, both stamped with the tag's version.
+      - name: Verify assets match the tag
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          version="${TAG#v}"
+          ls -l dist/
+          wheels=(dist/*.whl)
+          sdists=(dist/*.tar.gz)
+          if [ "${#wheels[@]}" -ne 1 ] || [ "${#sdists[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one wheel and one sdist"
+            exit 1
+          fi
+          case "${wheels[0]}" in
+            "dist/oscal_bindings-${version}-"*.whl) ;;
+            *) echo "::error::Wheel ${wheels[0]} is not version $version"; exit 1 ;;
+          esac
+          if [ "${sdists[0]}" != "dist/oscal_bindings-${version}.tar.gz" ]; then
+            echo "::error::Sdist ${sdists[0]} is not version $version"
+            exit 1
+          fi
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # uncomment for testing
+        # with:
+        #     repository-url: https://test.pypi.org/legacy/

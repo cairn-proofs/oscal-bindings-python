@@ -185,11 +185,8 @@ def test_no_hatch_static_analysis_ruleset(pyproject: dict[str, Any]) -> None:
     assert "ruff_defaults.toml" not in PYPROJECT.read_text(encoding="utf-8")
 
 
-# --- Req 4.8, 4.9: no CI workflow, no pre-commit hook -----------------------
-
-
-def test_no_ci_workflows_directory() -> None:
-    assert not (ROOT / ".github" / "workflows").exists()
+# --- Req 4.9: no pre-commit hook --------------------------------------------
+# Req 4.8 (no CI workflow) was superseded when GitHub Actions CI was added.
 
 
 def test_no_pre_commit_config() -> None:

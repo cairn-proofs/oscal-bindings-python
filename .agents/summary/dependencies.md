@@ -31,7 +31,7 @@ Managed through Hatch environments (`[tool.hatch.envs.default.dependencies]`) ra
 
 | Tool | Role |
 |------|------|
-| `pytest` | Test runner (`testpaths = ["tests"]`; JUnit + coverage output) |
+| `pytest` | Test runner (`testpaths = ["tests"]`; coverage run under `hatch test --cover`) |
 | `hypothesis` | Property-based tests (`tests/test_prop_*.py`); supplied via `extra-dependencies` on `[tool.hatch.envs.hatch-test]`, not a project dep |
 | `mypy` | Static type checking (`hatch run typing`, over `src/oscal_bindings` including `v1`) |
 | `datamodel-code-generator[http]` | Present in the default env for `hatch run generate` |

@@ -155,13 +155,25 @@ public API auditable in one file.
 ```bash
 hatch test                 # quick test on default Python
 hatch test --all           # test across all matrix versions
-hatch test --all --cover   # with coverage
+hatch test --all --cover   # with coverage (terminal report + htmlcov/)
 ```
 
-Test outputs land at standard locations:
+With `--cover`, the combined coverage report prints to the terminal and is also
+written as HTML to `htmlcov/` (git-ignored). CI uploads it as the `coverage-html`
+artifact.
 
-- `junit.xml` — JUnit XML report (consumed by CI test reporters)
-- `coverage.xml` — Cobertura coverage report
-- `htmlcov/` — HTML coverage report
+## Releasing
 
-All three are git-ignored.
+PyPI receives the exact wheel and sdist that CI built and tested; nothing rebuilds
+after CI.
+
+1. Bump `version` in `pyproject.toml` and merge it to `main`.
+2. Tag that commit `v<version>` (e.g. `v0.2.0`) and push the tag.
+3. CI (`build.yml`) fails fast if the tag isn't `v$(hatch version)`, runs the full
+   release chain, builds, and creates a **draft** GitHub release with the wheel and
+   sdist attached.
+4. Review the draft and publish it. That triggers `release.yml`, which downloads the
+   attached files, checks their filenames match the tag, and uploads them to PyPI
+   via trusted publishing.
+
+To retry a failed PyPI upload, run the `publish` workflow manually with the tag.

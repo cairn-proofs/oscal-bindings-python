@@ -80,11 +80,21 @@ pip-compile-constraint = "default"
 parallel = true
 extra-dependencies = ["hypothesis"]
 
+# Hatch runs cov-combine and then cov-report once after `hatch test --cover`.
+# cov-report adds the HTML report ([tool.coverage.html] sets the directory)
+# alongside the terminal one. Declaring this table REPLACES Hatch's built-in
+# scripts rather than merging, so run/run-cov/cov-combine restate its defaults.
+[tool.hatch.envs.hatch-test.scripts]
+run = "pytest{env:HATCH_TEST_ARGS:} {args}"
+run-cov = "coverage run -m pytest{env:HATCH_TEST_ARGS:} {args}"
+cov-combine = "coverage combine"
+cov-report = ["coverage report", "coverage html"]
+
 [[tool.hatch.envs.hatch-test.matrix]]
 python = ["3.11", "3.12"]
 
 [tool.pytest.ini_options]
-addopts = ["--durations=5", "--color=yes", "--junitxml=junit.xml"]
+addopts = ["--durations=5", "--color=yes"]
 testpaths = ["tests"]
 
 [tool.coverage.run]
@@ -94,9 +104,6 @@ parallel = true
 
 [tool.coverage.report]
 show_missing = true
-
-[tool.coverage.xml]
-output = "coverage.xml"
 
 [tool.coverage.html]
 directory = "htmlcov"

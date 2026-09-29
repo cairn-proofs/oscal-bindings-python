@@ -151,4 +151,4 @@ graph TD
 
 - `pytest`, `testpaths = ["tests"]`, one test module per source module plus an import smoke test with top-level/v1 parity checks (`test_oscal_bindings.py`), post-processor tests (`test_postprocess.py`), Hypothesis property tests (`test_prop_postprocess.py`), and shared helpers in `tests/support/` (`version_package.py`, `corpus.py`).
 - Matrix runs across Python 3.11 and 3.12 (`hatch test --all`), parallelized.
-- Reports: `junit.xml` (JUnit), `coverage.xml` (Cobertura), `htmlcov/` (HTML). All git-ignored.
+- Reports: terminal coverage plus `htmlcov/` (HTML, git-ignored), both from `hatch test --cover` via the overridden `cov-report` script.

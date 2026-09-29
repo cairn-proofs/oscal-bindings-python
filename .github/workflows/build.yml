@@ -1,0 +1,100 @@
+name: CI
+
+# Every push (branches and tags) runs CI. A push of a `v*` tag additionally
+# creates a draft GitHub release carrying the wheel and sdist built here;
+# publishing that draft triggers release.yml, which uploads those exact files
+# to PyPI. Nothing downstream rebuilds.
+on:
+  push:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Pinned like every other tool in the repo; bump deliberately.
+      - name: Install Hatch
+        run: pip install hatch==1.15.1
+
+      # Fail before the expensive steps if a release tag disagrees with the
+      # version the packages would be stamped with.
+      - name: Check tag matches project version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(hatch version)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match project version $version (expected v$version)"
+            exit 1
+          fi
+
+      # generate -> lint -> typing -> tests with coverage (3.11 + 3.12) -> docs
+      - name: Release checks
+        run: hatch run release
+
+      - name: Build wheel and sdist
+        run: hatch build
+
+      # always(): keep partial output for debugging when an earlier step fails.
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: coverage-html
+          path: htmlcov/
+
+      - name: Upload API docs
+        uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: api-docs
+          path: build/api-docs/
+
+      - name: Upload python packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-packages
+          path: |
+            build/*.whl
+            build/*.tar.gz
+          if-no-files-found: error
+
+  draft-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the release and upload its assets
+
+    steps:
+      - name: Download python packages
+        uses: actions/download-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+
+      # Draft only: a human reviews and publishes, which triggers release.yml.
+      # --verify-tag refuses to create the tag if it is somehow missing.
+      - name: Create draft release with packages attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes
