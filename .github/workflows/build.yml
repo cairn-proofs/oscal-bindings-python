@@ -1,14 +1,26 @@
 name: CI
 
-# Every push (branches and tags) runs CI. A push of a `v*` tag additionally
-# creates a draft GitHub release carrying the wheel and sdist built here;
-# publishing that draft triggers release.yml, which uploads those exact files
-# to PyPI. Nothing downstream rebuilds.
+# CI runs once per PR update (on GitHub's trial merge into main), on every push
+# to main, and on `v*` tags. Branches without a PR can be run by hand
+# (workflow_dispatch). A `v*` tag additionally creates a draft GitHub release
+# carrying the wheel and sdist built here; publishing that draft triggers
+# release.yml, which uploads those exact files to PyPI. Nothing downstream
+# rebuilds.
 on:
   push:
+    branches: ["main"]
+    # Required: once `branches` is set, tag pushes no longer trigger the
+    # workflow unless listed, and draft-release would silently never run.
+    tags: ["v*"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+# A newer push to the same PR cancels its superseded run. Runs for main and
+# tags are never cancelled, so a release build can't be killed mid-flight.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
