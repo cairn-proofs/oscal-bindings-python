@@ -181,9 +181,9 @@ after CI.
 
 1. Bump `version` in `pyproject.toml` and merge it to `main`.
 2. Tag that commit `v<version>` (e.g. `v0.2.0`) and push the tag.
-3. CI (`build.yml`) fails fast if the tag isn't `v$(hatch version)`, runs the full
-   release chain, builds, and creates a **draft** GitHub release with the wheel and
-   sdist attached.
+3. CI (`build.yml`) fails fast if the tagged commit isn't on `main` or the tag isn't
+   `v$(hatch version)`. It then runs the full release chain, builds, and creates a
+   **draft** GitHub release with the wheel and sdist attached.
 4. Review the draft and publish it. That triggers `release.yml`, which downloads the
    attached files, checks their filenames match the tag, and uploads them to PyPI
    via trusted publishing.
