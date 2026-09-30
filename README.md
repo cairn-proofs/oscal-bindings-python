@@ -214,7 +214,7 @@ Each OSCAL document type has a dedicated parser:
 
 ```bash
 hatch build
-hatch run release  # generate + lint + typing + test + coverage + docs
+hatch run release  # generate + lint + typing + security + test + coverage + docs
 ```
 
 ## Architecture

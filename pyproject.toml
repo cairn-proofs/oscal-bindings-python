@@ -39,13 +39,12 @@ Source = "https://github.com/cairn-proofs/oscal-bindings-python"
 Issues = "https://github.com/cairn-proofs/oscal-bindings-python/issues"
 
 [project.optional-dependencies]
-codegen = ["datamodel-code-generator[http]==0.59.0"]
+codegen = ["datamodel-code-generator[http,black,isort]==0.83.0"]
 
 # Every Hatch env installs from a hatch-pip-compile lockfile (requirements.txt for
 # default, requirements/requirements-<env>.txt otherwise). Hatch re-locks when an
-# env's declared dependencies change; upgrade deliberately with
-# `PIP_COMPILE_UPGRADE=1 hatch env run --env <env> -- python --version`
-# (hatch-test: upgrade default first, since it constrains). Transitive pins matter
+# env's declared dependencies change; upgrade deliberately with `hatch run
+# upgrade` (see the `lock`/`upgrade` scripts below). Transitive pins matter
 # here: datamodel-code-generator formats its output with black and isort, so an
 # unlocked env can change v1/models.py without any change in this repo.
 [tool.hatch.envs.default]
@@ -56,10 +55,10 @@ pip-compile-hashes = true
 python = "3.12"
 # pytest is deliberately absent: tests run in hatch-test (`hatch test`), whose
 # built-in pytest range is Hatch's to choose.
-dependencies = ["mypy", "datamodel-code-generator[http]==0.59.0", "pdoc", "ruff==0.16.8"]
+dependencies = ["mypy", "datamodel-code-generator[http,black,isort]==0.83.0", "pdoc", "ruff==0.16.8"]
 
 [tool.hatch.envs.default.scripts]
-generate = "datamodel-codegen --input ./schemas/1.2.3/oscal_complete_schema.json --output src/oscal_bindings/v1/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --collapse-root-models --use-annotated --field-constraints --reuse-model --target-python-version 3.11 --use-schema-description --disable-timestamp && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models src/oscal_bindings/v1/models.py"
+generate = "datamodel-codegen --input ./schemas/1.2.3/oscal_complete_schema.json --output src/oscal_bindings/v1/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --collapse-root-models --use-annotated --field-constraints --reuse-model --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models src/oscal_bindings/v1/models.py"
 docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
 # No --install-types: it would pip-install stubs at run time, outside the lockfile.
 # Add any stub packages mypy needs to `dependencies` above instead.
@@ -68,7 +67,26 @@ lint = [
     "ruff check .",
     "ruff format --check .",
 ]
-release = ["generate", "lint", "typing", "hatch test --all --cover", "docs"]
+security = ["hatch run security:scan-code", "hatch run security:scan-deps"]
+# `lock` touches every locked env, re-locking any whose lockfile is stale
+# (declared deps or its constraint file changed) and upgrading nothing; run it
+# after editing dependencies here. `upgrade` is the same pass with
+# PIP_COMPILE_UPGRADE=1, which forces a re-resolve of every env to the newest
+# versions its declared ranges allow. Order matters: default first, because
+# hatch-test is constrained by it. Exact `==` pins (codegen, ruff, bandit,
+# pip-audit, hatchling, hatch-pip-compile) don't move; bump those by hand.
+# After either: review the lockfile diff, then `hatch run release` (its
+# `generate` step surfaces any black/isort drift in v1/models.py).
+lock = [
+    "hatch env run --env default -- python --version",
+    # One per matrix entry; keep in step with [[tool.hatch.envs.hatch-test.matrix]].
+    "hatch env run --env hatch-test.py3.11 -- python --version",
+    "hatch env run --env hatch-test.py3.12 -- python --version",
+    "hatch env run --env hatch-build -- python --version",
+    "hatch env run --env security -- python --version",
+]
+upgrade = "PIP_COMPILE_UPGRADE=1 hatch run lock"
+release = ["generate", "lint", "typing", "security", "hatch test --all --cover", "docs"]
 
 [tool.hatch.envs.hatch-test]
 type = "pip-compile"
@@ -193,6 +211,42 @@ type = "pip-compile"
 pip-compile-resolver = "uv"
 pip-compile-installer = "uv"
 pip-compile-hashes = true
+
+# Security scanners get their own env and lockfile: adding their transitive deps
+# to `default` would leak those pins into hatch-test through its constraint.
+# Detached, so the project isn't installed: bandit reads source, and pip-audit
+# audits the committed lockfiles rather than this env.
+[tool.hatch.envs.security]
+type = "pip-compile"
+pip-compile-resolver = "uv"
+pip-compile-installer = "uv"
+pip-compile-hashes = true
+python = "3.12"
+detached = true
+dependencies = ["bandit==1.9.4", "pip-audit==2.10.1"]
+
+[tool.hatch.envs.security.scripts]
+# Covers the generated models too: codegen output ships, so it gets scanned.
+#
+# Script names must differ from the commands: Hatch expands a script name that
+# appears as a command's first word, so `bandit = "bandit ..."` recurses.
+scan-code = "bandit -c pyproject.toml -r src scripts"
+# Every committed lockfile, named explicitly (no globbing), so a dev-only,
+# build-only, or scanner vulnerability fails the release as well as a runtime one.
+# --disable-pip + --require-hashes audit the pins exactly as locked, with no
+# re-resolution or throwaway venv; --strict fails if any package can't be audited.
+# -s osv: the default PyPI source lacked advisories OSV carries (checked against
+# datamodel-code-generator 0.59.0: 10 IDs from PyPI vs 12 from OSV). With OSV,
+# --require-hashes checks hash presence only (pip-audit warns); hash validity is
+# enforced where it matters, when uv installs from these lockfiles.
+scan-deps = "pip-audit -s osv --strict --disable-pip --require-hashes -r requirements.txt -r requirements/requirements-hatch-test.py3.11.txt -r requirements/requirements-hatch-test.py3.12.txt -r requirements/requirements-hatch-build.txt -r requirements/requirements-security.txt"
+
+[tool.bandit]
+# Each skip needs a justification.
+# B105 (hardcoded_password_string): false positive on the generated OSCAL enum
+# member `pass_ = 'pass'` in v1/models.py, which can't carry a `# nosec`. Ruff's
+# S105 (same check) stays active on all hand-written code.
+skips = ["B105"]
 
 [tool.hatch.env]
 requires = ["hatch-pip-compile==1.11.8"]

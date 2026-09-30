@@ -3421,7 +3421,10 @@ class AssessmentPart(BaseModel):
             description='Permits multiple paragraphs, lists, tables etc.',
             title='Part Text'),
     ] = None
-    parts: list[AssessmentPart] | None = None
+    parts: Annotated[
+        list[AssessmentPart] | None,
+        Field(min_length=1),
+    ] = None
     links: Annotated[
         list[Link] | None, Field(min_length=1)
     ] = None
@@ -3559,7 +3562,9 @@ class Part(BaseModel):
             description='Permits multiple paragraphs, lists, tables etc.',
             title='Part Text'),
     ] = None
-    parts: list[Part] | None = None
+    parts: Annotated[
+        list[Part] | None, Field(min_length=1)
+    ] = None
     links: Annotated[
         list[Link] | None, Field(min_length=1)
     ] = None
@@ -5397,7 +5402,9 @@ class Control(BaseModel):
     parts: Annotated[
         list[Part] | None, Field(min_length=1)
     ] = None
-    controls: list[Control] | None = None
+    controls: Annotated[
+        list[Control] | None, Field(min_length=1)
+    ] = None
 
 
 class Mapping(BaseModel):
@@ -5777,7 +5784,9 @@ class Task(BaseModel):
             title='Event Timing'),
     ] = None
     dependencies: Annotated[list[Dependency] | None, Field(min_length=1)] = None
-    tasks: list[Task] | None = None
+    tasks: Annotated[
+        list[Task] | None, Field(min_length=1)
+    ] = None
     associated_activities: Annotated[
         list[AssociatedActivity] | None,
         Field(alias='associated-activities', min_length=1),
