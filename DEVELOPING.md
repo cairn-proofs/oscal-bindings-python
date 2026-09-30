@@ -17,9 +17,19 @@ hatch run generate         # regenerate models from schema + post-process
 hatch test --all --cover   # run tests with coverage across Python 3.11/3.12
 hatch run lint             # ruff check . && ruff format --check . (read-only)
 hatch run ruff format .    # apply formatting
+hatch run security         # bandit over src/ + scripts/, pip-audit over every lockfile
 hatch run docs             # generate pdoc API docs
-hatch run release          # full pipeline: generate + lint + typing + test + coverage + docs
+hatch run release          # full pipeline: generate + lint + typing + security + test + coverage + docs
 ```
+
+`hatch run security` runs in its own detached, locked `security` env
+(`requirements/requirements-security.txt`) so the scanners' dependencies stay out of
+`default` and, through its constraint, `hatch-test`. Bandit reads `[tool.bandit]` in
+`pyproject.toml`; every skip there carries a justification. pip-audit checks every
+committed lockfile (the security env's own included) against the OSV database,
+reading the pins as locked (`--disable-pip --require-hashes`, no re-resolution),
+and `--strict` fails the run if any package can't be audited. No account or API key
+is needed.
 
 `hatch run lint` is the only lint/format entry point. It uses the Ruff pinned in the
 default env and the `[tool.ruff]` config in `pyproject.toml`, and `release` runs it
@@ -43,10 +53,17 @@ output with black and isort, which are its transitive dependencies. Without the 
 a new black release could change `v1/models.py` with no change in this repo.
 
 - Hatch re-locks an env automatically when its declared dependencies in
-  `pyproject.toml` change. Commit the updated lockfile with that change.
-- To upgrade on purpose: `PIP_COMPILE_UPGRADE=1 hatch env run --env default -- python --version`,
-  then the same with `--env hatch-test`. Afterwards, run `hatch run generate` and
-  review any `models.py` diff as formatter drift.
+  `pyproject.toml` change, but only when that env is next used. `hatch run lock`
+  brings every lockfile up to date at once without upgrading anything. Commit the
+  updated lockfiles with the dependency change.
+- To upgrade on purpose: `hatch run upgrade`. It re-resolves every locked env
+  (`default` first, since it constrains `hatch-test`; then both `hatch-test` matrix
+  entries, `hatch-build`, and `security`) to the newest versions the declared ranges
+  allow. Exact `==` pins don't move; bump those by hand. Afterwards, review the
+  lockfile diff and run `hatch run release`; treat any `models.py` diff from its
+  `generate` step as formatter drift to review.
+- Adding a Python to the `hatch-test` matrix or a new locked env means adding it to
+  the `lock` script, which names each env explicitly.
 - Hatch itself comes from mise, pinned in `mise.toml` together with the
   `hatch-pip-compile` plugin and locked with its full dependency graph in `mise.lock`
   and `.mise/locks/`. CI installs from the same files. Don't install Hatch any other
