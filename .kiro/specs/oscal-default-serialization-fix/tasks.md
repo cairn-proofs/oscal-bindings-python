@@ -52,7 +52,7 @@ Shell rule for every task: never prefix commands with `cd`; pass the tool's `cwd
   - Mark task complete when tests are written, run, and passing on unfixed code
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11_
 
-- [ ] 3. Fix default serialization and by-name construction via `OscalBaseModel`
+- [x] 3. Fix default serialization and by-name construction via `OscalBaseModel`
 
   - [x] 3.1 Add `src/oscal_bindings/v1/_base.py`
     - `OscalBaseModel(BaseModel)` with `model_config = ConfigDict(serialize_by_alias=True)`
@@ -149,14 +149,14 @@ Shell rule for every task: never prefix commands with `cd`; pass the tool's `cwd
     - **EXPECTED OUTCOME**: Tests PASS and both diffs are empty (confirms no regressions)
     - _Requirements: 3.1–3.11_
 
-  - [-] 3.10 Commit the fix and docs (checkpoint)
+  - [x] 3.10 Commit the fix and docs (checkpoint)
     - Only after 3.8 and 3.9 pass and the full suite is green on 3.11 and 3.12 (`hatch test --all > ./tmp/commit3.log 2>&1; echo "EXIT: $?"`)
     - Stage by name only files created or modified for this feature: `src/oscal_bindings/v1/_base.py`, `src/oscal_bindings/v1/models.py` (regenerated), `validate_element.py`, `builders.py`, `parser.py`, `pyproject.toml`, the re-locked `requirements.txt` / `requirements/*.txt`, the task 1–3 test files and snapshot, README/DEVELOPING/AGENTS.md, the touched `.agents/summary/*.md`, the comment-only test edits, and `tasks.md`. Never stage `.github/dependabot.yml`, `.kiro/steering/*`, `./tmp/`, `htmlcov/`, or `.coverage`. Check `git status` before committing
     - Message includes `#5` and test status (e.g. "Default to valid OSCAL serialization via OscalBaseModel (#5). Tested: hatch test passes; serialize_oscal digests and element types unchanged; floor check on pydantic 2.11.0 <result>")
     - Never push
 
 - [ ] 4. Add fix-checking and property tests
-  - [~] 4.1 Opt-out and construction unit tests in `tests/test_serialization_defaults.py`
+  - [x] 4.1 Opt-out and construction unit tests in `tests/test_serialization_defaults.py`
     - `by_alias=False` gives Python names at depth with no `null`; `exclude_none=False` output equals default output; `include`/`exclude`/`exclude_unset` still honored
     - Construction smoke cases on `Rlink` / `Resource`: name kwargs, alias kwargs, mixed, unknown kwarg → `ValidationError` (`extra_forbidden`). Exhaustive construction, both-name-and-alias, and nested-dict rejection live in 4.3
     - `Rlink.model_json_schema(mode="serialization")` still lists `href`, `media-type`, `hashes`
@@ -164,17 +164,17 @@ Shell rule for every task: never prefix commands with `cd`; pass the tool's `cwd
     - Framework-shaped calls: `pydantic_core.to_json([doc])`, `TypeAdapter(dict[str, Any]).dump_python({"result": doc}, mode="json", by_alias=True)`, argument-less `model_dump_json()`; re-parse with `parse_oscal` and compare to `serialize_oscal`
     - _Requirements: 2.3, 2.4, 2.8, 2.9, 3.12_
 
-  - [~] 4.2 Write property test for default-path serialization
+  - [x] 4.2 Write property test for default-path serialization
     - **Property 1: Bug Condition** - Default serialization paths emit valid OSCAL (fix checking)
     - `tests/test_prop_serialization_defaults.py`: from `all_corpus_docs` via `st.data()`, default `model_dump_json()` equals `serialize_oscal` semantically, `to_json` agrees, no nulls or non-schema keys
     - Using leaf strategies in `tests/strategies.py`, randomly set optional fields to None or values; assert the same invariants across all default paths
     - `ci` Hypothesis profile (≥100 examples)
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.7_
 
-  - [~] 4.3 Write keyword-construction tests and `OscalBaseModel` tripwires
+  - [x] 4.3 Write keyword-construction tests and `OscalBaseModel` tripwires
     - **Property 3: Bug Condition** - Keyword construction accepts field names
     - Permanent tests in `tests/test_base_model.py` (exhaustive, parametrized) and `tests/test_prop_base_model.py` (Hypothesis, `ci` profile). No one-off scripts. Every assertion message names the class/field and points at the design root cause it guards: 5 for the marker, 4 for config
-    - Shared fixtures (module scope): `OBJECT_MODELS` = every class in `v1.models` that subclasses `OscalBaseModel` (excluding `OscalBaseModel` itself); `ALIAS_FIELDS` = every `(cls, name, alias)` from `cls.model_fields` with `alias not in (None, name)`. Assert both are non-empty and `len(OBJECT_MODELS) == 183` so the parametrization can't silently go vacuous. `INSTANCES` = one valid instance per class harvested by walking every parsed NIST/AWS corpus doc, topped up from the leaf strategies in `tests/strategies.py`
+    - Shared fixtures (module scope): `OBJECT_MODELS` = every class in `v1.models` that subclasses `OscalBaseModel` (excluding `OscalBaseModel` itself); `ALIAS_FIELDS` = every `(cls, name, alias)` from `cls.model_fields` with `alias not in (None, name)`. Assert both are non-empty and `len(OBJECT_MODELS) == 184` (183 direct `OscalBaseModel` subclasses plus `ExternalId1`, an indirect subclass) so the parametrization can't silently go vacuous. `INSTANCES` = one valid instance per class harvested by walking every parsed NIST/AWS corpus doc, topped up from the leaf strategies in `tests/strategies.py`
     - (a) Marker tripwire, structural:
       - `getattr(OscalBaseModel.__init__, "__pydantic_base_init__", False) is True`
       - For every class in `OBJECT_MODELS` plus `OscalBaseModel`: `cls.__pydantic_custom_init__ is False`, and `"__init__" not in cls.__dict__` for generated classes
@@ -196,17 +196,17 @@ Shell rule for every task: never prefix commands with `cd`; pass the tool's `cwd
     - Property 3 PBT (`tests/test_prop_base_model.py`): for a Hypothesis-drawn leaf model class and random valid field values, keyword-by-name == keyword-by-alias == `model_validate(alias dict)`; supplying both name and alias of a drawn field is rejected with `extra_forbidden`
     - _Requirements: 1.6, 2.9, 3.3, 3.4_
 
-  - [~] 4.4 Corpus schema validation integration test
+  - [x] 4.4 Corpus schema validation integration test
     - For every NIST and AWS corpus doc, validate `json.loads(doc.model_dump_json())` against `schemas/1.2.3/oscal_complete_schema.json` with a Draft-07 validator extended (`jsonschema.validators.extend`) so `pattern` uses the `regex` module (`\p{L}`/`\p{N}`); build the validator once per session
     - If runtime is too slow on the full corpus, switch to `jsonschema-rs`, re-lock, and record the choice in DEVELOPING.md
     - _Requirements: 2.5_
 
-  - [~] 4.5 Run the new tests
+  - [x] 4.5 Run the new tests
     - `hatch test tests/test_serialization_defaults.py tests/test_prop_serialization_defaults.py tests/test_prop_serialization_preservation.py tests/test_base_model.py tests/test_prop_base_model.py tests/test_builders.py > ./tmp/fixcheck.log 2>&1; echo "EXIT: $?"`
     - **EXPECTED OUTCOME**: all pass
     - _Requirements: 2.1–2.9, 2.13, 3.3, 3.4_
 
-  - [~] 4.6 Commit the fix-checking tests (checkpoint)
+  - [-] 4.6 Commit the fix-checking tests (checkpoint)
     - Only after 4.5 passes and `hatch test --all > ./tmp/commit4.log 2>&1; echo "EXIT: $?"` is green
     - Stage by name only the task-4 test files (`tests/test_serialization_defaults.py`, `tests/test_prop_serialization_defaults.py`, `tests/test_base_model.py`, `tests/test_prop_base_model.py`, the schema-validation test, any `tests/strategies.py` / `conftest.py` additions), any DEVELOPING.md note from 4.4, and `tasks.md`. Never stage `.github/dependabot.yml`, `.kiro/steering/*`, or `./tmp/`
     - Message includes `#5` and test status (e.g. "Add fix-checking and OscalBaseModel tripwire tests (#5). Tested: hatch test --all passes")
