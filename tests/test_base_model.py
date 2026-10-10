@@ -152,7 +152,9 @@ def harvest(nist_docs: list[CorpusDoc], aws_docs: list[CorpusDoc]) -> Harvest:
     replaced by a synthesized one that does, so by-name and by-alias
     construction actually differ for every class in ALIAS_FIELDS.
     """
-    docs = [*nist_docs, *aws_docs]
+    # Skip the >1 MB catalogs: they repeat the same classes and cost ~2 s per
+    # xdist worker. No class loses its corpus instance without them.
+    docs = [d for d in (*nist_docs, *aws_docs) if len(d.raw_bytes) <= 1_000_000]
     assert docs, "NIST/AWS corpus is empty; cannot harvest instances"
     instances, field_values = harvest_instances(parse_oscal(d.raw_bytes) for d in docs)
     synthesized: set[ModelCls] = set()
