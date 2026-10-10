@@ -88,6 +88,13 @@ def parse_oscal_file(path: Path | str) -> OscalDocument:
 def serialize_oscal(model: OscalDocument, *, indent: int | None = 2) -> str:
     """Serialize an OSCAL model to a JSON string.
 
+    Emits OSCAL property names (aliases such as `media-type`) and omits
+    unset optional fields. The models already default to this, so plain
+    `model.model_dump_json()` gives equivalent output. The explicit
+    `by_alias=True, exclude_none=True` are kept on purpose: they document
+    the contract here and keep this output stable if the model defaults
+    ever change.
+
     Args:
         model: An OscalDocument instance to serialize.
         indent: Number of spaces for JSON indentation. Use None for compact

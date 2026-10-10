@@ -79,9 +79,11 @@ These recur across document types:
 
 | Convention | Detail |
 |------------|--------|
-| Config | `ConfigDict(extra='forbid')` — unknown JSON keys are rejected |
+| Base class | Every object model subclasses `OscalBaseModel` (`v1/_base.py`, via `--base-class`); `OscalDocument` and `Mappings` stay `RootModel` |
+| Config | `ConfigDict(extra='forbid')` — unknown JSON keys are rejected; merged with the base's `serialize_by_alias=True` |
 | Field aliases | JSON uses kebab/camelCase (`media-type`, `oscal-version`, `document-ids`); Python attrs use snake_case; aliases bridge them |
-| Populate-by-name | Not enabled — you must pass alias keys when using `model_validate({...})`, which is why `make_rlink` uses `"media-type"` |
+| Serialization | Alias keys and no `null` on every path by default (wrap `model_serializer` drops None); `by_alias=False` emits names; `exclude_none=False` is a no-op |
+| By-name input | Constructor kwargs accept names or aliases (`Rlink(media_type=...)`). `model_validate({...})` stays alias-only (`extra_forbidden` at any depth); JSON never populates from a name key (dropped on pydantic 2.13.x, rejected on 2.11.0; [#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)). No `validate_by_name` in config |
 | Constraints | `Annotated[T, Field(...)]` with `pattern`, `min_length`, etc. (produced by `--field-constraints`) |
 | Scalars | Collapsed to `TypeAlias` (not `RootModel`) — e.g. a `uuid` field is a constrained `str`, accessed directly |
 | Datetimes | `AwareDatetime`; `pattern=` constraints stripped by the post-processor since they're invalid on non-str types |
@@ -112,4 +114,4 @@ Notable enum: **`Algorithm`** (`SHA-224`, `SHA-256`, `SHA-384`, `SHA-512`, `SHA3
 
 ## Element Validation Model
 
-`v1/extensions/validate_element.py` builds `_ELEMENT_MAP` by introspecting every `BaseModel` subclass in `v1/models.py` and converting its class name to kebab-case. So the set of validatable element types is derived directly from the generated model classes — see `get_supported_element_types()` for the live list (includes `catalog`, `metadata`, `observation`, `back-matter`, etc.).
+`v1/extensions/validate_element.py` builds `_ELEMENT_MAP` by introspecting every `BaseModel` subclass in `v1/models.py` (excluding `BaseModel` and `OscalBaseModel` themselves) and converting its class name to kebab-case. So the set of validatable element types is derived directly from the generated model classes — see `get_supported_element_types()` for the live list (includes `catalog`, `metadata`, `observation`, `back-matter`, etc.).

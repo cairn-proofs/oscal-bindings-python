@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from oscal_bindings import make_hash, make_resource, make_rlink
-from oscal_bindings.models import Algorithm, Hash, Resource, Rlink
+from oscal_bindings.models import Algorithm, DocumentId, Hash, Resource, Rlink
 
 UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -85,6 +85,46 @@ class TestMakeResource:
         # None, so an existing caller's resource has document_ids is None.
         r = make_resource()
         assert r.document_ids is None
+
+    # document_ids is validated at construction like rlinks (Property 4;
+    # Requirements 1.7, 2.13, 3.8). Pre-fix it was assigned post-construction
+    # with validate_assignment off, so these inputs were stored unchecked.
+
+    def test_empty_document_ids_raises(self):
+        # Resource.document_ids has min_length=1 ("document-ids": [] is
+        # invalid OSCAL).
+        with pytest.raises(ValidationError):
+            make_resource(document_ids=[])
+
+    def test_non_document_id_items_raise(self):
+        with pytest.raises(ValidationError):
+            make_resource(document_ids=["x"])  # type: ignore[list-item]
+
+    def test_mixed_document_id_items_raise(self):
+        with pytest.raises(ValidationError):
+            make_resource(
+                document_ids=[DocumentId(identifier="x"), "y"]  # type: ignore[list-item]
+            )
+
+    def test_valid_document_ids_equal_alias_dict_construction(self):
+        u = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+        ids = [
+            DocumentId(identifier="doc-1"),
+            DocumentId(scheme="https://example.com/ids", identifier="doc-2"),
+        ]
+        r = make_resource(uuid=u, title="T", document_ids=ids)
+        # The pre-fix way: alias-keyed dict through model_validate.
+        expected = Resource.model_validate(
+            {
+                "uuid": u,
+                "title": "T",
+                "document-ids": [
+                    d.model_dump(by_alias=True, exclude_none=True) for d in ids
+                ],
+            }
+        )
+        assert r == expected
+        assert r.document_ids == ids
 
 
 class TestComposability:

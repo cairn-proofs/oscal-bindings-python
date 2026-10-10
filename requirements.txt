@@ -5,7 +5,7 @@
 # - datamodel-code-generator[black,http,isort]==0.83.0
 # - pdoc
 # - ruff==0.16.8
-# - pydantic[email]>=2.0
+# - pydantic[email]>=2.11
 #
 
 annotated-types==0.8.0 \

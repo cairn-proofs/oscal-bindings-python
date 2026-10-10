@@ -36,13 +36,7 @@ def make_rlink(
     hashes: list[Hash] | None = None,
 ) -> Rlink:
     """Build an `Rlink` element pointing at an external resource."""
-    return Rlink.model_validate(
-        {
-            "href": href,
-            "media-type": media_type,
-            "hashes": hashes,
-        }
-    )
+    return Rlink(href=href, media_type=media_type, hashes=hashes)
 
 
 def make_resource(
@@ -62,18 +56,13 @@ def make_resource(
         uuid: Resource UUID. A fresh UUID4 is generated if not provided.
         document_ids: Optional list of `DocumentId`s recording document
             identities qualified by scheme. Omitted from the resource when
-            not provided.
+            not provided. Validated like `rlinks`: an empty list or items
+            that are not valid `DocumentId`s raise `pydantic.ValidationError`.
     """
-    resource = Resource(
+    return Resource(
         uuid=uuid if uuid is not None else str(_uuid.uuid4()),
         title=title,
         description=description,
         rlinks=rlinks,
+        document_ids=document_ids,
     )
-    if document_ids is not None:
-        # `Resource.document_ids` carries a differing alias (`document-ids`) and
-        # the model forbids extras / does not populate-by-name, so it cannot be
-        # set via the constructor kwarg. Assign post-construction (validation is
-        # on the typed `list[DocumentId]` we already hold).
-        resource.document_ids = document_ids
-    return resource
