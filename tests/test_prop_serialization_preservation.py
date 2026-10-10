@@ -118,6 +118,26 @@ TYPED_PARSERS: dict[str, Callable[[str | bytes], BaseModel]] = {
     "mapping-collection": parse_mapping_collection,
 }
 
+# Two tests below draw only from documents up to this size; the 2-10 MB
+# catalogs cost ~0.5 s per example to parse and walk. 279 of 306 docs and all
+# 7 document types remain.
+# - Parse entry points are thin wrappers over OscalDocument.model_validate_json,
+#   which test_model_validate_rejects_name_keyed_input_at_depth exercises over
+#   the whole corpus, large catalogs included; this test only shows they agree.
+# - Unknown keys are rejected by extra='forbid' on every model, which the corpus
+#   and mutation suites already cover; site variety, not document size, matters.
+SMALL_DOC_MAX_BYTES = 100_000
+
+
+def _small_docs(corpus: list[CorpusDoc]) -> list[CorpusDoc]:
+    """Corpus docs up to SMALL_DOC_MAX_BYTES; every document type must remain."""
+    small = [d for d in corpus if len(d.raw_bytes) <= SMALL_DOC_MAX_BYTES]
+    assert {d.root_key for d in small} == {d.root_key for d in corpus}, (
+        f"a document type lost coverage under {SMALL_DOC_MAX_BYTES} bytes"
+    )
+    return small
+
+
 JsonPath = tuple[str | int, ...]
 
 
@@ -339,7 +359,7 @@ def test_parse_entry_points_never_keep_name_keyed_json_value(
 
     **Validates: Requirements 3.2, 3.3**
     """
-    corpus_doc, _, site = _draw_alias_site(data, all_corpus_docs)
+    corpus_doc, _, site = _draw_alias_site(data, _small_docs(all_corpus_docs))
     text = json.dumps(_name_keyed(corpus_doc, site))
     where = _describe(corpus_doc, site.path, site.name, site.alias)
     tmp_file = tmp_path_factory.mktemp("name_keyed") / "doc.json"
@@ -516,7 +536,7 @@ def test_unknown_key_rejected_at_depth(
 
     **Validates: Requirements 3.5**
     """
-    corpus_doc = data.draw(st.sampled_from(all_corpus_docs), label="doc")
+    corpus_doc = data.draw(st.sampled_from(_small_docs(all_corpus_docs)), label="doc")
     site = data.draw(
         st.sampled_from(_sites(corpus_doc.raw_bytes).objects), label="site"
     )
