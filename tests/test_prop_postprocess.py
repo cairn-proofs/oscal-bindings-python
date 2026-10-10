@@ -352,8 +352,8 @@ class TestProperty2ParityWithPositionalMap:
         ordinal_of = {name: ordinal for ordinal, name in snapshot.items()}
 
         for published, ordinal in ordinal_of.items():
-            header = f"class {published}(BaseModel):"
+            header = f"class {published}(OscalBaseModel):"
             assert header in content, f"expected wrapper header for {published}"
-            content = content.replace(header, f"class {ordinal}(BaseModel):")
+            content = content.replace(header, f"class {ordinal}(OscalBaseModel):")
 
         assert pp.derive_document_renames(content) == snapshot

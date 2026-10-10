@@ -9,10 +9,9 @@ One `@given` test per builder so each of Req 8.1 / 8.2 / 8.3 fails (and
 reports its counterexample) on its own. Each test checks two re-validations:
 
 - **Python mode** — ``model_dump(by_alias=True, exclude_none=True)`` fed back
-  through ``model_validate`` reproduces an equal element. This matters most
-  for `make_resource`, which assigns ``document_ids`` post-construction on a
-  model without ``validate_assignment``: the re-validation is what proves the
-  assigned value is schema-valid.
+  through ``model_validate`` reproduces an equal element, confirming the
+  builder's by-name construction (``media_type``, ``document_ids``) yields the
+  same model as validating the alias-keyed OSCAL form.
 - **JSON mode** — the element's JSON text re-validates via
   ``model_validate_json`` and dumps back to the identical JSON. This is the
   wire-level "schema-valid" check. It compares JSON, not model equality,

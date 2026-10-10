@@ -6,17 +6,11 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Any
 
-from pydantic import (
-    AnyUrl,
-    AwareDatetime,
-    BaseModel,
-    ConfigDict,
-    EmailStr,
-    Field,
-    RootModel)
+from oscal_bindings.v1._base import OscalBaseModel
+from pydantic import AnyUrl, AwareDatetime, ConfigDict, EmailStr, Field, RootModel
 
 
-class IncludeAll(BaseModel):
+class IncludeAll(OscalBaseModel):
     """
     Include all controls from the imported catalog or profile resources.
     """
@@ -100,7 +94,7 @@ class GenerationMethod(Enum):
     arbitrary = 'arbitrary'
 
 
-class MergeFlat(BaseModel):
+class MergeFlat(OscalBaseModel):
     """
     Provides structuring directives that instruct how controls are organized after profile resolution.
     """
@@ -374,7 +368,7 @@ UUIDDatatype = Annotated[
     ]
 
 
-class ParameterGuideline(BaseModel):
+class ParameterGuideline(OscalBaseModel):
     """
     A prose statement that provides a recommendation for the use of a parameter.
     """
@@ -398,7 +392,7 @@ ParameterValue = Annotated[
     ]
 
 
-class ParameterSelection(BaseModel):
+class ParameterSelection(OscalBaseModel):
     """
     Presenting a choice among alternatives.
     """
@@ -425,7 +419,7 @@ WithId = Annotated[
     ]
 
 
-class ExternalId(BaseModel):
+class ExternalId(OscalBaseModel):
     """
     An identifier for a person or organization using a designated scheme. e.g. an Open Researcher and Contributor ID (ORCID).
     """
@@ -479,7 +473,7 @@ RoleId = Annotated[
     ]
 
 
-class Base64(BaseModel):
+class Base64(OscalBaseModel):
     """
     A resource encoded using the Base64 alphabet defined by RFC 2045.
     """
@@ -510,7 +504,7 @@ class Base64(BaseModel):
     ]
 
 
-class Link(BaseModel):
+class Link(OscalBaseModel):
     """
     A reference to a local or remote resource, that has a specific relation to the containing object.
     """
@@ -554,7 +548,7 @@ class Link(BaseModel):
     ] = None
 
 
-class Hash(BaseModel):
+class Hash(OscalBaseModel):
     """
     A representation of a cryptographic digest generated over a resource using a specified hash algorithm.
     """
@@ -583,7 +577,7 @@ EmailAddress = Annotated[
     ]
 
 
-class TelephoneNumber(BaseModel):
+class TelephoneNumber(OscalBaseModel):
     """
     A telephone service number as defined by ITU-T E.164.
     """
@@ -611,7 +605,7 @@ AddrLine = Annotated[
     ]
 
 
-class DocumentId(BaseModel):
+class DocumentId(OscalBaseModel):
     """
     A document identifier qualified by an identifier scheme.
     """
@@ -632,7 +626,7 @@ class DocumentId(BaseModel):
     ]
 
 
-class QualifierItem(BaseModel):
+class QualifierItem(OscalBaseModel):
     """
     Describes requirements, incompatibilities and gaps that are identified between a target and source in a mapping item.
     """
@@ -674,7 +668,7 @@ class QualifierItem(BaseModel):
     ] = None
 
 
-class ConfidenceScore1(BaseModel):
+class ConfidenceScore1(OscalBaseModel):
     """
     This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.
     """
@@ -689,7 +683,7 @@ class ConfidenceScore1(BaseModel):
     ] = None
 
 
-class Coverage(BaseModel):
+class Coverage(OscalBaseModel):
     """
     A decimal value from 0-1, representing the percentage coverage of the targets by the sources.
     """
@@ -712,7 +706,7 @@ class Coverage(BaseModel):
     ]
 
 
-class MergeAsIs(BaseModel):
+class MergeAsIs(OscalBaseModel):
     """
     Provides structuring directives that instruct how controls are organized after profile resolution.
     """
@@ -735,7 +729,7 @@ class MergeAsIs(BaseModel):
     ]
 
 
-class Remove(BaseModel):
+class Remove(OscalBaseModel):
     """
     Specifies objects to be removed from a control based on specific aspects of the object that must all match.
     """
@@ -789,7 +783,7 @@ class Remove(BaseModel):
     ] = None
 
 
-class ImportComponentDefinition(BaseModel):
+class ImportComponentDefinition(OscalBaseModel):
     """
     Loads a component definition from another resource.
     """
@@ -810,7 +804,7 @@ class ImportComponentDefinition(BaseModel):
     ] = None
 
 
-class IncorporatesComponent(BaseModel):
+class IncorporatesComponent(OscalBaseModel):
     """
     The collection of components comprising this capability.
     """
@@ -833,7 +827,7 @@ class IncorporatesComponent(BaseModel):
     ]
 
 
-class Status(BaseModel):
+class Status(OscalBaseModel):
     """
     Describes the operational status of the system component.
     """
@@ -855,7 +849,7 @@ class Status(BaseModel):
     ] = None
 
 
-class PortRange(BaseModel):
+class PortRange(OscalBaseModel):
     """
     Where applicable this is the transport layer protocol port range an IPv4-based or IPv6-based service uses.
     """
@@ -891,7 +885,7 @@ class PortRange(BaseModel):
     ] = None
 
 
-class ImplementationStatus(BaseModel):
+class ImplementationStatus(OscalBaseModel):
     """
     Indicates the degree to which the a given control is implemented.
     """
@@ -921,7 +915,7 @@ FunctionPerformed = Annotated[
     ]
 
 
-class SetParameter(BaseModel):
+class SetParameter(OscalBaseModel):
     """
     Identifies the parameter that will be set by the enclosed value.
     """
@@ -945,7 +939,7 @@ class SetParameter(BaseModel):
     ] = None
 
 
-class SystemId(BaseModel):
+class SystemId(OscalBaseModel):
     """
     A human-oriented, globally unique identifier with cross-instance scope that can be used to reference this system identification property elsewhere in this or other OSCAL instances. When referencing an externally defined system identification, the system identification must be used in the context of the external / imported OSCAL instance (e.g., uri-reference). This string should be assigned per-subject, which means it should be consistently used to identify the same system across revisions of the document.
     """
@@ -967,7 +961,7 @@ class SystemId(BaseModel):
     ]
 
 
-class ImportProfile(BaseModel):
+class ImportProfile(OscalBaseModel):
     """
     Used to import the OSCAL profile representing the system's control baseline.
     """
@@ -988,7 +982,7 @@ class ImportProfile(BaseModel):
     ] = None
 
 
-class Categorization(BaseModel):
+class Categorization(OscalBaseModel):
     """
     A set of information type identifiers qualified by the given identification system used, such as NIST SP 800-60.
     """
@@ -1006,7 +1000,7 @@ class Categorization(BaseModel):
     ] = None
 
 
-class SecurityImpactLevel(BaseModel):
+class SecurityImpactLevel(OscalBaseModel):
     """
     The overall level of expected impact resulting from unauthorized disclosure, modification, or loss of access to information.
     """
@@ -1039,7 +1033,7 @@ class SecurityImpactLevel(BaseModel):
     ]
 
 
-class SspStatus(BaseModel):
+class SspStatus(OscalBaseModel):
     """
     Describes the operational status of the system.
     """
@@ -1061,7 +1055,7 @@ class SspStatus(BaseModel):
     ] = None
 
 
-class ImportSsp(BaseModel):
+class ImportSsp(OscalBaseModel):
     """
     Used by the assessment plan and POA&M to import information about the system.
     """
@@ -1082,7 +1076,7 @@ class ImportSsp(BaseModel):
     ] = None
 
 
-class OnDate(BaseModel):
+class OnDate(OscalBaseModel):
     """
     The task is intended to occur on the specified date.
     """
@@ -1104,7 +1098,7 @@ class OnDate(BaseModel):
     ] = None
 
 
-class Timing(BaseModel):
+class Timing(OscalBaseModel):
     """
     The timing under which the task is intended to occur.
     """
@@ -1120,7 +1114,7 @@ class Timing(BaseModel):
     ]
 
 
-class WithinDateRange(BaseModel):
+class WithinDateRange(OscalBaseModel):
     """
     The task is intended to occur within the specified date range.
     """
@@ -1149,7 +1143,7 @@ class WithinDateRange(BaseModel):
     ] = None
 
 
-class Timing1(BaseModel):
+class Timing1(OscalBaseModel):
     """
     The timing under which the task is intended to occur.
     """
@@ -1165,7 +1159,7 @@ class Timing1(BaseModel):
     ]
 
 
-class AtFrequency(BaseModel):
+class AtFrequency(OscalBaseModel):
     """
     The task is intended to occur at the specified frequency.
     """
@@ -1194,7 +1188,7 @@ class AtFrequency(BaseModel):
     ] = None
 
 
-class Timing2(BaseModel):
+class Timing2(OscalBaseModel):
     """
     The timing under which the task is intended to occur.
     """
@@ -1210,7 +1204,7 @@ class Timing2(BaseModel):
     ]
 
 
-class Dependency(BaseModel):
+class Dependency(OscalBaseModel):
     """
     Used to indicate that a task is dependent on another task.
     """
@@ -1233,7 +1227,7 @@ class Dependency(BaseModel):
     ] = None
 
 
-class AssessmentCommonSelectControlById(BaseModel):
+class AssessmentCommonSelectControlById(OscalBaseModel):
     """
     Used to select a control for inclusion/exclusion based on one or more control identifiers. A set of statement identifiers can be used to target the inclusion/exclusion to only specific control statements providing more granularity over the specific statements that are within the assessment scope.
     """
@@ -1253,7 +1247,7 @@ class AssessmentCommonSelectControlById(BaseModel):
     ] = None
 
 
-class SelectObjectiveById(BaseModel):
+class SelectObjectiveById(OscalBaseModel):
     """
     Used to select a control objective for inclusion/exclusion based on the control objective's identifier.
     """
@@ -1276,7 +1270,7 @@ class SelectObjectiveById(BaseModel):
     ] = None
 
 
-class Source(BaseModel):
+class Source(OscalBaseModel):
     """
     Assessment subjects will be identified while conducting the referenced activity-instance.
     """
@@ -1299,7 +1293,7 @@ class Source(BaseModel):
     ] = None
 
 
-class Status1(BaseModel):
+class Status1(OscalBaseModel):
     """
     A determination of if the objective is satisfied or not within a given system.
     """
@@ -1327,7 +1321,7 @@ class Status1(BaseModel):
     ] = None
 
 
-class RelatedObservation(BaseModel):
+class RelatedObservation(OscalBaseModel):
     """
     Relates the identified element to a set of referenced observations that were used to support its determination.
     """
@@ -1350,7 +1344,7 @@ class RelatedObservation(BaseModel):
     ] = None
 
 
-class AssociatedRisk(BaseModel):
+class AssociatedRisk(OscalBaseModel):
     """
     Relates the finding to a set of referenced risks that were used to determine the finding.
     """
@@ -1373,7 +1367,7 @@ class AssociatedRisk(BaseModel):
     ] = None
 
 
-class ThreatId(BaseModel):
+class ThreatId(OscalBaseModel):
     """
     A pointer, by ID, to an externally-defined threat.
     """
@@ -1400,7 +1394,7 @@ class ThreatId(BaseModel):
     ]
 
 
-class LoggedBy(BaseModel):
+class LoggedBy(OscalBaseModel):
     """
     Used to indicate who created a log entry in what role.
     """
@@ -1431,7 +1425,7 @@ class LoggedBy(BaseModel):
     ] = None
 
 
-class ImportAp(BaseModel):
+class ImportAp(OscalBaseModel):
     """
     Used by assessment-results to import information about the original plan for assessing the system.
     """
@@ -1452,7 +1446,7 @@ class ImportAp(BaseModel):
     ] = None
 
 
-class RelatedFinding(BaseModel):
+class RelatedFinding(OscalBaseModel):
     """
     Relates the poam-item to referenced finding(s).
     """
@@ -1475,7 +1469,7 @@ class RelatedFinding(BaseModel):
     ] = None
 
 
-class Test(BaseModel):
+class Test(OscalBaseModel):
     """
     A test expression which is expected to be evaluated by a tool.
     """
@@ -1497,7 +1491,7 @@ class Test(BaseModel):
     ] = None
 
 
-class ParameterConstraint(BaseModel):
+class ParameterConstraint(OscalBaseModel):
     """
     A formal or informal expression of a constraint or test.
     """
@@ -1513,7 +1507,7 @@ class ParameterConstraint(BaseModel):
     tests: Annotated[list[Test] | None, Field(min_length=1)] = None
 
 
-class Matching(BaseModel):
+class Matching(OscalBaseModel):
     """
     Selecting a set of controls by matching their IDs with a wildcard pattern.
     """
@@ -1535,7 +1529,7 @@ class Matching(BaseModel):
     ] = None
 
 
-class ControlCommonSelectControlById(BaseModel):
+class ControlCommonSelectControlById(OscalBaseModel):
     """
     Select a control or controls from an imported control set.
     """
@@ -1559,7 +1553,7 @@ class ControlCommonSelectControlById(BaseModel):
     ] = None
 
 
-class Rlink(BaseModel):
+class Rlink(OscalBaseModel):
     """
     A URL-based pointer to an external resource with an optional hash for verification and change detection.
     """
@@ -1585,7 +1579,7 @@ class Rlink(BaseModel):
     ] = None
 
 
-class Property(BaseModel):
+class Property(OscalBaseModel):
     """
     An attribute, characteristic, or quality of the containing object expressed as a namespace qualified name/value pair.
     """
@@ -1642,7 +1636,7 @@ class Property(BaseModel):
     ] = None
 
 
-class ResponsibleParty(BaseModel):
+class ResponsibleParty(OscalBaseModel):
     """
     A reference to a set of persons and/or organizations that have responsibility for performing the referenced role in the context of the containing object.
     """
@@ -1675,7 +1669,7 @@ class ResponsibleParty(BaseModel):
     ] = None
 
 
-class Action(BaseModel):
+class Action(OscalBaseModel):
     """
     An action applied by a role within a given party to the content.
     """
@@ -1727,7 +1721,7 @@ class Action(BaseModel):
     ] = None
 
 
-class ResponsibleRole(BaseModel):
+class ResponsibleRole(OscalBaseModel):
     """
     A reference to a role with responsibility for performing a function relative to the containing object, optionally associated with a set of persons and/or organizations that perform that role.
     """
@@ -1760,7 +1754,7 @@ class ResponsibleRole(BaseModel):
     ] = None
 
 
-class Address(BaseModel):
+class Address(OscalBaseModel):
     """
     A postal address for the location.
     """
@@ -1806,7 +1800,7 @@ class Address(BaseModel):
     ] = None
 
 
-class MappingItem(BaseModel):
+class MappingItem(OscalBaseModel):
     """
     A specific edge within a source or target that is the subject of a mapping.
     """
@@ -1842,7 +1836,7 @@ class MappingItem(BaseModel):
     ] = None
 
 
-class MappingResourceReference(BaseModel):
+class MappingResourceReference(OscalBaseModel):
     """
     A reference to a resource that is either the source or the target of a mapping.
     """
@@ -1879,7 +1873,7 @@ class MappingResourceReference(BaseModel):
     ] = None
 
 
-class GapSummary(BaseModel):
+class GapSummary(OscalBaseModel):
     """
     A by-id collection of all controls that were not mapped at all in this mapping-collection. If a control is partially mapped, the parts of the control are not mappable, the gap and discrepancies should be documented in the relationship-gal.
     """
@@ -1899,7 +1893,7 @@ class GapSummary(BaseModel):
     ]
 
 
-class ConfidenceScore2(BaseModel):
+class ConfidenceScore2(OscalBaseModel):
     """
     This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.
     """
@@ -1915,7 +1909,7 @@ class ConfidenceScore2(BaseModel):
     ] = None
 
 
-class Import1(BaseModel):
+class Import1(OscalBaseModel):
     """
     Designates a referenced source catalog or profile that provides a source of control information for use in creating a new overlay or baseline.
     """
@@ -1937,7 +1931,7 @@ class Import1(BaseModel):
     ] = None
 
 
-class Import2(BaseModel):
+class Import2(OscalBaseModel):
     """
     Designates a referenced source catalog or profile that provides a source of control information for use in creating a new overlay or baseline.
     """
@@ -1960,7 +1954,7 @@ class Import2(BaseModel):
     ] = None
 
 
-class SetParameters(BaseModel):
+class SetParameters(OscalBaseModel):
     """
     A parameter setting, to be propagated to points of insertion.
     """
@@ -2023,7 +2017,7 @@ class SetParameters(BaseModel):
     ] = None
 
 
-class SetParameters1(BaseModel):
+class SetParameters1(OscalBaseModel):
     """
     A parameter setting, to be propagated to points of insertion.
     """
@@ -2084,7 +2078,7 @@ class SetParameters1(BaseModel):
     select: ParameterSelection | None = None
 
 
-class InsertControls1(BaseModel):
+class InsertControls1(OscalBaseModel):
     """
     Specifies which controls to use in the containing context.
     """
@@ -2107,7 +2101,7 @@ class InsertControls1(BaseModel):
     ] = None
 
 
-class InsertControls2(BaseModel):
+class InsertControls2(OscalBaseModel):
     """
     Specifies which controls to use in the containing context.
     """
@@ -2131,7 +2125,7 @@ class InsertControls2(BaseModel):
     ] = None
 
 
-class ComponentDefinitionStatement(BaseModel):
+class ComponentDefinitionStatement(OscalBaseModel):
     """
     Identifies which statements within a control are addressed.
     """
@@ -2177,7 +2171,7 @@ class ComponentDefinitionStatement(BaseModel):
     ] = None
 
 
-class Protocol(BaseModel):
+class Protocol(OscalBaseModel):
     """
     Information about the protocol used to provide a service.
     """
@@ -2211,7 +2205,7 @@ class Protocol(BaseModel):
     ] = None
 
 
-class AuthorizedPrivilege(BaseModel):
+class AuthorizedPrivilege(OscalBaseModel):
     """
     Identifies a specific system privilege held by the user, along with an associated description and/or rationale for the privilege.
     """
@@ -2237,7 +2231,7 @@ class AuthorizedPrivilege(BaseModel):
     ]
 
 
-class ImplementedComponent(BaseModel):
+class ImplementedComponent(OscalBaseModel):
     """
     The set of components that are implemented in a given system inventory item.
     """
@@ -2270,7 +2264,7 @@ class ImplementedComponent(BaseModel):
     ] = None
 
 
-class InventoryItem(BaseModel):
+class InventoryItem(OscalBaseModel):
     """
     A single managed inventory item within the system.
     """
@@ -2312,7 +2306,7 @@ class InventoryItem(BaseModel):
     ] = None
 
 
-class Impact(BaseModel):
+class Impact(OscalBaseModel):
     """
     The expected level of impact resulting from the described information.
     """
@@ -2348,7 +2342,7 @@ class Impact(BaseModel):
     ] = None
 
 
-class Diagram(BaseModel):
+class Diagram(OscalBaseModel):
     """
     A graphic that provides a visual representation the system, or some aspect of it.
     """
@@ -2387,7 +2381,7 @@ class Diagram(BaseModel):
     ] = None
 
 
-class NetworkArchitecture(BaseModel):
+class NetworkArchitecture(OscalBaseModel):
     """
     A description of the system's network architecture, optionally supplemented by diagrams that illustrate the network architecture.
     """
@@ -2417,7 +2411,7 @@ class NetworkArchitecture(BaseModel):
     ] = None
 
 
-class DataFlow(BaseModel):
+class DataFlow(OscalBaseModel):
     """
     A description of the logical flow of information within the system and across its boundaries, optionally supplemented by diagrams that illustrate these flows.
     """
@@ -2447,7 +2441,7 @@ class DataFlow(BaseModel):
     ] = None
 
 
-class LeveragedAuthorization(BaseModel):
+class LeveragedAuthorization(OscalBaseModel):
     """
     A description of another authorized system from which this system inherits capabilities that satisfy security requirements. Another term for this concept is a common control provider.
     """
@@ -2498,7 +2492,7 @@ class LeveragedAuthorization(BaseModel):
     ] = None
 
 
-class ProvidedItem(BaseModel):
+class ProvidedItem(OscalBaseModel):
     """
     Describes a capability which may be inherited by a leveraging system.
     """
@@ -2536,7 +2530,7 @@ class ProvidedItem(BaseModel):
     ] = None
 
 
-class Responsibility(BaseModel):
+class Responsibility(OscalBaseModel):
     """
     Describes a control implementation responsibility imposed on a leveraging system.
     """
@@ -2582,7 +2576,7 @@ class Responsibility(BaseModel):
     ] = None
 
 
-class Export(BaseModel):
+class Export(OscalBaseModel):
     """
     Identifies content intended for external consumption, such as with leveraged organizations.
     """
@@ -2611,7 +2605,7 @@ class Export(BaseModel):
     ] = None
 
 
-class InheritedItem(BaseModel):
+class InheritedItem(OscalBaseModel):
     """
     Describes a control implementation inherited by a leveraging system.
     """
@@ -2651,7 +2645,7 @@ class InheritedItem(BaseModel):
     ] = None
 
 
-class SatisfiedItem(BaseModel):
+class SatisfiedItem(OscalBaseModel):
     """
     Describes how this system satisfies a responsibility imposed by a leveraged system.
     """
@@ -2697,7 +2691,7 @@ class SatisfiedItem(BaseModel):
     ] = None
 
 
-class ByComponent(BaseModel):
+class ByComponent(OscalBaseModel):
     """
     Defines how the referenced component implements a set of controls.
     """
@@ -2759,7 +2753,7 @@ class ByComponent(BaseModel):
     ] = None
 
 
-class ControlSelections(BaseModel):
+class ControlSelections(OscalBaseModel):
     """
     Identifies the controls being assessed. In the assessment plan, these are the planned controls. In the assessment results, these are the actual controls, and reflects any changes from the plan.
     """
@@ -2793,7 +2787,7 @@ class ControlSelections(BaseModel):
     ] = None
 
 
-class ControlSelections1(BaseModel):
+class ControlSelections1(OscalBaseModel):
     """
     Identifies the controls being assessed. In the assessment plan, these are the planned controls. In the assessment results, these are the actual controls, and reflects any changes from the plan.
     """
@@ -2828,7 +2822,7 @@ class ControlSelections1(BaseModel):
     ] = None
 
 
-class ControlObjectiveSelections(BaseModel):
+class ControlObjectiveSelections(OscalBaseModel):
     """
     Identifies the control objectives of the assessment. In the assessment plan, these are the planned objectives. In the assessment results, these are the assessed objectives, and reflects any changes from the plan.
     """
@@ -2862,7 +2856,7 @@ class ControlObjectiveSelections(BaseModel):
     ] = None
 
 
-class ControlObjectiveSelections1(BaseModel):
+class ControlObjectiveSelections1(OscalBaseModel):
     """
     Identifies the control objectives of the assessment. In the assessment plan, these are the planned objectives. In the assessment results, these are the assessed objectives, and reflects any changes from the plan.
     """
@@ -2897,7 +2891,7 @@ class ControlObjectiveSelections1(BaseModel):
     ] = None
 
 
-class ReviewedControls(BaseModel):
+class ReviewedControls(OscalBaseModel):
     """
     Identifies the controls being assessed and their control objectives.
     """
@@ -2932,7 +2926,7 @@ class ReviewedControls(BaseModel):
     ] = None
 
 
-class AssessmentSubjectPlaceholder(BaseModel):
+class AssessmentSubjectPlaceholder(OscalBaseModel):
     """
     Used when the assessment subjects will be determined as part of one or more other assessment activities. These assessment subjects will be recorded in the assessment results in the assessment log.
     """
@@ -2967,7 +2961,7 @@ class AssessmentSubjectPlaceholder(BaseModel):
     ] = None
 
 
-class SelectSubjectById(BaseModel):
+class SelectSubjectById(OscalBaseModel):
     """
     Identifies a set of assessment subjects to include/exclude by UUID.
     """
@@ -3002,7 +2996,7 @@ class SelectSubjectById(BaseModel):
     ] = None
 
 
-class SubjectReference(BaseModel):
+class SubjectReference(OscalBaseModel):
     """
     A human-oriented identifier reference to a resource. Use type to indicate whether the identified resource is a component, inventory item, location, user, or something else.
     """
@@ -3044,7 +3038,7 @@ class SubjectReference(BaseModel):
     ] = None
 
 
-class UsesComponent(BaseModel):
+class UsesComponent(OscalBaseModel):
     """
     The set of components that are used by the assessment platform.
     """
@@ -3077,7 +3071,7 @@ class UsesComponent(BaseModel):
     ] = None
 
 
-class AssessmentPlatform(BaseModel):
+class AssessmentPlatform(OscalBaseModel):
     """
     Used to represent the toolset used to perform aspects of the assessment.
     """
@@ -3115,7 +3109,7 @@ class AssessmentPlatform(BaseModel):
     ] = None
 
 
-class FindingTarget(BaseModel):
+class FindingTarget(OscalBaseModel):
     """
     Captures an assessor's conclusions regarding the degree to which an objective is satisfied.
     """
@@ -3174,7 +3168,7 @@ class FindingTarget(BaseModel):
     ] = None
 
 
-class RelevantEvidenceItem(BaseModel):
+class RelevantEvidenceItem(OscalBaseModel):
     """
     Links this observation to relevant evidence.
     """
@@ -3207,7 +3201,7 @@ class RelevantEvidenceItem(BaseModel):
     ] = None
 
 
-class OriginActor(BaseModel):
+class OriginActor(OscalBaseModel):
     """
     The actor that produces an observation, a finding, or a risk. One or more actor type can be used to specify a person that is using a tool.
     """
@@ -3245,7 +3239,7 @@ class OriginActor(BaseModel):
     ] = None
 
 
-class MitigatingFactor(BaseModel):
+class MitigatingFactor(OscalBaseModel):
     """
     Describes an existing mitigating factor that may affect the overall determination of the risk, with an optional link to an implementation statement in the SSP.
     """
@@ -3285,7 +3279,7 @@ class MitigatingFactor(BaseModel):
     ] = None
 
 
-class Facet(BaseModel):
+class Facet(OscalBaseModel):
     """
     An individual characteristic that is part of a larger set produced by the same actor.
     """
@@ -3326,7 +3320,7 @@ class Facet(BaseModel):
     ] = None
 
 
-class RequiredAsset(BaseModel):
+class RequiredAsset(OscalBaseModel):
     """
     Identifies an asset required to achieve remediation.
     """
@@ -3371,7 +3365,7 @@ class RequiredAsset(BaseModel):
     ] = None
 
 
-class AssessmentPart(BaseModel):
+class AssessmentPart(OscalBaseModel):
     """
     A partition of an assessment plan or results or a child of another part.
     """
@@ -3430,7 +3424,7 @@ class AssessmentPart(BaseModel):
     ] = None
 
 
-class Attestation(BaseModel):
+class Attestation(OscalBaseModel):
     """
     A set of textual statements, typically written by the assessor.
     """
@@ -3446,7 +3440,7 @@ class Attestation(BaseModel):
     ]
 
 
-class Origin(BaseModel):
+class Origin(OscalBaseModel):
     """
     Identifies the source of the finding, such as a tool or person.
     """
@@ -3458,7 +3452,7 @@ class Origin(BaseModel):
     ]
 
 
-class PoamItem(BaseModel):
+class PoamItem(OscalBaseModel):
     """
     Describes an individual POA&M item.
     """
@@ -3511,7 +3505,7 @@ class PoamItem(BaseModel):
     ] = None
 
 
-class Part(BaseModel):
+class Part(OscalBaseModel):
     """
     An annotated, markup-based textual element of a control's or catalog group's definition, or a child of another part.
     """
@@ -3570,7 +3564,7 @@ class Part(BaseModel):
     ] = None
 
 
-class Parameter1(BaseModel):
+class Parameter1(OscalBaseModel):
     """
     Parameters provide a mechanism for the dynamic assignment of value(s) in a control.
     """
@@ -3638,7 +3632,7 @@ class Parameter1(BaseModel):
     ] = None
 
 
-class Parameter2(BaseModel):
+class Parameter2(OscalBaseModel):
     """
     Parameters provide a mechanism for the dynamic assignment of value(s) in a control.
     """
@@ -3704,7 +3698,7 @@ class Parameter2(BaseModel):
     ] = None
 
 
-class Revision(BaseModel):
+class Revision(OscalBaseModel):
     """
     An entry in a sequential list of revisions to the containing document, expected to be in reverse chronological order (i.e. latest first).
     """
@@ -3762,7 +3756,7 @@ class Revision(BaseModel):
     ] = None
 
 
-class Role(BaseModel):
+class Role(OscalBaseModel):
     """
     Defines a function, which might be assigned to a party in a specific situation.
     """
@@ -3811,7 +3805,7 @@ class Role(BaseModel):
     ] = None
 
 
-class Location(BaseModel):
+class Location(OscalBaseModel):
     """
     A physical point of presence, which may be associated with people, organizations, or other concepts within the current or linked OSCAL document.
     """
@@ -3856,7 +3850,7 @@ class Location(BaseModel):
     ] = None
 
 
-class Parties(BaseModel):
+class Parties(OscalBaseModel):
     """
     An organization or person, which may be associated with roles or other concepts within the current or linked OSCAL document.
     """
@@ -3923,7 +3917,7 @@ class Parties(BaseModel):
     ] = None
 
 
-class Parties1(BaseModel):
+class Parties1(OscalBaseModel):
     """
     An organization or person, which may be associated with roles or other concepts within the current or linked OSCAL document.
     """
@@ -3991,7 +3985,7 @@ class Parties1(BaseModel):
     ] = None
 
 
-class Metadata(BaseModel):
+class Metadata(OscalBaseModel):
     """
     Provides information about the containing document, and defines concepts that are shared across the document.
     """
@@ -4064,7 +4058,7 @@ class Metadata(BaseModel):
     ] = None
 
 
-class Citation(BaseModel):
+class Citation(OscalBaseModel):
     """
     An optional citation consisting of end note text using structured markup.
     """
@@ -4086,7 +4080,7 @@ class Citation(BaseModel):
     ] = None
 
 
-class Resource(BaseModel):
+class Resource(OscalBaseModel):
     """
     A resource associated with content in the containing document instance. A resource may be directly included in the document using base64 encoding or may point to one or more equivalent internet resources.
     """
@@ -4141,7 +4135,7 @@ class Resource(BaseModel):
     ] = None
 
 
-class BackMatter(BaseModel):
+class BackMatter(OscalBaseModel):
     """
     A collection of resources that may be referenced from within the OSCAL document instance.
     """
@@ -4151,7 +4145,7 @@ class BackMatter(BaseModel):
     resources: Annotated[list[Resource] | None, Field(min_length=1)] = None
 
 
-class Map(BaseModel):
+class Map(OscalBaseModel):
     """
     A relationship-based mapping between a source and target set consisting of members (i.e., controls, control statements) from the respective source and target.
     """
@@ -4219,7 +4213,7 @@ class Map(BaseModel):
     ] = None
 
 
-class MappingProvenance(BaseModel):
+class MappingProvenance(OscalBaseModel):
     """
     Describes requirements, incompatibilities and gaps that are identified between a target and source in a mapping item.
     """
@@ -4283,7 +4277,7 @@ class MappingProvenance(BaseModel):
     ] = None
 
 
-class ProfileGroup2(BaseModel):
+class ProfileGroup2(OscalBaseModel):
     """
     A group of (selected) controls or of groups of controls.
     """
@@ -4339,7 +4333,7 @@ class ProfileGroup2(BaseModel):
     ] = None
 
 
-class Add(BaseModel):
+class Add(OscalBaseModel):
     """
     Specifies contents to be added into controls, in resolution.
     """
@@ -4387,7 +4381,7 @@ class Add(BaseModel):
     ] = None
 
 
-class Alter(BaseModel):
+class Alter(OscalBaseModel):
     """
     Specifies changes to be made to an included control when a profile is resolved.
     """
@@ -4406,7 +4400,7 @@ class Alter(BaseModel):
     adds: Annotated[list[Add] | None, Field(min_length=1)] = None
 
 
-class Modify(BaseModel):
+class Modify(OscalBaseModel):
     """
     Set parameters or amend controls in resolution.
     """
@@ -4420,7 +4414,7 @@ class Modify(BaseModel):
     alters: Annotated[list[Alter] | None, Field(min_length=1)] = None
 
 
-class ComponentDefinitionImplementedRequirement(BaseModel):
+class ComponentDefinitionImplementedRequirement(OscalBaseModel):
     """
     Describes how the containing component or capability implements an individual control.
     """
@@ -4473,7 +4467,7 @@ class ComponentDefinitionImplementedRequirement(BaseModel):
     ] = None
 
 
-class SystemComponent(BaseModel):
+class SystemComponent(OscalBaseModel):
     """
     A defined component that can be part of an implemented system.
     """
@@ -4540,7 +4534,7 @@ class SystemComponent(BaseModel):
     ] = None
 
 
-class SystemUser(BaseModel):
+class SystemUser(OscalBaseModel):
     """
     A type of user that interacts with the system based on an associated role.
     """
@@ -4597,7 +4591,7 @@ class SystemUser(BaseModel):
     ] = None
 
 
-class InformationType(BaseModel):
+class InformationType(OscalBaseModel):
     """
     Contains details about one information type that is stored, processed, or transmitted by the system, such as privacy information, and those defined in NIST SP 800-60.
     """
@@ -4642,7 +4636,7 @@ class InformationType(BaseModel):
     ] = None
 
 
-class SystemInformation(BaseModel):
+class SystemInformation(OscalBaseModel):
     """
     Contains details about all information types that are stored, processed, or transmitted by the system, such as privacy information, and those defined in NIST SP 800-60.
     """
@@ -4660,7 +4654,7 @@ class SystemInformation(BaseModel):
     ]
 
 
-class AuthorizationBoundary(BaseModel):
+class AuthorizationBoundary(OscalBaseModel):
     """
     A description of this system's authorization boundary, optionally supplemented by diagrams that illustrate the authorization boundary.
     """
@@ -4690,7 +4684,7 @@ class AuthorizationBoundary(BaseModel):
     ] = None
 
 
-class SystemImplementation(BaseModel):
+class SystemImplementation(OscalBaseModel):
     """
     Provides information as to how the system is implemented.
     """
@@ -4726,7 +4720,7 @@ class SystemImplementation(BaseModel):
     ] = None
 
 
-class SspStatement(BaseModel):
+class SspStatement(OscalBaseModel):
     """
     Identifies which statements within a control are addressed.
     """
@@ -4770,7 +4764,7 @@ class SspStatement(BaseModel):
     ] = None
 
 
-class TermsAndConditions(BaseModel):
+class TermsAndConditions(OscalBaseModel):
     """
     Used to define various terms and conditions under which an assessment, described by the plan, can be performed. Each child part defines a different type of term or condition.
     """
@@ -4783,7 +4777,7 @@ class TermsAndConditions(BaseModel):
     ] = None
 
 
-class LocalObjective(BaseModel):
+class LocalObjective(OscalBaseModel):
     """
     A local definition of a control objective for this assessment. Uses catalog syntax for control objective and assessment actions.
     """
@@ -4819,7 +4813,7 @@ class LocalObjective(BaseModel):
     ] = None
 
 
-class AssessmentMethod(BaseModel):
+class AssessmentMethod(OscalBaseModel):
     """
     A local definition of a control objective. Uses catalog syntax for control objective and assessment activities.
     """
@@ -4854,7 +4848,7 @@ class AssessmentMethod(BaseModel):
     ] = None
 
 
-class Step(BaseModel):
+class Step(OscalBaseModel):
     """
     Identifies an individual step in a series of steps related to an activity, such as an assessment test or examination procedure.
     """
@@ -4903,7 +4897,7 @@ class Step(BaseModel):
     ] = None
 
 
-class Activity(BaseModel):
+class Activity(OscalBaseModel):
     """
     Identifies an assessment or related process that can be performed. In the assessment plan, this is an intended activity which may be associated with an assessment task. In the assessment results, this an activity that was actually performed as part of an assessment.
     """
@@ -4953,7 +4947,7 @@ class Activity(BaseModel):
     ] = None
 
 
-class AssessmentSubject1(BaseModel):
+class AssessmentSubject1(OscalBaseModel):
     """
     Identifies system elements being assessed, such as components, inventory items, and locations. In the assessment plan, this identifies a planned assessment subject. In the assessment results this is an actual assessment subject, and reflects any changes from the plan. exactly what will be the focus of this assessment. Any subjects not identified in this way are out-of-scope.
     """
@@ -4993,7 +4987,7 @@ class AssessmentSubject1(BaseModel):
     ] = None
 
 
-class AssessmentSubject2(BaseModel):
+class AssessmentSubject2(OscalBaseModel):
     """
     Identifies system elements being assessed, such as components, inventory items, and locations. In the assessment plan, this identifies a planned assessment subject. In the assessment results this is an actual assessment subject, and reflects any changes from the plan. exactly what will be the focus of this assessment. Any subjects not identified in this way are out-of-scope.
     """
@@ -5034,7 +5028,7 @@ class AssessmentSubject2(BaseModel):
     ] = None
 
 
-class AssessmentAssets(BaseModel):
+class AssessmentAssets(OscalBaseModel):
     """
     Identifies the assets used to perform this assessment, such as the assessment team, scanning tools, and assumptions.
     """
@@ -5050,7 +5044,7 @@ class AssessmentAssets(BaseModel):
     ]
 
 
-class IdentifiedSubject(BaseModel):
+class IdentifiedSubject(OscalBaseModel):
     """
     Used to detail assessment subjects that were identified by this task.
     """
@@ -5074,7 +5068,7 @@ class IdentifiedSubject(BaseModel):
     ]
 
 
-class RelatedTask(BaseModel):
+class RelatedTask(OscalBaseModel):
     """
     Identifies an individual task for which the containing object is a consequence of.
     """
@@ -5122,7 +5116,7 @@ class RelatedTask(BaseModel):
     ] = None
 
 
-class RelatedResponse(BaseModel):
+class RelatedResponse(OscalBaseModel):
     """
     Identifies an individual risk response that this log entry is for.
     """
@@ -5155,7 +5149,7 @@ class RelatedResponse(BaseModel):
     ] = None
 
 
-class Entry(BaseModel):
+class Entry(OscalBaseModel):
     """
     Identifies an individual risk response that occurred as part of managing an identified risk.
     """
@@ -5224,7 +5218,7 @@ class Entry(BaseModel):
     ] = None
 
 
-class RiskLog(BaseModel):
+class RiskLog(OscalBaseModel):
     """
     A log of all risk-related tasks taken.
     """
@@ -5234,7 +5228,7 @@ class RiskLog(BaseModel):
     entries: Annotated[list[Entry], Field(min_length=1)]
 
 
-class LocalDefinitions1(BaseModel):
+class LocalDefinitions1(OscalBaseModel):
     """
     Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
     """
@@ -5256,7 +5250,7 @@ class LocalDefinitions1(BaseModel):
     ] = None
 
 
-class Entry1(BaseModel):
+class Entry1(OscalBaseModel):
     """
     Identifies the result of an action and/or task that occurred as part of executing an assessment plan or an assessment event that occurred in producing the assessment results.
     """
@@ -5319,7 +5313,7 @@ class Entry1(BaseModel):
     ] = None
 
 
-class AssessmentLog(BaseModel):
+class AssessmentLog(OscalBaseModel):
     """
     A log of all assessment-related actions taken.
     """
@@ -5329,7 +5323,7 @@ class AssessmentLog(BaseModel):
     entries: Annotated[list[Entry1], Field(min_length=1)]
 
 
-class PoamLocalDefinitions(BaseModel):
+class PoamLocalDefinitions(OscalBaseModel):
     """
     Allows components, and inventory-items to be defined within the POA&M for circumstances where no OSCAL-based SSP exists, or is not delivered with the POA&M.
     """
@@ -5356,7 +5350,7 @@ class PoamLocalDefinitions(BaseModel):
     ] = None
 
 
-class Control(BaseModel):
+class Control(OscalBaseModel):
     """
     A structured object representing a requirement or guideline, which when implemented will reduce an aspect of risk related to an information system and its information.
     """
@@ -5407,7 +5401,7 @@ class Control(BaseModel):
     ] = None
 
 
-class Mapping(BaseModel):
+class Mapping(OscalBaseModel):
     """
     A mapping between two target resources.
     """
@@ -5491,7 +5485,7 @@ class Mapping(BaseModel):
     coverage: Coverage | None = None
 
 
-class ComponentDefinitionControlImplementation(BaseModel):
+class ComponentDefinitionControlImplementation(OscalBaseModel):
     """
     Defines how the component or capability supports a set of controls.
     """
@@ -5533,7 +5527,7 @@ class ComponentDefinitionControlImplementation(BaseModel):
     ]
 
 
-class SystemCharacteristics(BaseModel):
+class SystemCharacteristics(OscalBaseModel):
     """
     Contains the characteristics of the system, such as its name, purpose, and security impact level.
     """
@@ -5616,7 +5610,7 @@ class SystemCharacteristics(BaseModel):
     ] = None
 
 
-class SspImplementedRequirement(BaseModel):
+class SspImplementedRequirement(OscalBaseModel):
     """
     Describes how the system satisfies the requirements of an individual control.
     """
@@ -5667,7 +5661,7 @@ class SspImplementedRequirement(BaseModel):
     ] = None
 
 
-class LocalDefinitions(BaseModel):
+class LocalDefinitions(OscalBaseModel):
     """
     Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
     """
@@ -5701,7 +5695,7 @@ class LocalDefinitions(BaseModel):
     ] = None
 
 
-class AssociatedActivity(BaseModel):
+class AssociatedActivity(OscalBaseModel):
     """
     Identifies an individual activity to be performed as part of a task.
     """
@@ -5741,7 +5735,7 @@ class AssociatedActivity(BaseModel):
     ] = None
 
 
-class Task(BaseModel):
+class Task(OscalBaseModel):
     """
     Represents a scheduled event or milestone, which may be associated with a series of assessment actions.
     """
@@ -5811,7 +5805,7 @@ class Task(BaseModel):
     ] = None
 
 
-class AssessmentCommonOrigin(BaseModel):
+class AssessmentCommonOrigin(OscalBaseModel):
     """
     Identifies the source of the finding, such as a tool, interviewed person, or activity.
     """
@@ -5827,7 +5821,7 @@ class AssessmentCommonOrigin(BaseModel):
     ] = None
 
 
-class Characterization(BaseModel):
+class Characterization(OscalBaseModel):
     """
     A collection of descriptive data about the containing object from a specific origin.
     """
@@ -5844,7 +5838,7 @@ class Characterization(BaseModel):
     facets: Annotated[list[Facet], Field(min_length=1)]
 
 
-class Response(BaseModel):
+class Response(OscalBaseModel):
     """
     Describes either recommended or an actual plan for addressing the risk.
     """
@@ -5900,7 +5894,7 @@ class Response(BaseModel):
     ] = None
 
 
-class LocalDefinitions2(BaseModel):
+class LocalDefinitions2(OscalBaseModel):
     """
     Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
     """
@@ -5928,7 +5922,7 @@ class LocalDefinitions2(BaseModel):
     ] = None
 
 
-class CatalogGroupWithControls(BaseModel):
+class CatalogGroupWithControls(OscalBaseModel):
     """
     A group of controls, or of groups of controls.
     """
@@ -5983,7 +5977,7 @@ class Mappings(RootModel[list[Mapping]]):
     root: Annotated[list[Mapping], Field(min_length=1)]
 
 
-class MappingCollection(BaseModel):
+class MappingCollection(OscalBaseModel):
     """
     A collection of relationship-based control and/or control statement mappings.
     """
@@ -6005,7 +5999,7 @@ class MappingCollection(BaseModel):
     ] = None
 
 
-class DefinedComponent(BaseModel):
+class DefinedComponent(OscalBaseModel):
     """
     A defined component that can be part of an implemented system.
     """
@@ -6070,7 +6064,7 @@ class DefinedComponent(BaseModel):
     ] = None
 
 
-class Capability(BaseModel):
+class Capability(OscalBaseModel):
     """
     A grouping of other components and/or capabilities.
     """
@@ -6119,7 +6113,7 @@ class Capability(BaseModel):
     ] = None
 
 
-class SspControlImplementation(BaseModel):
+class SspControlImplementation(OscalBaseModel):
     """
     Describes how the system satisfies a set of controls.
     """
@@ -6142,7 +6136,7 @@ class SspControlImplementation(BaseModel):
     ]
 
 
-class AssessmentPlan(BaseModel):
+class AssessmentPlan(OscalBaseModel):
     """
     An assessment plan, such as those provided by a FedRAMP assessor.
     """
@@ -6198,7 +6192,7 @@ class AssessmentPlan(BaseModel):
     ] = None
 
 
-class Finding(BaseModel):
+class Finding(OscalBaseModel):
     """
     Describes an individual finding.
     """
@@ -6259,7 +6253,7 @@ class Finding(BaseModel):
     ] = None
 
 
-class Observation(BaseModel):
+class Observation(OscalBaseModel):
     """
     Describes an individual observation.
     """
@@ -6327,7 +6321,7 @@ class Observation(BaseModel):
     ] = None
 
 
-class Risk(BaseModel):
+class Risk(OscalBaseModel):
     """
     An identified risk.
     """
@@ -6409,7 +6403,7 @@ class Risk(BaseModel):
     ] = None
 
 
-class Result(BaseModel):
+class Result(OscalBaseModel):
     """
     Used by the assessment results and POA&M. In the assessment results, this identifies all of the assessment observations and findings, initial and residual risks, deviations, and disposition. In the POA&M, this identifies initial and residual risks, deviations, and disposition.
     """
@@ -6492,7 +6486,7 @@ class Result(BaseModel):
     ] = None
 
 
-class PlanOfActionAndMilestones(BaseModel):
+class PlanOfActionAndMilestones(OscalBaseModel):
     """
     A plan of action and milestones which identifies initial and residual risks, deviations, and disposition, such as those required by FedRAMP.
     """
@@ -6533,7 +6527,7 @@ class PlanOfActionAndMilestones(BaseModel):
     ] = None
 
 
-class MappingCollectionDocument(BaseModel):
+class MappingCollectionDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6548,7 +6542,7 @@ class MappingCollectionDocument(BaseModel):
     ]
 
 
-class AssessmentPlanDocument(BaseModel):
+class AssessmentPlanDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6563,7 +6557,7 @@ class AssessmentPlanDocument(BaseModel):
     ]
 
 
-class PlanOfActionAndMilestonesDocument(BaseModel):
+class PlanOfActionAndMilestonesDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6579,7 +6573,7 @@ class PlanOfActionAndMilestonesDocument(BaseModel):
     ]
 
 
-class ComponentDefinition(BaseModel):
+class ComponentDefinition(OscalBaseModel):
     """
     A collection of component descriptions, which may optionally be grouped by capability.
     """
@@ -6611,7 +6605,7 @@ class ComponentDefinition(BaseModel):
     ] = None
 
 
-class SystemSecurityPlan(BaseModel):
+class SystemSecurityPlan(OscalBaseModel):
     """
     A system security plan, such as those described in NIST SP 800-18.
     """
@@ -6645,7 +6639,7 @@ class SystemSecurityPlan(BaseModel):
     ] = None
 
 
-class AssessmentResults(BaseModel):
+class AssessmentResults(OscalBaseModel):
     """
     Security assessment results, such as those provided by a FedRAMP assessor in the FedRAMP Security Assessment Report.
     """
@@ -6674,7 +6668,7 @@ class AssessmentResults(BaseModel):
     ] = None
 
 
-class ComponentDefinitionDocument(BaseModel):
+class ComponentDefinitionDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6690,7 +6684,7 @@ class ComponentDefinitionDocument(BaseModel):
     ]
 
 
-class SystemSecurityPlanDocument(BaseModel):
+class SystemSecurityPlanDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6705,7 +6699,7 @@ class SystemSecurityPlanDocument(BaseModel):
     ]
 
 
-class AssessmentResultsDocument(BaseModel):
+class AssessmentResultsDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6720,7 +6714,7 @@ class AssessmentResultsDocument(BaseModel):
     ]
 
 
-class CatalogDocument(BaseModel):
+class CatalogDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6733,7 +6727,7 @@ class CatalogDocument(BaseModel):
     catalog: Catalog
 
 
-class ProfileDocument(BaseModel):
+class ProfileDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     field_schema: Annotated[
@@ -6746,7 +6740,7 @@ class ProfileDocument(BaseModel):
     profile: Profile
 
 
-class Catalog(BaseModel):
+class Catalog(OscalBaseModel):
     """
     A structured, organized collection of control information.
     """
@@ -6781,7 +6775,7 @@ class Catalog(BaseModel):
     ] = None
 
 
-class CatalogGroupWithGroups(BaseModel):
+class CatalogGroupWithGroups(OscalBaseModel):
     """
     A group of controls, or of groups of controls.
     """
@@ -6833,7 +6827,7 @@ class CatalogGroupWithGroups(BaseModel):
     ] = None
 
 
-class Profile(BaseModel):
+class Profile(OscalBaseModel):
     """
     Each OSCAL profile is defined by a profile element.
     """
@@ -6867,7 +6861,7 @@ class Profile(BaseModel):
     ] = None
 
 
-class Custom(BaseModel):
+class Custom(OscalBaseModel):
     """
     Provides an alternate grouping structure that selected controls will be placed in.
     """
@@ -6888,7 +6882,7 @@ class Custom(BaseModel):
     ] = None
 
 
-class MergeCustom(BaseModel):
+class MergeCustom(OscalBaseModel):
     """
     Provides structuring directives that instruct how controls are organized after profile resolution.
     """
@@ -6910,7 +6904,7 @@ class MergeCustom(BaseModel):
     ]
 
 
-class ProfileGroup1(BaseModel):
+class ProfileGroup1(OscalBaseModel):
     """
     A group of (selected) controls or of groups of controls.
     """

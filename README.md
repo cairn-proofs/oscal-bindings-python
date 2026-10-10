@@ -176,6 +176,49 @@ json_str = serialize_oscal(doc)                # pretty-printed (indent: 2)
 json_str = serialize_oscal(doc, indent=None)   # compact
 ```
 
+Every model serializes to valid OSCAL by default: OSCAL key names (`media-type`, not
+`media_type`) and no `null` for unset fields, on every path. That covers
+`model_dump()`, `model_dump(mode="json")`, `model_dump_json()`, `pydantic_core.to_json(...)`,
+and `TypeAdapter(...).dump_python(...)`, including models nested in plain dicts and
+lists. Framework serializers that never pass kwargs (e.g. MCP or agent tool results)
+get valid OSCAL too. `serialize_oscal` is still the recommended call for whole
+documents.
+
+```python
+from oscal_bindings import make_rlink
+
+rlink = make_rlink("https://example.com/a.pdf", media_type="application/pdf")
+rlink.model_dump_json()                 # '{"href":"https://example.com/a.pdf","media-type":"application/pdf"}'
+rlink.model_dump(by_alias=False)        # {'href': '...', 'media_type': 'application/pdf'}
+```
+
+Opt-outs:
+
+- `by_alias=False` emits Python field names, still without `null`.
+- `exclude_none=False` has no effect. OSCAL forbids `null`, so None-valued fields
+  are always omitted. To tell whether a field was set, use attribute access
+  (`rlink.hashes is None`) or `model_fields_set`.
+
+### Field names vs. OSCAL names
+
+Python code can use field names; OSCAL data must use OSCAL names.
+
+- Constructor keyword arguments accept either: `Rlink(href=..., media_type=...)` and
+  `Rlink(href=..., **{"media-type": ...})` build the same model. Plain dicts nested
+  inside the kwargs are OSCAL data and must use OSCAL names.
+- Dict input (`Model.model_validate(...)`, `validate_element`) rejects a field name
+  at any depth with `extra_forbidden`.
+- JSON input (`parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed
+  `parse_*` functions, `model_validate_json`) never populates a field from a field
+  name key.
+
+**Known issue** ([#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)):
+on recent pydantic (observed on 2.13.x), a field-name key in JSON input is silently
+dropped instead of rejected. `parse_oscal('{... "back_matter": {...}}')` succeeds with
+`back_matter` unset; a required field reports only `missing` at its OSCAL name.
+Pydantic 2.11.0 rejects the same input with `extra_forbidden`. Dict input is rejected
+on every supported version.
+
 ### Validation
 
 ```python
@@ -220,7 +263,8 @@ hatch run release  # generate + lint + typing + security + test + coverage + doc
 ## Architecture
 
 - **Version package** (`src/oscal_bindings/v1/`) — everything below, scoped to the OSCAL major version. Exposes `__oscal_schema_version__`.
-- **Generated models** (`src/oscal_bindings/v1/models.py`) — Pydantic v2 `BaseModel` classes with `Annotated` field constraints, produced by `datamodel-code-generator` from the OSCAL JSON Schema.
+- **Generated models** (`src/oscal_bindings/v1/models.py`) — Pydantic v2 classes with `Annotated` field constraints, produced by `datamodel-code-generator` from the OSCAL JSON Schema.
+- **Model base** (`src/oscal_bindings/v1/_base.py`) — hand-written `OscalBaseModel`, which every generated object model inherits via `--base-class`: OSCAL keys and no nulls by default, field-name constructor kwargs.
 - **Post-processing** (`scripts/postprocess_models.py`) — renames classes from schema namespace paths to clean short names and names each document wrapper after its root key (e.g. `CatalogDocument`).
 - **Vendored schemas** (`schemas/<release>/`) — one directory per OSCAL release; the active bundle is chosen by explicit path.
 - **Runtime** (`src/oscal_bindings/v1/parser.py`) — parse / serialize / validate utilities and per-type typed parsers.
@@ -235,7 +279,7 @@ Public symbols are re-exported from `oscal_bindings.v1` and from the top-level `
 ## Requirements
 
 - Python 3.11+
-- Pydantic v2
+- Pydantic 2.11+
 
 ## License
 

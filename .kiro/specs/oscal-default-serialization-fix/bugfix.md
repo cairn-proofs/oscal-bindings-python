@@ -14,7 +14,9 @@ Byte-exact datetime round-trips (e.g. `.000000-04:00` → `-04:00`, `-00:00` →
 
 Accepting Python field names on construction (populate-by-name) is the natural companion to alias-by-default serialization, and it lets the `make_resource` / `make_rlink` workarounds simplify. Applied naively, though, it would also make the JSON/dict validation entry points accept name-keyed input (`{"incorporates_components": ...}`) that they reject today, which conflicts with "validation unchanged."
 
-Resolved: OSCAL input stays alias-only. Python keyword construction accepts field names (2.9). `parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed `parse_*` functions, and `validate_element` continue to reject JSON/dict input keyed by Python field names, at every nesting level (3.3, 3.4). Accepting name-keyed input everywhere was considered and rejected.
+Resolved: OSCAL input stays alias-only. Python keyword construction accepts field names (2.9). Name-keyed OSCAL input keeps today's behavior exactly (3.3, 3.4). Dict input (`model_validate` on any generated model, `validate_element`) is rejected with `extra_forbidden` at every nesting level. JSON input (`parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed `parse_*` functions, `model_validate_json`) never populates a field from a name-keyed key. Accepting name-keyed input everywhere was considered and rejected.
+
+Known pre-existing defect, out of scope for #5: on pydantic 2.13.x the JSON path doesn't reject a name-keyed key. It silently drops it, so `parse_oscal` accepts the document with that optional field unset, or reports only `missing` at the alias for a required field. Dict input with the same key is rejected. Pydantic 2.11.0 rejects the same JSON with `extra_forbidden` (observed in the task 3.6 floor check; 2.12.x untested), so the drop is an upstream regression after 2.11.0. This fix preserves the installed pydantic's behavior unchanged. Follow-up: [#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6).
 
 ## Bug Analysis
 
@@ -56,7 +58,7 @@ Resolved: OSCAL input stays alias-only. Python keyword construction accepts fiel
 
 2.10 WHEN the package is installed THEN the system SHALL declare a pydantic floor at the minimum version that supports the required configuration (pydantic>=2.11), replacing `pydantic[email]>=2.0`
 
-2.11 WHEN users read the README THEN the system SHALL document the default serialization behavior (aliases on, None dropped), the opt-outs from 2.8, the name-keyed input policy (keyword construction accepts field names; OSCAL JSON/dict input stays alias-only), and the pydantic floor change
+2.11 WHEN users read the README THEN the system SHALL document the default serialization behavior (aliases on, None dropped), the opt-outs from 2.8, the name-keyed input policy (keyword construction accepts field names; OSCAL input stays alias-only per 3.3, including the known JSON-mode silent drop), and the pydantic floor change
 
 2.12 WHEN the fix is complete THEN the system SHALL report parse and serialize time for the NIST SP 800-53 rev5 catalog before and after the change, and document any serialize-time regression
 
@@ -66,11 +68,14 @@ Resolved: OSCAL input stays alias-only. Python keyword construction accepts fiel
 
 3.1 WHEN `serialize_oscal(doc)` or `serialize_oscal(doc, indent=...)` is called THEN the system SHALL CONTINUE TO produce the same JSON as before the fix for every corpus document
 
-3.2 WHEN alias-keyed OSCAL JSON is passed to `parse_oscal`, `parse_oscal_file`, `validate_oscal`, or any typed `parse_*` function THEN the system SHALL CONTINUE TO accept exactly the inputs it accepts today and reject exactly the inputs it rejects today, with the same `OscalParseError` contract
+3.2 WHEN OSCAL JSON (text or bytes) is passed to `parse_oscal`, `parse_oscal_file`, `validate_oscal`, or any typed `parse_*` function THEN the system SHALL CONTINUE TO accept exactly the inputs it accepts today and reject exactly the inputs it rejects today, with the same `OscalParseError` contract and the same parsed values. This covers alias-keyed input and, per 3.3, input that uses Python field names
 
-3.3 WHEN JSON or dict input uses Python field names instead of OSCAL names (e.g. `incorporates_components`) and is passed to `parse_oscal`, `parse_oscal_file`, `validate_oscal`, or a typed `parse_*` function THEN the system SHALL CONTINUE TO reject it, whether the field-name key appears at the top level or in any nested object
+3.3 WHEN OSCAL input uses a Python field name instead of the OSCAL name of an alias-differing field (e.g. `incorporates_components`, `back_matter`), at the top level or in any nested object, THEN the system SHALL CONTINUE TO behave as it does today:
+  - (a) Dict input: `model_validate` on any generated model (including `OscalDocument` and the `*Document` wrappers) SHALL CONTINUE TO reject it with an `extra_forbidden` error at that key, at every nesting depth
+  - (b) JSON input: `parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed `parse_*` functions, and `model_validate_json` SHALL CONTINUE TO never populate the field from the name-keyed value (the value is never kept). On pydantic 2.13.x the key is dropped. The input is accepted with the field unset if the field is optional, and rejected as `missing` at the alias if it's required. Rejection with `extra_forbidden` at the key also satisfies this clause
+  - Known pre-existing defect: (b)'s silent drop means `parse_oscal` can lose data from mis-keyed input without an error. It is out of scope for #5, and this fix SHALL NOT change it. Pydantic 2.11.0 rejects the key with `extra_forbidden` instead (task 3.6 floor check), which also satisfies (b). Tracked in [#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)
 
-3.4 WHEN dict input with Python field names (at any nesting level) is passed to `validate_element` THEN the system SHALL CONTINUE TO report it as invalid
+3.4 WHEN dict input with Python field names (at any nesting level) is passed to `validate_element` THEN the system SHALL CONTINUE TO report it as invalid, with an "Extra inputs are not permitted" error at the name-keyed path (3.3(a))
 
 3.5 WHEN input contains unknown keys THEN the system SHALL CONTINUE TO reject it (extra fields forbidden)
 

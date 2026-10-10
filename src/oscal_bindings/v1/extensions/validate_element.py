@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 import oscal_bindings.v1.models as _models
+from oscal_bindings.v1._base import OscalBaseModel
 from oscal_bindings.v1.parser import OscalParseError
 
 
@@ -38,7 +39,10 @@ def _build_element_map() -> dict[str, type[BaseModel]]:
         if (
             isinstance(obj, type)
             and issubclass(obj, BaseModel)
-            and obj is not BaseModel
+            # models.py imports both bases into its namespace; neither is an
+            # OSCAL element. RootModel ("root-model") is kept for parity with
+            # the pre-fix element-type list.
+            and obj not in (BaseModel, OscalBaseModel)
         ):
             kebab = _pascal_to_kebab(name)
             element_map[kebab] = obj

@@ -6,14 +6,14 @@ Declared in `pyproject.toml` `[project.dependencies]`.
 
 | Dependency | Constraint | Why it's needed |
 |------------|-----------|-----------------|
-| `pydantic[email]` | `>=2.0` | The generated models are Pydantic v2 `BaseModel`s. The `email` extra provides `EmailStr` validation used by contact fields. Pydantic v2 is required — the codegen uses `--output-model-type pydantic_v2.BaseModel` and the runtime uses v2-only APIs (`model_validate_json`, `model_dump_json`, `RootModel`). |
+| `pydantic[email]` | `>=2.11` | The generated models are Pydantic v2 models (via `OscalBaseModel`). The `email` extra provides `EmailStr` validation used by contact fields. The 2.11 floor is for `ConfigDict(serialize_by_alias=True)` in `v1/_base.py`; the runtime also uses v2-only APIs (`model_validate_json`, `model_dump_json`, `RootModel`, `model_serializer`). The full serialization/parser/preservation suites pass on 2.11.0. |
 
 That is the **only** runtime dependency. The library is otherwise pure standard library (`pathlib`, `uuid`, `datetime`, `re`, `dataclasses`, `enum`, `typing`).
 
 ```mermaid
 graph TD
     APP["Downstream application"] --> OB["oscal_bindings"]
-    OB --> PYD["pydantic[email] >= 2.0"]
+    OB --> PYD["pydantic[email] >= 2.11"]
     OB --> STD["Python stdlib<br/>(pathlib, uuid, datetime, re, dataclasses)"]
 ```
 
@@ -33,6 +33,7 @@ Managed through Hatch environments (`[tool.hatch.envs.default.dependencies]`) ra
 |------|------|
 | `pytest` | Test runner (`testpaths = ["tests"]`; coverage run under `hatch test --cover`) |
 | `hypothesis` | Property-based tests (`tests/test_prop_*.py`); supplied via `extra-dependencies` on `[tool.hatch.envs.hatch-test]`, not a project dep |
+| `jsonschema`, `regex` | Test-only, also via `hatch-test` `extra-dependencies`: validate serialized output against the vendored OSCAL schema. `regex` backs the `pattern` keyword because OSCAL patterns use `\p{L}`/`\p{N}`, which stdlib `re` rejects |
 | `mypy` | Static type checking (`hatch run typing`, over `src/oscal_bindings` including `v1`) |
 | `datamodel-code-generator[http]` | Present in the default env for `hatch run generate` |
 | `pdoc` | API documentation (`hatch run docs` → `build/api-docs`) |
@@ -62,7 +63,7 @@ The active bundle is selected by the explicitly passed path only (the `generate`
 
 ## Dependency Risk Notes
 
-- **Single tight runtime coupling to Pydantic v2.** A Pydantic 3.x major release could require regeneration and code changes in `v1/parser.py` / `v1/extensions/`. This is the main upgrade-watch item.
+- **Single tight runtime coupling to Pydantic v2.** A Pydantic 3.x major release could require regeneration and code changes in `v1/_base.py`, `v1/parser.py`, and `v1/extensions/`. This is the main upgrade-watch item. `OscalBaseModel` also relies on the undocumented `__pydantic_base_init__` marker (tripwire tests guard it), and name-keyed JSON handling varies by minor version: 2.11.0 rejects with `extra_forbidden`, 2.13.x silently drops ([#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)).
 - **Codegen reproducibility** depends on the pinned `datamodel-code-generator` version *and* its transitive formatters (black, isort), all captured in the `requirements.txt` lockfile. Regenerating under the lock reproduces `v1/models.py` byte-for-byte. Regenerating with a different version may shift class names; the post-processor assumes the generator's `Model` root and `OscalComplete*` prefixing. Wrapper naming does not depend on the `Model1..8` ordinals (it is derived from each wrapper's body field), so a reordering or renumbering on the generator's side cannot silently mis-map names.
 - **`extra='forbid'` ties coverage to the vendored release.** A document using a field added after the Active_Schema_Bundle release is rejected rather than ignored, so "supports OSCAL 1.x" means "supports 1.2.3 and earlier". `__oscal_schema_version__` is the introspection mechanism; a lenient mode is deferred, not rejected (see `DEVELOPING.md` Key Design Decisions).
 - **No transitive runtime deps beyond Pydantic and its own deps**, keeping the install surface small for downstream compliance tooling.

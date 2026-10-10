@@ -14,7 +14,9 @@ graph TB
         S["schemas/1.2.3/oscal_complete_schema.json"]
     end
     subgraph L1["Layer 1 — Generated models"]
-        M["v1/models.py<br/>Pydantic v2 BaseModel classes<br/>+ TypeAliases + Enums"]
+        BASE["v1/_base.py<br/>OscalBaseModel (hand-written)"]
+        M["v1/models.py<br/>OscalBaseModel subclasses<br/>+ TypeAliases + Enums"]
+        BASE --> M
     end
     subgraph L2["Layer 2 — Runtime utilities"]
         P["v1/parser.py<br/>parse / serialize / validate<br/>+ 8 typed parsers"]
@@ -59,7 +61,10 @@ Consequences of that choice, as implemented:
 Every OSCAL top-level document carries `metadata` and a body-level `uuid`, but the path to them differs per type (`doc.catalog.metadata` vs `doc.system_security_plan.metadata`). `OscalDoc` collapses that dispatch behind uniform properties. A class-level dict `_WRAPPER_TO_BODY_ATTR` maps each of the 8 wrapper types to its body attribute name, so `body` is a single `getattr` rather than an 8-way `if`/`elif` chain.
 
 ### Adapter / Convenience constructors — builders
-`make_hash`, `make_rlink`, `make_resource` adapt the raw Pydantic models (which use camelCase JSON aliases, forbid extras, and don't populate-by-name) into kwarg-friendly Python constructors with sensible defaults (e.g. auto UUID4).
+`make_hash`, `make_rlink`, `make_resource` wrap the models in kwarg-friendly constructors with sensible defaults (e.g. auto UUID4, string `algorithm` coercion). Because `OscalBaseModel` accepts field-name kwargs, they construct directly (`Rlink(media_type=...)`, `Resource(document_ids=...)`), so every argument, `document_ids` included, is validated at construction.
+
+### Hand-written base class — `OscalBaseModel`
+`v1/_base.py` is the one piece of hand-written behavior generated code inherits, wired in by codegen's `--base-class` rather than by editing output. It makes default serialization valid OSCAL (`serialize_by_alias=True` plus a wrap serializer that drops None) and maps field-name constructor kwargs to aliases. Its `__init__` carries `__pydantic_base_init__` so `model_validate*` never routes through it, keeping OSCAL input alias-only. It imports only `pydantic` and stdlib, so `models.py → _base` can't cycle.
 
 ### Generated-code + post-processor
 Rather than hand-maintaining ~7000 lines of models, the library generates them and applies a deterministic rename pass. This keeps the models faithful to the schema while giving them clean names. The generator output is never hand-edited — regeneration is idempotent.
@@ -110,6 +115,7 @@ The asymmetry is deliberate: ambiguity invalidates the scan's own assumption, so
 |----------|-----------|
 | Generate models, don't hand-write | Faithful to NIST schema; regenerable when OSCAL updates |
 | Keep generated code pristine; helpers in `extensions/` | Codegen pipeline stays a clean run + rename pass; helpers evolve independently |
+| Model behavior via `--base-class OscalBaseModel` | Valid OSCAL from every serialization path, by-name construction, alias-only validation; no post-processor rewriting — see `DEVELOPING.md` "Valid OSCAL by default" |
 | Collapse scalar RootModels to TypeAliases | Callers access `catalog.metadata.version` directly, no `.root` unwrapping |
 | Module-prefixed names for 5 collisions | Disambiguate e.g. `SspControlImplementation` vs `ComponentDefinitionControlImplementation` |
 | Major-version namespace (`oscal_bindings.v1`) | The compatibility boundary is the major version, matching NIST's `$id` split; minor-version namespacing rejected as it would force import churn on every routine refresh — see `DEVELOPING.md` Key Design Decisions |

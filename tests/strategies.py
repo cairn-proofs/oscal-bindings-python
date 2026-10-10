@@ -139,8 +139,8 @@ def _alias_dict(
 #: `Hash` instances.
 hash_models = st.builds(Hash, algorithm=algorithm_members, value=hex_digests)
 
-#: `Rlink` instances (built via alias because `media-type` is aliased and the
-#: model does not populate by name).
+#: `Rlink` instances, validated from alias-keyed dicts (``model_validate`` is
+#: alias-only; only the constructor accepts field names like ``media_type``).
 rlink_models = _alias_dict(
     {"href": hrefs},
     {
@@ -176,8 +176,8 @@ def hash_strategy() -> st.SearchStrategy[dict[str, Any]]:
 def rlink_strategy() -> st.SearchStrategy[dict[str, Any]]:
     """Kwargs for `make_rlink`: ``href`` always; ``media_type``/``hashes`` optionally.
 
-    Uses the Python kwarg name ``media_type`` (the builder maps it onto the
-    ``media-type`` alias). ``media_type`` may be explicitly ``None``.
+    Uses the Python kwarg name ``media_type`` (the builder passes it to the
+    `Rlink` constructor by name). ``media_type`` may be explicitly ``None``.
     """
     return _alias_dict(
         {"href": hrefs},
@@ -287,8 +287,9 @@ def leaf_instance_strategy(element_type: str) -> st.SearchStrategy[dict[str, Any
     """Validator-ready dict for one allow-listed leaf ``element_type``.
 
     Constructs the mapped Pydantic model via ``model_validate`` over
-    alias-keyed generated values (models forbid extras and do not populate by
-    name), then returns ``model_dump(by_alias=True, exclude_none=True)``.
+    alias-keyed generated values (models forbid extras and ``model_validate``
+    rejects field-name keys), then returns
+    ``model_dump(by_alias=True, exclude_none=True)``.
 
     Raises:
         ValueError: If ``element_type`` is not in `LEAF_ELEMENT_TYPES`.

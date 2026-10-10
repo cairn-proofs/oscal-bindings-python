@@ -571,9 +571,9 @@ class TestParityWithPositionalMap:
         shuffled = published[3:] + published[:3]
 
         for ordinal, name in enumerate(shuffled, start=1):
-            header = f"class {name}(BaseModel):"
+            header = f"class {name}(OscalBaseModel):"
             assert header in content, f"expected wrapper header for {name}"
-            content = content.replace(header, f"class Model{ordinal}(BaseModel):")
+            content = content.replace(header, f"class Model{ordinal}(OscalBaseModel):")
 
         derived = pp.derive_document_renames(content)
 

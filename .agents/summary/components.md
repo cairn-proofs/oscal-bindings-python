@@ -1,6 +1,6 @@
 # Components
 
-The library has five source components inside the version package `src/oscal_bindings/v1/` (plus the top-level re-export package, the code-generation script, and the test suite). Each maps to one file. All paths below are relative to `src/oscal_bindings/` unless noted.
+The library has six source components inside the version package `src/oscal_bindings/v1/` (plus the top-level re-export package, the code-generation script, and the test suite). Each maps to one file. All paths below are relative to `src/oscal_bindings/` unless noted.
 
 ```mermaid
 graph LR
@@ -31,6 +31,18 @@ graph LR
 - Shared elements: `Metadata`, `BackMatter`, `Resource`, `Rlink`, `Hash`, `DocumentId`, `Link`, `Property`, `Role`, `Party`/`Parties`, `Parameter`, `Part`, etc.
 - Enums: `Algorithm` (SHA-224 … SHA3-512), plus many small `Type`/`Scheme`/`Rel`/`State` enums.
 - Models use `ConfigDict(extra='forbid')` and camelCase JSON aliases (e.g. `media-type`, `oscal-version`, `document-ids`).
+- Every object model subclasses `OscalBaseModel` (`--base-class`); `OscalDocument` and `Mappings` stay `RootModel[...]`.
+
+### 1a. `v1/_base.py` — `OscalBaseModel` (hand-written)
+
+**Responsibility:** Default behavior inherited by all 183 generated object models. Imports only `pydantic` and stdlib.
+
+| Symbol | Purpose |
+|--------|---------|
+| `OscalBaseModel.model_config` | `serialize_by_alias=True`; deliberately no `validate_by_name` / `populate_by_name` |
+| `OscalBaseModel._omit_none` | Wrap `model_serializer` that drops None values, so no path emits `null`; no return annotation (it would blank the serialization JSON schema) |
+| `OscalBaseModel.__init__` | Maps field-name kwargs to aliases; leaves the name if the alias is also passed so `extra='forbid'` rejects it. Marked `__pydantic_base_init__ = True` so `model_validate*` doesn't route through it |
+| `_kwarg_aliases(cls)` | `functools.cache`'d `{name: alias}` for alias-differing fields, excluding names that are also some field's alias |
 
 ## 2. `v1/parser.py` — Runtime parse/serialize/validate
 
@@ -63,15 +75,16 @@ graph LR
 | Function | Notes |
 |----------|-------|
 | `make_hash(value, algorithm=Algorithm.SHA_256)` | Accepts enum or string (`"SHA-256"`); coerces string via `Algorithm(...)` |
-| `make_rlink(href, *, media_type=None, hashes=None)` | Built via `Rlink.model_validate({...})` to satisfy the `media-type` alias |
-| `make_resource(*, title, description, rlinks, uuid, document_ids)` | Generates a UUID4 when `uuid` omitted; `document_ids` set **post-construction** because the `document-ids` alias + `extra='forbid'` prevent passing it as a kwarg |
+| `make_rlink(href, *, media_type=None, hashes=None)` | `Rlink(href=..., media_type=..., hashes=...)` — by-name kwargs via `OscalBaseModel` |
+| `make_resource(*, title, description, rlinks, uuid, document_ids)` | Generates a UUID4 when `uuid` omitted; one `Resource(...)` call, so `document_ids` is validated at construction (`[]` or non-`DocumentId` items raise `ValidationError`) |
 
 ## 5. `v1/extensions/validate_element.py` — element-level validation
 
 **Responsibility:** Validate an arbitrary OSCAL element fragment (a dict) against its model.
 
 - `_pascal_to_kebab(name)` — converts model class names to kebab element types.
-- `_build_element_map()` — introspects `oscal_bindings.v1.models` for all `BaseModel` subclasses, building `{kebab-name: model class}`; result cached in module-level `_ELEMENT_MAP`.
+- `_build_element_map()` — introspects `oscal_bindings.v1.models` for all `BaseModel` subclasses except `BaseModel` and `OscalBaseModel` themselves, building `{kebab-name: model class}`; result cached in module-level `_ELEMENT_MAP`. The pre-existing `root-model` entry (from the `RootModel` import) is kept; the set is pinned by `tests/support/element_types_snapshot.txt`.
+- `validate_element` calls `model_validate(element)` with no extra kwargs; dict input stays alias-only from the models' defaults.
 - `get_supported_element_types() -> list[str]` — sorted kebab names.
 - `validate_element(element: dict|None, element_type: str) -> ElementValidationResult` — raises `OscalParseError` for unknown types; otherwise returns a result with `valid` and a list of `ValidationError(path, message)`.
 - Dataclasses `ElementValidationResult` and `ValidationError` (re-exported as `ElementValidationError`).

@@ -31,7 +31,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 requires-python = ">=3.11"
-dependencies = ["pydantic[email]>=2.0"]
+dependencies = ["pydantic[email]>=2.11"]
 
 [project.urls]
 Homepage = "https://github.com/cairn-proofs/oscal-bindings-python"
@@ -58,7 +58,7 @@ python = "3.12"
 dependencies = ["mypy", "datamodel-code-generator[http,black,isort]==0.83.0", "pdoc", "ruff==0.16.8"]
 
 [tool.hatch.envs.default.scripts]
-generate = "datamodel-codegen --input ./schemas/1.2.3/oscal_complete_schema.json --output src/oscal_bindings/v1/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --collapse-root-models --use-annotated --field-constraints --reuse-model --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models src/oscal_bindings/v1/models.py"
+generate = "datamodel-codegen --input ./schemas/1.2.3/oscal_complete_schema.json --output src/oscal_bindings/v1/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --base-class oscal_bindings.v1._base.OscalBaseModel --collapse-root-models --use-annotated --field-constraints --reuse-model --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models src/oscal_bindings/v1/models.py"
 docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
 # No --install-types: it would pip-install stubs at run time, outside the lockfile.
 # Add any stub packages mypy needs to `dependencies` above instead.
@@ -96,7 +96,7 @@ pip-compile-hashes = true
 # Resolve shared deps (pydantic, pytest, ...) to the same versions as default.
 pip-compile-constraint = "default"
 parallel = true
-extra-dependencies = ["hypothesis"]
+extra-dependencies = ["hypothesis", "jsonschema", "regex"]
 
 # Hatch runs cov-combine and then cov-report once after `hatch test --cover`.
 # cov-report adds the HTML report ([tool.coverage.html] sets the directory)
