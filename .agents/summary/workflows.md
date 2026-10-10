@@ -140,7 +140,7 @@ From `DEVELOPING.md` and `pyproject.toml` hatch scripts:
 
 ```mermaid
 flowchart LR
-    G["hatch run generate"] --> T["hatch test --all --cover<br/>(py3.11 + py3.12, parallel)"]
+    G["hatch run generate"] --> T["hatch test --all --cover<br/>(py3.11–py3.14, parallel)"]
     T --> D["hatch run docs (pdoc → build/api-docs)"]
     G -.-> R["hatch run release = generate + lint + typing + security + test --all --cover + docs"]
     T -.-> R

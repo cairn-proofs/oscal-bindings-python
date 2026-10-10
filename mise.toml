@@ -1,5 +1,5 @@
 [tools]
-python = "3.12"
+python = "3.14"
 # uv >= 0.12.10 lets mise lock pypi: tools' full dependency graph (hashes) in
 # mise.lock plus a sidecar under .mise/locks/.
 uv = "0.12.15"

@@ -26,6 +26,8 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Security",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Typing :: Typed",
@@ -52,7 +54,7 @@ type = "pip-compile"
 pip-compile-resolver = "uv"
 pip-compile-installer = "uv"
 pip-compile-hashes = true
-python = "3.12"
+python = "3.14"
 # pytest is deliberately absent: tests run in hatch-test (`hatch test`), whose
 # built-in pytest range is Hatch's to choose.
 dependencies = ["mypy", "datamodel-code-generator[http,black,isort]==0.83.0", "pdoc", "ruff==0.16.8"]
@@ -82,6 +84,8 @@ lock = [
     # One per matrix entry; keep in step with [[tool.hatch.envs.hatch-test.matrix]].
     "hatch env run --env hatch-test.py3.11 -- python --version",
     "hatch env run --env hatch-test.py3.12 -- python --version",
+    "hatch env run --env hatch-test.py3.13 -- python --version",
+    "hatch env run --env hatch-test.py3.14 -- python --version",
     "hatch env run --env hatch-build -- python --version",
     "hatch env run --env security -- python --version",
 ]
@@ -109,7 +113,7 @@ cov-combine = "coverage combine"
 cov-report = ["coverage report", "coverage html"]
 
 [[tool.hatch.envs.hatch-test.matrix]]
-python = ["3.11", "3.12"]
+python = ["3.11", "3.12", "3.13", "3.14"]
 
 [tool.pytest.ini_options]
 addopts = ["--durations=5", "--color=yes"]
@@ -125,6 +129,12 @@ show_missing = true
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+# Check against the oldest supported Python, not the interpreter mypy runs on
+# (the default env's 3.14), so 3.12+ stdlib/typing APIs fail `hatch run typing`.
+# Keep in step with requires-python, like ruff's target-version below.
+[tool.mypy]
+python_version = "3.11"
 
 [tool.ruff]
 line-length = 88
@@ -221,7 +231,7 @@ type = "pip-compile"
 pip-compile-resolver = "uv"
 pip-compile-installer = "uv"
 pip-compile-hashes = true
-python = "3.12"
+python = "3.14"
 detached = true
 dependencies = ["bandit==1.9.4", "pip-audit==2.10.1"]
 
@@ -239,7 +249,7 @@ scan-code = "bandit -c pyproject.toml -r src scripts"
 # datamodel-code-generator 0.59.0: 10 IDs from PyPI vs 12 from OSV). With OSV,
 # --require-hashes checks hash presence only (pip-audit warns); hash validity is
 # enforced where it matters, when uv installs from these lockfiles.
-scan-deps = "pip-audit -s osv --strict --disable-pip --require-hashes -r requirements.txt -r requirements/requirements-hatch-test.py3.11.txt -r requirements/requirements-hatch-test.py3.12.txt -r requirements/requirements-hatch-build.txt -r requirements/requirements-security.txt"
+scan-deps = "pip-audit -s osv --strict --disable-pip --require-hashes -r requirements.txt -r requirements/requirements-hatch-test.py3.11.txt -r requirements/requirements-hatch-test.py3.12.txt -r requirements/requirements-hatch-test.py3.13.txt -r requirements/requirements-hatch-test.py3.14.txt -r requirements/requirements-hatch-build.txt -r requirements/requirements-security.txt"
 
 [tool.bandit]
 # Each skip needs a justification.
