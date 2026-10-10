@@ -21,7 +21,9 @@ pin today's behavior:
   pydantic doesn't break them. Silent dropping is a pre-existing defect,
   tracked separately from issue #5.
 - Unknown keys stay rejected (3.5).
-- ``serialize_oscal`` output is what it always was (3.1).
+- ``serialize_oscal`` byte-identity (3.1) was checked once against pre-fix
+  SHA-256 digests of every corpus doc; it isn't re-tested here because
+  ``serialize_oscal`` is a one-line ``model_dump_json`` call.
 - ``get_supported_element_types()`` equals the committed pre-fix snapshot (3.7).
 - Builders with valid arguments equal the pre-fix alias-dict construction (3.8).
 - ``OscalDoc`` accessors and attribute access by Python name are unchanged
@@ -72,7 +74,6 @@ from oscal_bindings import (
     parse_plan_of_action_and_milestones,
     parse_profile,
     parse_system_security_plan,
-    serialize_oscal,
     validate_element,
     validate_oscal,
 )
@@ -552,32 +553,6 @@ def test_unknown_key_rejected_at_depth(
     with pytest.raises(ValidationError) as direct:
         type(site.owner).model_validate(subtree)
     assert _has_extra_forbidden(direct.value.errors(), (), UNKNOWN_KEY), where
-
-
-# --- serialize_oscal output (3.1) --------------------------------------------
-
-
-@given(data=st.data())
-def test_serialize_oscal_equals_explicit_alias_exclude_none_dump(
-    all_corpus_docs: list[CorpusDoc], data: st.DataObject
-) -> None:
-    """Feature: oscal-default-serialization-fix, Property 2: ``serialize_oscal``
-    is the explicit ``by_alias=True, exclude_none=True`` dump.
-
-    Byte-identity against the pre-fix tree is checked separately by comparing
-    SHA-256 digests captured before the fix (task 3.9).
-
-    **Validates: Requirements 3.1**
-    """
-    corpus_doc = data.draw(st.sampled_from(all_corpus_docs), label="doc")
-    doc = _sites(corpus_doc.raw_bytes).doc
-    where = f"{corpus_doc.corpus_name}:{corpus_doc.rel_path}"
-    assert serialize_oscal(doc) == doc.model_dump_json(
-        indent=2, by_alias=True, exclude_none=True
-    ), where
-    assert serialize_oscal(doc, indent=None) == doc.model_dump_json(
-        by_alias=True, exclude_none=True
-    ), where
 
 
 # --- Element types (3.7) -----------------------------------------------------

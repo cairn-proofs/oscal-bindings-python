@@ -8,8 +8,9 @@ behavior, so they fail on the unfixed library and pass once the fix lands:
   ``pydantic_core.to_json``, ``TypeAdapter.dump_python``) emits OSCAL (alias)
   keys only and no ``None``/``null``, at every depth, for models alone and
   inside plain containers.
-- For a whole document, ``json.loads(doc.model_dump_json())`` equals
-  ``json.loads(serialize_oscal(doc))``.
+- For SP 800-53 rev5, ``json.loads(doc.model_dump_json())`` equals
+  ``json.loads(serialize_oscal(doc))``. The same check over the whole corpus is
+  in ``tests/test_prop_serialization_defaults.py``.
 - Keyword construction by Python field name equals construction by alias.
 - ``make_resource`` validates ``document_ids`` and raises ``ValidationError``.
 
@@ -24,6 +25,7 @@ framework-shaped calls that must re-parse to the same document.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 from pathlib import Path
@@ -31,8 +33,6 @@ from typing import TYPE_CHECKING, Any
 
 import pydantic_core
 import pytest
-from hypothesis import given
-from hypothesis import strategies as st
 from pydantic import BaseModel, RootModel, TypeAdapter, ValidationError
 from support.oscal_shape import DEFAULT_PATHS, assert_valid_oscal_shape
 
@@ -73,6 +73,35 @@ def catalog_bytes(nist_docs: list[CorpusDoc]) -> bytes:
     pytest.fail(f"{CATALOG_800_53} missing from the NIST corpus")
 
 
+# Shape, opt-out, and framework tests need nesting and alias-differing fields at
+# depth, not size. Re-parsing and walking the 10 MB SP 800-53 catalog per case
+# made this module the slowest in CI, so they use the smallest NIST catalog
+# that has back-matter rlinks with a media-type.
+_SMALL_CATALOG_MARKERS = (b'"back-matter"', b'"media-type"', b'"last-modified"')
+
+
+@pytest.fixture(scope="module")
+def small_catalog_bytes(nist_docs: list[CorpusDoc]) -> bytes:
+    candidates = [
+        d.raw_bytes
+        for d in nist_docs
+        if d.root_key == "catalog"
+        and all(m in d.raw_bytes for m in _SMALL_CATALOG_MARKERS)
+    ]
+    assert candidates, "no NIST catalog with back-matter rlinks and media-type"
+    return min(candidates, key=len)
+
+
+@functools.cache
+def _parsed_catalog(raw: bytes) -> BaseModel:
+    return parse_catalog(raw)
+
+
+@functools.cache
+def _parsed_document(raw: bytes) -> BaseModel:
+    return parse_oscal(raw)
+
+
 def _capability() -> BaseModel:
     return Capability(uuid=UUID, name="n", description="d")
 
@@ -96,9 +125,9 @@ MODEL_FACTORIES: dict[str, Callable[[bytes], BaseModel]] = {
     "rlink-no-media-type": lambda _: _rlink_plain(),
     "rlink-media-type": lambda _: _rlink_media_type(),
     "resource-document-ids": lambda _: _resource_document_ids(),
-    "corpus-metadata": lambda raw: parse_catalog(raw).catalog.metadata,
-    "catalog-document": parse_catalog,
-    "oscal-document": parse_oscal,
+    "corpus-metadata": lambda raw: _parsed_catalog(raw).catalog.metadata,  # type: ignore[attr-defined]
+    "catalog-document": _parsed_catalog,
+    "oscal-document": _parsed_document,
 }
 
 
@@ -113,10 +142,10 @@ BY_ALIAS = {"by_alias-omitted": {}, "by_alias=True": {"by_alias": True}}
 @pytest.mark.parametrize("path", list(PATHS))
 @pytest.mark.parametrize("model", list(MODEL_FACTORIES))
 def test_default_path_emits_oscal_keys_and_no_nulls(
-    model: str, path: str, by_alias: str, catalog_bytes: bytes
+    model: str, path: str, by_alias: str, small_catalog_bytes: bytes
 ) -> None:
     """Default paths emit alias keys only and no null (1.1-1.4, 2.1-2.4, 2.6)."""
-    instance = MODEL_FACTORIES[model](catalog_bytes)
+    instance = MODEL_FACTORIES[model](small_catalog_bytes)
     assert_valid_oscal_shape(PATHS[path](instance, BY_ALIAS[by_alias]))
 
 
@@ -127,18 +156,6 @@ def test_catalog_model_dump_json_equals_serialize_oscal(catalog_bytes: bytes) ->
     """SP 800-53: bare ``model_dump_json`` matches ``serialize_oscal`` (1.5)."""
     doc = parse_oscal(catalog_bytes)
     assert json.loads(doc.model_dump_json()) == json.loads(serialize_oscal(doc))
-
-
-@given(data=st.data())
-def test_corpus_model_dump_json_equals_serialize_oscal(
-    all_corpus_docs: list[CorpusDoc], data: st.DataObject
-) -> None:
-    """Any corpus doc: default ``model_dump_json`` matches ``serialize_oscal`` (1.5)."""
-    corpus_doc = data.draw(st.sampled_from(all_corpus_docs), label="doc")
-    doc = parse_oscal(corpus_doc.raw_bytes)
-    assert json.loads(doc.model_dump_json()) == json.loads(serialize_oscal(doc)), (
-        f"{corpus_doc.corpus_name}:{corpus_doc.rel_path}"
-    )
 
 
 # --- Keyword construction by Python field name (1.6, 2.9) --------------------
@@ -228,10 +245,10 @@ def _all_keys(value: object) -> set[str]:
     ],
 )
 def test_by_alias_false_emits_names_at_depth_without_nulls(
-    dump: Callable[[BaseModel], Any], catalog_bytes: bytes
+    dump: Callable[[BaseModel], Any], small_catalog_bytes: bytes
 ) -> None:
     """``by_alias=False`` gives Python names at every depth, still no null."""
-    dumped = dump(parse_catalog(catalog_bytes))
+    dumped = dump(_parsed_catalog(small_catalog_bytes))
     problems = _name_keyed_violations(dumped)
     assert not problems, f"{len(problems)} violation(s): {'; '.join(problems[:10])}"
     # Alias-differing fields at depth come out under their Python names.
@@ -241,9 +258,9 @@ def test_by_alias_false_emits_names_at_depth_without_nulls(
 
 
 @pytest.mark.parametrize("model", list(MODEL_FACTORIES))
-def test_exclude_none_false_is_a_no_op(model: str, catalog_bytes: bytes) -> None:
+def test_exclude_none_false_is_a_no_op(model: str, small_catalog_bytes: bytes) -> None:
     """``exclude_none=False`` output equals default output (OSCAL forbids null)."""
-    m = MODEL_FACTORIES[model](catalog_bytes)
+    m = MODEL_FACTORIES[model](small_catalog_bytes)
     assert m.model_dump(exclude_none=False) == m.model_dump()
     assert m.model_dump(mode="json", exclude_none=False) == m.model_dump(mode="json")
     assert m.model_dump_json(exclude_none=False) == m.model_dump_json()
@@ -391,9 +408,9 @@ def _framework_model_dump_json(doc: BaseModel) -> Any:
     ],
 )
 def test_framework_shaped_output_reparses_to_same_document(
-    dump: Callable[[BaseModel], Any], catalog_bytes: bytes
+    dump: Callable[[BaseModel], Any], small_catalog_bytes: bytes
 ) -> None:
-    doc = parse_oscal(catalog_bytes)
+    doc = _parsed_document(small_catalog_bytes)
     expected = serialize_oscal(doc)
     dumped = dump(doc)
     assert dumped == json.loads(expected)
