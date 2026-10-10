@@ -155,7 +155,7 @@ Shell rule for every task: never prefix commands with `cd`; pass the tool's `cwd
     - Message includes `#5` and test status (e.g. "Default to valid OSCAL serialization via OscalBaseModel (#5). Tested: hatch test passes; serialize_oscal digests and element types unchanged; floor check on pydantic 2.11.0 <result>")
     - Never push
 
-- [ ] 4. Add fix-checking and property tests
+- [x] 4. Add fix-checking and property tests
   - [x] 4.1 Opt-out and construction unit tests in `tests/test_serialization_defaults.py`
     - `by_alias=False` gives Python names at depth with no `null`; `exclude_none=False` output equals default output; `include`/`exclude`/`exclude_unset` still honored
     - Construction smoke cases on `Rlink` / `Resource`: name kwargs, alias kwargs, mixed, unknown kwarg → `ValidationError` (`extra_forbidden`). Exhaustive construction, both-name-and-alias, and nested-dict rejection live in 4.3
@@ -206,18 +206,18 @@ Shell rule for every task: never prefix commands with `cd`; pass the tool's `cwd
     - **EXPECTED OUTCOME**: all pass
     - _Requirements: 2.1–2.9, 2.13, 3.3, 3.4_
 
-  - [-] 4.6 Commit the fix-checking tests (checkpoint)
+  - [x] 4.6 Commit the fix-checking tests (checkpoint)
     - Only after 4.5 passes and `hatch test --all > ./tmp/commit4.log 2>&1; echo "EXIT: $?"` is green
     - Stage by name only the task-4 test files (`tests/test_serialization_defaults.py`, `tests/test_prop_serialization_defaults.py`, `tests/test_base_model.py`, `tests/test_prop_base_model.py`, the schema-validation test, any `tests/strategies.py` / `conftest.py` additions), any DEVELOPING.md note from 4.4, and `tasks.md`. Never stage `.github/dependabot.yml`, `.kiro/steering/*`, or `./tmp/`
     - Message includes `#5` and test status (e.g. "Add fix-checking and OscalBaseModel tripwire tests (#5). Tested: hatch test --all passes")
     - Never push
 
-- [~] 5. Benchmark after the fix
+- [x] 5. Benchmark after the fix
   - `hatch run python scripts/bench_serialization.py > ./tmp/bench_after.log 2>&1; echo "EXIT: $?"`
   - Compare with `./tmp/bench_before.log`; record both tables (parse, serialize compact/indented, `model_dump_json`, `to_json`, versions) in DEVELOPING.md and note the accepted serialize-time regression and the documented `exclude_if` fallback (~1.35×, needs pydantic ≥2.12) for the PR description
   - _Requirements: 2.12_
 
-- [~] 6. Checkpoint - Ensure all tests pass
+- [-] 6. Checkpoint - Ensure all tests pass
   - `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` (generate reproducibility, lint, typing incl. `_base.py` and name-kwarg `builders.py`, security, `hatch test --all --cover` on 3.11 + 3.12, docs)
   - Confirm `git diff --exit-code src/oscal_bindings/v1/models.py` is clean after the release run's `generate`
   - Inspect `./tmp/release.log` for failures; fix and re-run
