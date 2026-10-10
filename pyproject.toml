@@ -17,7 +17,7 @@ license-files = ["LICENSE", "NOTICE"]
 # Name only, no email: published metadata can't be edited after upload, and
 # contact goes through [project.urls] (issues).
 authors = [{ name = "Fritz Kunstler" }]
-keywords = ["oscal", "nist", "compliance", "security-controls", "fedramp", "pydantic"]
+keywords = ["oscal", "GRC engineering", "compliance automation", "security controls", "security assurance", "compliance as code"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
