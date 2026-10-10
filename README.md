@@ -278,7 +278,7 @@ Public symbols are re-exported from `oscal_bindings.v1` and from the top-level `
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11+ (tested on 3.11–3.14)
 - Pydantic 2.11+
 
 ## License

@@ -10,7 +10,7 @@ The implementation lives in a **major-version package**, `oscal_bindings.v1`. Th
 - **Repository:** `cairn-proofs/oscal-bindings-python`. The `-python` suffix is for the repo only: sibling bindings in other languages live in `oscal-bindings-<lang>` repos, while each registry package uses that ecosystem's native name.
 - **License:** Apache-2.0 (`LICENSE`); NIST attribution for the vendored schemas is in `NOTICE`.
 - **Version:** 0.1
-- **Language:** Python 3.11+ (test matrix: 3.11, 3.12)
+- **Language:** Python 3.11+ (test matrix: 3.11, 3.12, 3.13, 3.14)
 - **Core runtime dependency:** Pydantic v2 (with `email` extra)
 - **Build backend:** Hatchling
 - **License / audience:** Developers building compliance tooling, GRC platforms, and security automation that consume/produce OSCAL documents.
@@ -37,7 +37,7 @@ No other programming languages are present. There are no compiled extensions, no
 | Static typing | `mypy` |
 | API docs | `pdoc` |
 | Linting / formatting | `ruff` (configured in `pyproject.toml`) |
-| Toolchain pinning | `mise.toml` + `mise.lock` (Python 3.12, uv, Hatch + hatch-pip-compile) |
+| Toolchain pinning | `mise.toml` + `mise.lock` (Python 3.14, uv, Hatch + hatch-pip-compile) |
 
 ## Directory Structure
 
@@ -72,7 +72,7 @@ oscal-bindings-python/
 ├── requirements.txt             # default-env lockfile (hatch-pip-compile output)
 ├── requirements/                # hatch-test (per Python) + hatch-build lockfiles
 ├── pyproject.toml               # Build config, deps, hatch envs/scripts
-├── mise.toml / mise.lock        # Toolchain pins: Python 3.12, uv, Hatch (+ .mise/locks sidecar)
+├── mise.toml / mise.lock        # Toolchain pins: Python 3.14, uv, Hatch (+ .mise/locks sidecar)
 ├── DEVELOPING.md                # Dev workflow + design-decision rationale
 └── README.md                    # User-facing usage guide
 ```
@@ -150,5 +150,5 @@ graph TD
 ## Testing
 
 - `pytest`, `testpaths = ["tests"]`, one test module per source module plus an import smoke test with top-level/v1 parity checks (`test_oscal_bindings.py`), post-processor tests (`test_postprocess.py`), Hypothesis property tests (`test_prop_postprocess.py`), and shared helpers in `tests/support/` (`version_package.py`, `corpus.py`).
-- Matrix runs across Python 3.11 and 3.12 (`hatch test --all`), parallelized.
+- Matrix runs across Python 3.11, 3.12, 3.13, and 3.14 (`hatch test --all`), parallelized.
 - Reports: terminal coverage plus `htmlcov/` (HTML, git-ignored), both from `hatch test --cover` via the overridden `cov-report` script.

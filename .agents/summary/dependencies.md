@@ -44,16 +44,17 @@ Managed through Hatch environments (`[tool.hatch.envs.default.dependencies]`) ra
 | Tool | Role |
 |------|------|
 | Hatch (`hatchling` backend) | Build backend + environment/script management. Wheel packages `src/oscal_bindings`; build output goes to `./build`. |
-| `hatch-pip-compile` (`==1.11.8`) | Env type for `default`, `hatch-test`, `hatch-build`; writes hashed lockfiles `requirements.txt` and `requirements/requirements-hatch-{test.py3.11,test.py3.12,build}.txt`. `hatch-test` is constrained by `default`. |
+| `hatch-pip-compile` (`==1.11.8`) | Env type for `default`, `hatch-test`, `hatch-build`, `security`; writes hashed lockfiles `requirements.txt` and `requirements/requirements-hatch-{test.py3.11,test.py3.12,test.py3.13,test.py3.14,build}.txt` plus `requirements/requirements-security.txt`. `hatch-test` is constrained by `default`. |
 | `uv` | Resolver and installer behind `hatch-pip-compile`. No `uv.lock`: the pip-compile lockfiles are the single lock system. `[tool.uv.workspace]` is still declared. |
-| `mise` | Sole installer of the toolchain, locally and in CI (`jdx/mise-action`): Python 3.12, uv, and Hatch 1.18.1 with `hatch-pip-compile` injected, locked with hashes in `mise.lock` + `.mise/locks/`. |
+| `mise` | Sole installer of the toolchain, locally and in CI (`jdx/mise-action`): Python 3.14, uv, and Hatch 1.18.1 with `hatch-pip-compile` injected, locked with hashes in `mise.lock` + `.mise/locks/`. |
 
 ## Python Version Support
 
 - **Requires** Python `>=3.11` (`requires-python`).
-- **Tested** on 3.11 and 3.12 (`[[tool.hatch.envs.hatch-test.matrix]]`, parallel).
+- **Tested** on 3.11, 3.12, 3.13, and 3.14 (`[[tool.hatch.envs.hatch-test.matrix]]`, parallel).
 - Codegen targets 3.11 syntax (`--target-python-version 3.11`), so generated models use `X | Y` unions and `list[...]` builtins.
-- Default hatch env and `mise.toml` use 3.12.
+- mypy checks against 3.11 (`[tool.mypy] python_version`) and ruff targets `py311`, matching the floor rather than the toolchain.
+- `mise.toml` and the `default` and `security` hatch envs use 3.14; `hatch-build` follows the mise interpreter.
 
 ## Schema Input (not a package dependency)
 

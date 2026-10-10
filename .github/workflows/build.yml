@@ -70,7 +70,7 @@ jobs:
           fi
 
       # generate -> lint -> typing -> security (bandit + pip-audit) ->
-      # tests with coverage (3.11 + 3.12) -> docs
+      # tests with coverage (3.11–3.14) -> docs
       - name: Release checks
         run: hatch run release
 

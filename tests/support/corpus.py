@@ -471,10 +471,10 @@ def _matching_files(root: Path, globs: tuple[str, ...]) -> dict[str, Path]:
     """Map POSIX ``rel_path`` → file for every regular file matching ``globs``.
 
     Keyed by ``rel_path`` so a file matched by several globs appears once.
-    ``Path.glob`` treats ``**`` as zero or more directories on 3.11 and 3.12
-    alike, so ``**/*.json`` also matches top-level files. Unlike a shell glob
-    it also matches dotfiles; that is harmless here since non-documents are
-    filtered by root key.
+    ``Path.glob`` treats ``**`` as zero or more directories on every tested
+    Python (3.11 through 3.14), so ``**/*.json`` also matches top-level files.
+    Unlike a shell glob it also matches dotfiles; that is harmless here since
+    non-documents are filtered by root key.
     """
     matches: dict[str, Path] = {}
     for pattern in globs:
