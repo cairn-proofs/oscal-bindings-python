@@ -217,7 +217,7 @@ Shell rule for every task: never prefix commands with `cd`; pass the tool's `cwd
   - Compare with `./tmp/bench_before.log`; record both tables (parse, serialize compact/indented, `model_dump_json`, `to_json`, versions) in DEVELOPING.md and note the accepted serialize-time regression and the documented `exclude_if` fallback (~1.35×, needs pydantic ≥2.12) for the PR description
   - _Requirements: 2.12_
 
-- [-] 6. Checkpoint - Ensure all tests pass
+- [x] 6. Checkpoint - Ensure all tests pass
   - `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` (generate reproducibility, lint, typing incl. `_base.py` and name-kwarg `builders.py`, security, `hatch test --all --cover` on 3.11 + 3.12, docs)
   - Confirm `git diff --exit-code src/oscal_bindings/v1/models.py` is clean after the release run's `generate`
   - Inspect `./tmp/release.log` for failures; fix and re-run
