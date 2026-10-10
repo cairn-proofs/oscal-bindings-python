@@ -19,7 +19,7 @@ license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Fritz Kunstler" }]
 keywords = ["oscal", "GRC engineering", "compliance automation", "security controls", "security assurance", "compliance as code"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
