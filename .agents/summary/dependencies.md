@@ -33,7 +33,7 @@ Managed through Hatch environments (`[tool.hatch.envs.default.dependencies]`) ra
 |------|------|
 | `pytest` | Test runner (`testpaths = ["tests"]`; coverage run under `hatch test --cover`) |
 | `hypothesis` | Property-based tests (`tests/test_prop_*.py`); supplied via `extra-dependencies` on `[tool.hatch.envs.hatch-test]`, not a project dep |
-| `jsonschema`, `regex` | Test-only, also via `hatch-test` `extra-dependencies`: validate serialized output against the vendored OSCAL schema. `regex` backs the `pattern` keyword because OSCAL patterns use `\p{L}`/`\p{N}`, which stdlib `re` rejects |
+| `jsonschema-rs` | Test-only, also via `hatch-test` `extra-dependencies`: validates serialized output against the vendored OSCAL schema (`tests/test_schema_validation.py`). Compiled, so it stays fast under coverage, and its regex engine supports the `\p{L}`/`\p{N}` classes in OSCAL patterns. Replaced pure-Python `jsonschema` + `regex`, which cost ~30 s of CI test time |
 | `mypy` | Static type checking (`hatch run typing`, over `src/oscal_bindings` including `v1`) |
 | `datamodel-code-generator[http]` | Present in the default env for `hatch run generate` |
 | `pdoc` | API documentation (`hatch run docs` → `build/api-docs`) |

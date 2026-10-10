@@ -96,7 +96,7 @@ pip-compile-hashes = true
 # Resolve shared deps (pydantic, pytest, ...) to the same versions as default.
 pip-compile-constraint = "default"
 parallel = true
-extra-dependencies = ["hypothesis", "jsonschema", "regex"]
+extra-dependencies = ["hypothesis", "jsonschema-rs"]
 
 # Hatch runs cov-combine and then cov-report once after `hatch test --cover`.
 # cov-report adds the HTML report ([tool.coverage.html] sets the directory)
