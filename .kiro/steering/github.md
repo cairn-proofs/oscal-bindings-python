@@ -18,7 +18,7 @@ inclusion: always
 
 - Don't forget to commit the updated tasks.md file when appropriate.
 
-- Run the full test suite `hatch run tests` before commit.
+- Run the full test suite across the whole Python matrix with `hatch test --all` before commit (capture it: `hatch test --all > ./tmp/test.log 2>&1; echo "EXIT: $?"`). Before the final commit on a branch, or when generation, dependencies, or tooling changed, run the full gate `hatch run release` instead.
 
 - Only add, stage, or commit files that you created or modified for this feature. Do not add, stage, or commit unrelated files.
 

@@ -26,6 +26,39 @@ To install directly from a Git tag, branch, or commit:
 pip install "git+https://github.com/cairn-proofs/oscal-bindings-python.git@main"
 ```
 
+## Known issue: Invalid OSCAL JSON keys can be silently lost
+
+> [!IMPORTANT]
+> On pydantic 2.13.x, which `pip install` picks today, the JSON parsers silently discard any key spelled with a Python field name (`back_matter`) instead of its OSCAL name (`back-matter`), along with that key's entire value. `validate_oscal` still reports the document as valid. Tracked in [#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6).
+
+Verified on pydantic 2.13.5. What happens:
+
+- `parse_oscal`, `parse_oscal_file`, the typed `parse_*` functions, and `model_validate_json` accept the document with the field unset.
+- `validate_oscal` returns `True`, so it can't catch the mistake.
+- A missing required field is reported only as `missing` at its OSCAL name, which hides the real cause.
+- If both spellings are present, the OSCAL-name value wins and the other key is ignored.
+
+```python
+doc = parse_oscal('{"catalog": {..., "back_matter": {"resources": [...]}}}')
+doc.root.catalog.back_matter    # None: the back-matter is gone
+```
+
+You're most likely to hit this with hand-written JSON, or with output from `model_dump(by_alias=False)` that's fed back in. Unknown keys (`bogus`, `back-matterr`) are still rejected, and dict input is rejected on every supported pydantic version.
+
+**Workaround:** if your input might not come from a conforming OSCAL tool, validate it as a dict. Dict validation rejects field-name keys with `extra_forbidden`:
+
+```python
+import json
+from oscal_bindings import CatalogDocument, OscalDocument
+
+CatalogDocument.model_validate(json.loads(text))   # known type: clearest errors
+OscalDocument.model_validate(json.loads(text))     # any of the 8 document types
+```
+
+This raises `pydantic.ValidationError`, not `OscalParseError`. Pinning `pydantic<2.13` probably avoids the bug too, but that hasn't been verified.
+
+This is an upstream pydantic-core bug in its new 2.13 JSON validation path. The fix is [pydantic/pydantic#13275](https://github.com/pydantic/pydantic/pull/13275), which hasn't merged yet. Once a fixed release ships, this library will raise its pydantic floor to that release.
+
 ## Import paths
 
 The bindings live under a namespace scoped to the OSCAL **major** version:
@@ -34,9 +67,7 @@ The bindings live under a namespace scoped to the OSCAL **major** version:
 from oscal_bindings.v1 import parse_oscal, OscalDoc, Catalog
 ```
 
-The top-level package re-exports the current major version, so `from oscal_bindings
-import parse_oscal` (and `oscal_bindings.models`, `oscal_bindings.parser`,
-`oscal_bindings.extensions`) resolves to the same objects:
+The top-level package re-exports the current major version, so `from oscal_bindings import parse_oscal` (and `oscal_bindings.models`, `oscal_bindings.parser`, `oscal_bindings.extensions`) resolves to the same objects:
 
 ```python
 import oscal_bindings
@@ -45,12 +76,9 @@ import oscal_bindings.v1
 oscal_bindings.Catalog is oscal_bindings.v1.models.Catalog   # True
 ```
 
-Examples below use the shorter top-level path. Importing from `oscal_bindings.v1` is
-equivalent and states which OSCAL major version your code is written against.
+Examples below use the shorter top-level path. Importing from `oscal_bindings.v1` is equivalent and states which OSCAL major version your code is written against.
 
-OSCAL is backward-compatible within a major version, so a routine 1.x schema refresh
-regenerates `v1` in place and never changes your imports. Only OSCAL 2.0 would
-introduce a second namespace.
+OSCAL is backward-compatible within a major version, so a routine 1.x schema refresh regenerates `v1` in place and never changes your imports. Only OSCAL 2.0 would introduce a second namespace.
 
 ### Which OSCAL release?
 
@@ -62,9 +90,7 @@ from oscal_bindings import __oscal_schema_version__
 __oscal_schema_version__      # '1.2.3'
 ```
 
-Worth checking, because models are strict about unknown fields: a document from a
-newer 1.x release than the vendored one can fail validation on a field these bindings
-have never seen. The constant makes that gap visible rather than a mystery.
+Worth checking, because models are strict about unknown fields: a document from a newer 1.x release than the vendored one can fail validation on a field these bindings have never seen. The constant makes that gap visible rather than a mystery.
 
 ## Usage
 
@@ -84,10 +110,7 @@ profile = parse_profile(json_string)    # returns ProfileDocument
 doc = parse_oscal_file("catalog.json")
 ```
 
-`parse_oscal` and the per-type parsers accept either `str` or `bytes`.
-Passing `bytes` directly skips a UTF-8 decode step, which avoids one
-document-size string allocation — preferable when the document comes
-from a byte-source (HTTP response body, S3 GET, container layer pull):
+`parse_oscal` and the per-type parsers accept either `str` or `bytes`. Passing `bytes` directly skips a UTF-8 decode step, which avoids one document-size string allocation — preferable when the document comes from a byte-source (HTTP response body, S3 GET, container layer pull):
 
 ```python
 import urllib.request
@@ -96,8 +119,7 @@ with urllib.request.urlopen("https://example.com/catalog.json") as resp:
     doc = parse_oscal(resp.read())     # bytes → parsed model, no .decode() needed
 ```
 
-Invalid UTF-8 bytes surface as `OscalParseError`, the same exception
-type used for JSON and schema validation failures.
+Invalid UTF-8 bytes surface as `OscalParseError`, the same exception type used for JSON and schema validation failures.
 
 ### Accessing Parsed Data
 
@@ -109,11 +131,7 @@ print(catalog.catalog.metadata.version)
 
 ### Accessors
 
-`OscalDoc` is a uniform facade over any of the 8 parsed wrappers
-(`CatalogDocument`, `ProfileDocument`, `SystemSecurityPlanDocument`,
-…). It exposes the structural fields shared across every OSCAL
-top-level document — `metadata`, `oscal_version`, `uuid` — without
-making the caller dispatch on body type.
+`OscalDoc` is a uniform facade over any of the 8 parsed wrappers (`CatalogDocument`, `ProfileDocument`, `SystemSecurityPlanDocument`, …). It exposes the structural fields shared across every OSCAL top-level document — `metadata`, `oscal_version`, `uuid` — without making the caller dispatch on body type.
 
 ```python
 from oscal_bindings import OscalDoc
@@ -133,8 +151,7 @@ from oscal_bindings import OscalDoc, parse_oscal_file
 doc = OscalDoc(parse_oscal_file("ssp.json"))
 ```
 
-For Assessment Plans and Assessment Results, `assessment_period()`
-returns the `(start, end)` date range:
+For Assessment Plans and Assessment Results, `assessment_period()` returns the `(start, end)` date range:
 
 ```python
 from oscal_bindings import OscalAccessError
@@ -176,13 +193,7 @@ json_str = serialize_oscal(doc)                # pretty-printed (indent: 2)
 json_str = serialize_oscal(doc, indent=None)   # compact
 ```
 
-Every model serializes to valid OSCAL by default: OSCAL key names (`media-type`, not
-`media_type`) and no `null` for unset fields, on every path. That covers
-`model_dump()`, `model_dump(mode="json")`, `model_dump_json()`, `pydantic_core.to_json(...)`,
-and `TypeAdapter(...).dump_python(...)`, including models nested in plain dicts and
-lists. Framework serializers that never pass kwargs (e.g. MCP or agent tool results)
-get valid OSCAL too. `serialize_oscal` is still the recommended call for whole
-documents.
+Every model serializes to valid OSCAL by default: OSCAL key names (`media-type`, not `media_type`) and no `null` for unset fields, on every path. That covers `model_dump()`, `model_dump(mode="json")`, `model_dump_json()`, `pydantic_core.to_json(...)`, and `TypeAdapter(...).dump_python(...)`, including models nested in plain dicts and lists. Framework serializers that never pass kwargs (e.g. MCP or agent tool results) get valid OSCAL too. `serialize_oscal` is still the recommended call for whole documents.
 
 ```python
 from oscal_bindings import make_rlink
@@ -195,29 +206,17 @@ rlink.model_dump(by_alias=False)        # {'href': '...', 'media_type': 'applica
 Opt-outs:
 
 - `by_alias=False` emits Python field names, still without `null`.
-- `exclude_none=False` has no effect. OSCAL forbids `null`, so None-valued fields
-  are always omitted. To tell whether a field was set, use attribute access
-  (`rlink.hashes is None`) or `model_fields_set`.
+- `exclude_none=False` has no effect. OSCAL forbids `null`, so None-valued fields are always omitted. To tell whether a field was set, use attribute access (`rlink.hashes is None`) or `model_fields_set`.
 
 ### Field names vs. OSCAL names
 
 Python code can use field names; OSCAL data must use OSCAL names.
 
-- Constructor keyword arguments accept either: `Rlink(href=..., media_type=...)` and
-  `Rlink(href=..., **{"media-type": ...})` build the same model. Plain dicts nested
-  inside the kwargs are OSCAL data and must use OSCAL names.
-- Dict input (`Model.model_validate(...)`, `validate_element`) rejects a field name
-  at any depth with `extra_forbidden`.
-- JSON input (`parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed
-  `parse_*` functions, `model_validate_json`) never populates a field from a field
-  name key.
+- Constructor keyword arguments accept either: `Rlink(href=..., media_type=...)` and `Rlink(href=..., **{"media-type": ...})` build the same model. Plain dicts nested inside the kwargs are OSCAL data and must use OSCAL names.
+- Dict input (`Model.model_validate(...)`, `validate_element`) rejects a field name at any depth with `extra_forbidden`.
+- JSON input (`parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed `parse_*` functions, `model_validate_json`) never populates a field from a field name key.
 
-**Known issue** ([#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)):
-on recent pydantic (observed on 2.13.x), a field-name key in JSON input is silently
-dropped instead of rejected. `parse_oscal('{... "back_matter": {...}}')` succeeds with
-`back_matter` unset; a required field reports only `missing` at its OSCAL name.
-Pydantic 2.11.0 rejects the same input with `extra_forbidden`. Dict input is rejected
-on every supported version.
+On pydantic 2.13.x, JSON input drops a field-name key without an error instead of rejecting it. See [Known issue: Invalid OSCAL JSON keys can be silently lost](#known-issue-invalid-oscal-json-keys-can-be-silently-lost).
 
 ### Validation
 
@@ -283,5 +282,4 @@ Public symbols are re-exported from `oscal_bindings.v1` and from the top-level `
 
 ## License
 
-Apache License 2.0; see [LICENSE](LICENSE). The vendored OSCAL schemas are from NIST
-and are in the public domain; see [NOTICE](NOTICE).
+Apache License 2.0; see [LICENSE](LICENSE). The vendored OSCAL schemas are from NIST and are in the public domain; see [NOTICE](NOTICE).
