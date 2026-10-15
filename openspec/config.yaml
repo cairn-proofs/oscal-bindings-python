@@ -5,6 +5,11 @@ schema: spec-driven
 # Include constraints an agent cannot infer by reading the code.
 # Keep general project documentation and discoverable codebase facts out.
 # The OSCAL bindings contract lives in the spec store cairn-proofs/oscal-bindings-specs, not here.
+# `references` makes its main specs read-only planning context for this repo. Build inputs from the
+# store (schemas, corpus) are pinned by sha256 instead, because a reference reads the local checkout as-is.
+references:
+  - { id: oscal-bindings-specs, remote: "https://github.com/cairn-proofs/oscal-bindings-specs.git" }
+
 context: |
   Write all artifacts using the `/asd-ste100` skill. If you can't find it, stop and ask.
   If you add line breaks to Markdown, break at 120 columns, not 80.
