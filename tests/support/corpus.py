@@ -19,6 +19,7 @@ place from the path in ``OSCAL_BINDINGS_LOCAL_CORPUS`` (Req 11).
 
 from __future__ import annotations
 
+import hashlib
 import http.client
 import io
 import json
@@ -434,6 +435,84 @@ def _tarball_root(extracted: Path) -> Path:
 def _is_complete(target: Path) -> bool:
     """Return True if ``target`` is an extracted cache dir with its marker."""
     return target.is_dir() and (target / _COMPLETE_MARKER).exists()
+
+
+@dataclass(frozen=True)
+class PinnedArchive:
+    """A .tar.gz at a fixed HTTPS URL, pinned by the sha256 of its bytes."""
+
+    name: str
+    url: str
+    sha256: str
+    cache_dir: str
+    """Directory name under the cache root. Include the version and the hash."""
+
+
+def ensure_pinned_archive(
+    archive: PinnedArchive, *, cache_root: Path = CACHE_ROOT
+) -> Path:
+    """Ensure ``archive`` is downloaded, hash-checked, and extracted in the cache.
+
+    Same cache, lock, safe extraction, and atomic publish as ``ensure_corpus``.
+    The sha256 of the downloaded bytes is checked before anything is extracted.
+    A fetch failure or a hash mismatch raises ``CorpusError`` and publishes
+    nothing. It never skips. A single top-level directory in the archive is
+    stripped, so the returned path is the archive's content root.
+    """
+    target = cache_root / archive.cache_dir
+    if _is_complete(target):
+        return target
+    cache_root.mkdir(parents=True, exist_ok=True)
+    lock_path = cache_root / f"{archive.cache_dir}.lock"
+    with _thread_lock_for(lock_path.resolve()):
+        try:
+            with _FileLock(lock_path):
+                if not _is_complete(target):
+                    _fetch_verify_publish(archive, target=target, cache_root=cache_root)
+        except TimeoutError as exc:
+            msg = (
+                f"Archive {archive.name!r}: timed out waiting for the cache lock: {exc}"
+            )
+            raise CorpusError(msg) from exc
+    return target
+
+
+def _fetch_verify_publish(
+    archive: PinnedArchive, *, target: Path, cache_root: Path
+) -> None:
+    """Download, hash-check, and atomically publish ``archive`` at ``target``.
+
+    Must be called with the archive lock held.
+    """
+    try:
+        data = _http_get(archive.url)
+    except _FETCH_ERRORS as exc:
+        msg = f"Archive {archive.name!r} at {archive.url}: fetch failed: {exc}"
+        raise CorpusError(msg) from exc
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != archive.sha256:
+        msg = (
+            f"Archive {archive.name!r} at {archive.url}: sha256 mismatch: "
+            f"expected {archive.sha256}, got {actual}"
+        )
+        raise CorpusError(msg)
+    tmp = cache_root / f".tmp-{archive.cache_dir}-{os.getpid()}-{threading.get_ident()}"
+    try:
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        _extract_tar_gz(data, into=tmp)
+        root = _tarball_root(tmp)
+        (root / _COMPLETE_MARKER).touch()
+        if _is_complete(target):
+            return
+        if target.exists():
+            shutil.rmtree(target)
+        root.replace(target)
+    except _EXTRACT_ERRORS as exc:
+        msg = f"Archive {archive.name!r}: extraction failed: {exc}"
+        raise CorpusError(msg) from exc
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _single_top_level_key(raw_bytes: bytes) -> str | None:
