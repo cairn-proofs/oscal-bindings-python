@@ -30,5 +30,5 @@
 
 - [x] 4.1 Delete `scripts/check_spec_ids.py` and `tests/test_check_spec_ids.py` (design.md D6). Verify no file in the
       repo refers to them.
-- [ ] 4.2 From a clean clone with an empty `tests/.corpus_cache`, run `hatch run release`. Verify it passes, the
+- [x] 4.2 From a clean clone with an empty `tests/.corpus_cache`, run `hatch run release`. Verify it passes, the
       runner fetched the artifact by URL and checked its hash, and no runner code reads `schemas/`.
