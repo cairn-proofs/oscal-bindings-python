@@ -18,8 +18,8 @@ import pytest
 if TYPE_CHECKING:
     from types import ModuleType
 
-# The checker is parked here until task 7.3 of the change
-# reverse-engineer-oscal-bindings-spec in cairn-proofs/oscal-bindings-specs.
+# The checker is parked here until this repo's phase 1 local change decides its
+# use (task 6.1 of reverse-engineer-oscal-bindings-spec in the spec store).
 # PyYAML is not a declared test dependency, so the module skips when absent.
 pytest.importorskip("yaml", reason="scripts/check_spec_ids.py needs PyYAML")
 
