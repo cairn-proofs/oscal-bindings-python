@@ -1,0 +1,33 @@
+schema: spec-driven
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# The OSCAL bindings contract lives in the spec store cairn-proofs/oscal-bindings-specs, not here.
+# `references` makes its main specs read-only planning context for this repo. Build inputs from the
+# store (schemas, corpus) are pinned by sha256 instead, because a reference reads the local checkout as-is.
+references:
+  - { id: oscal-bindings-specs, remote: "https://github.com/cairn-proofs/oscal-bindings-specs.git" }
+
+context: |
+  Write all artifacts using the `/asd-ste100` skill. If you can't find it, stop and ask.
+  If you add line breaks to Markdown, break at 120 columns, not 80.
+  List style: prefer NUMBERED lists (`1.`, `2.`) over bullets for any enumerable prose so each item is referenceable.
+  Proposals and designs cite GitHub issues, discussions, etc. Specs do not.
+
+# Per-artifact rules (optional)
+rules:
+  specs:
+    - >-
+      Historical narration, temporal tags and statements of what changed relative to previous requirements are
+      prohibited in specs. You MUST NOT introduce such language. You MUST replace or delete such language when you
+      find it in a spec, without changing intent. If that seems unsafe, flag it for user review, but do not ignore
+      it. A spec is not a change log. It defines the intended steady state.
+    - >-
+      Inside requirement text, use NUMBERED lists (`1.`, `2.`) for enumerable prose, such as conditions,
+      constraints and allowed values, so each item is referenceable. Never renumber scenario lines.
+    - >-
+      When you reference a section of the proposal, the design or another document in the project, use a link with
+      a GitHub-compatible (github-slugger) anchor. Prefer references over duplication. Never copy normative content
+      from one spec to another. In spec deltas, write links so that they resolve after archive.
