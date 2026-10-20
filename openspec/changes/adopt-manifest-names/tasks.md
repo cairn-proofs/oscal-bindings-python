@@ -59,7 +59,7 @@
       reused names `Status`, `Origin`, `LocalDefinitions`, and `MergeFlat`, each with its old and its new type.
 - [x] 5.2 Update `README.md`, `DEVELOPING.md`, `AGENTS.md`, and `.agents/summary/` for the new pipeline and the names.
       Set `version` to `0.3.0`. Verify that no doc names a removed constant or phase.
-- [ ] 5.3 Run `hatch run release` from a clean clone with an empty `tests/.corpus_cache`. Verify that it passes and
+- [x] 5.3 Run `hatch run release` from a clean clone with an empty `tests/.corpus_cache`. Verify that it passes and
       that `models.py` holds no class name outside the manifest.
 
 ## Task Dependency Graph
