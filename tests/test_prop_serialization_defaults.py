@@ -28,7 +28,13 @@ from strategies import LEAF_ELEMENT_TYPES, leaf_instance_strategy
 from support.oscal_shape import DEFAULT_PATHS, assert_valid_oscal_shape
 
 from oscal_bindings import parse_oscal, serialize_oscal
-from oscal_bindings.v1.models import DocumentId, Hash, Link, Property, Rlink
+from oscal_bindings.v1.models import (
+    BackMatterResourceRlink,
+    DocumentId,
+    Hash,
+    Link,
+    Property,
+)
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -36,7 +42,7 @@ if TYPE_CHECKING:
 
 LEAF_MODELS: dict[str, type[BaseModel]] = {
     "hash": Hash,
-    "rlink": Rlink,
+    "back-matter-resource-rlink": BackMatterResourceRlink,
     "link": Link,
     "property": Property,
     "document-id": DocumentId,

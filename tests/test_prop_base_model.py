@@ -17,14 +17,20 @@ from pydantic import ValidationError
 from strategies import LEAF_ELEMENT_TYPES, leaf_instance_strategy
 from support.model_instances import alias_names, kwargs_by_name
 
-from oscal_bindings.v1.models import DocumentId, Hash, Link, Property, Rlink
+from oscal_bindings.v1.models import (
+    BackMatterResourceRlink,
+    DocumentId,
+    Hash,
+    Link,
+    Property,
+)
 
 if TYPE_CHECKING:
     from oscal_bindings.v1._base import OscalBaseModel
 
 LEAF_CLASSES: dict[str, type[OscalBaseModel]] = {
     "hash": Hash,
-    "rlink": Rlink,
+    "back-matter-resource-rlink": BackMatterResourceRlink,
     "link": Link,
     "property": Property,
     "document-id": DocumentId,

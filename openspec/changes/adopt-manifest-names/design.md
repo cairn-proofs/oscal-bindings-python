@@ -59,6 +59,9 @@ validated manifest, and it makes these changes in a copy:
    with the `$ref`. It first checks that each enum value is valid for the base datatype, so the base constraint holds
    for every value that the enum accepts. This removes the extra enum classes.
 5. It leaves scalar definitions and the root `oneOf` as they are.
+6. It keeps the `title` and `description` of a property beside the `$ref` that replaces the property schema. A union
+   branch without a `description` takes the `description` of its union. Without this step, 27 fields lose their
+   documentation and 31 branch classes lose their docstrings.
 
 Codegen then reads the hoisted copy, without `--reuse-model`. The manifest already records every merge, and
 `--reuse-model` merges by structure, which [MDL-013] does not allow. The vendored schema stays the source of truth and
@@ -85,6 +88,13 @@ Then it applies these guards. Each guard reports every failure at once, and the 
    `TypeAlias` for `union`, and as a `RootModel` for `single-or-many` and `document-union`.
 2. Each other module-level name is a scalar alias (D3). No class has a name outside the manifest.
 3. No two module-level names are equal.
+
+The post-processor reads the vendored schema, not the hoisted copy. It needs only the definition keys of the scalar
+definitions (D3).
+
+The variants of a union alias are in manifest order. When an object matches more than one variant, pydantic selects
+the first variant. So a `Parameter` with neither `select` nor `values` parses as `ParameterWithSelect`. The serialized
+output does not change.
 
 - **Why aliases for unions:** a union is a choice between classes and not an object. A `TypeAlias` gives the name to
   annotations and `TypeAdapter` without a wrapper object.

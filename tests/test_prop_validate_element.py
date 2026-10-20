@@ -28,7 +28,13 @@ from oscal_bindings.v1 import (
     get_supported_element_types,
     validate_element,
 )
-from oscal_bindings.v1.models import DocumentId, Hash, Link, Property, Rlink
+from oscal_bindings.v1.models import (
+    BackMatterResourceRlink,
+    DocumentId,
+    Hash,
+    Link,
+    Property,
+)
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -38,7 +44,7 @@ if TYPE_CHECKING:
 # explicitly rather than reaching into the private `_ELEMENT_MAP`.
 _LEAF_MODELS: dict[str, type[BaseModel]] = {
     "hash": Hash,
-    "rlink": Rlink,
+    "back-matter-resource-rlink": BackMatterResourceRlink,
     "link": Link,
     "property": Property,
     "document-id": DocumentId,

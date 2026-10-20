@@ -1,17 +1,52 @@
-"""Post-process generated models.py to optimize RootModel usage and rename classes."""
+"""Post-process the generated ``models.py`` and check it against the manifest.
+
+datamodel-codegen reads the hoisted schema (``scripts/hoist_names.py``), so it
+emits each ``object``, ``document``, and ``enum`` type of the naming manifest
+as a class with its manifest name. This script completes the module:
+
+1. Phase 1 changes structure. It collapses each scalar ``RootModel`` to an
+   ``Annotated`` alias, and it removes ``pattern=`` from the fields of a type
+   that has no regex constraint (``AwareDatetime``, ``AnyUrl``, ``EmailStr``,
+   numbers).
+2. It adds the manifest types that codegen does not emit with their names:
+
+   1. Each ``single-or-many`` entry becomes a ``RootModel`` of the item or a
+      list of the item, and it replaces the inline union of the field.
+   2. The ``document-union`` entry is the root ``RootModel``, renamed to its
+      manifest name.
+   3. Each ``union`` entry becomes a ``TypeAlias`` of its variants, in manifest
+      order, after the last variant class. Each inline union of exactly the
+      variant set becomes the alias name.
+
+3. It names each scalar alias from its definition key without the
+   ``oscal-complete-oscal-<module>:`` prefix (``LocationUuid``). A scalar has
+   no manifest entry. Its name is a binding name, not a contract name.
+4. It applies three guards to the result, and it writes nothing when one
+   fails. Each guard reports every offender:
+
+   1. Each manifest name is defined at module level in the form that its kind
+      requires.
+   2. Each other module-level name is a scalar alias.
+   3. No module-level name is defined twice, and no scalar alias has a
+      manifest name.
+"""
 
 from __future__ import annotations
 
 import argparse
+import ast
+import io
 import json
 import re
 import sys
+import tokenize
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -20,80 +55,49 @@ DEFAULT_MODELS_PATH = REPO_ROOT / "src" / "oscal_bindings" / "v1" / "models.py"
 #: OSCAL release whose vendored Schema_Bundle is currently active. Schema bundles live
 #: under ``schemas/<release>/``; the active one is selected by this explicit path
 #: alone — never by scanning, globbing, or ordering the ``schemas/`` directory.
-#: Adding another ``schemas/<release>/`` bundle changes nothing until this constant
-#: (or an explicit ``--schema`` argument) changes.
 ACTIVE_SCHEMA_RELEASE = "1.2.3"
-#: Default path to the source schema (the Active_Schema_Bundle schema path).
+#: Default path to the vendored schema. The scalar names come from its definition
+#: keys.
 DEFAULT_SCHEMA_PATH = (
     REPO_ROOT / "schemas" / ACTIVE_SCHEMA_RELEASE / "oscal_complete_schema.json"
 )
 
-#: Name of the generated field holding the ``$schema`` directive. It is present on
-#: every Wrapper_Class and is *not* the document root key, so the derivation
-#: excludes it.
-SCHEMA_DIRECTIVE_FIELD = "field_schema"
+#: The prefix of a namespaced definition key of the complete schema.
+SCHEMA_KEY_PREFIX: Final = "oscal-complete-oscal-"
 
-#: Frozen snapshot of the positional ``Model1..Model8`` map that the content-based
-#: derivation replaced. The ordinals were an artifact of the order
-#: ``datamodel-codegen`` walked the schema's top-level ``oneOf``, so a schema revision
-#: that added or reordered document types would have silently produced wrong names.
-#:
-#: This no longer drives renaming. It is retained only as the expected result for the
-#: parity gate: the derivation must reproduce exactly these eight published names
-#: against the Active_Schema_Bundle.
-POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT = {
-    "Model1": "CatalogDocument",
-    "Model2": "MappingCollectionDocument",
-    "Model3": "ProfileDocument",
-    "Model4": "ComponentDefinitionDocument",
-    "Model5": "SystemSecurityPlanDocument",
-    "Model6": "AssessmentPlanDocument",
-    "Model7": "AssessmentResultsDocument",
-    "Model8": "PlanOfActionAndMilestonesDocument",
+#: The module-level form that each manifest kind requires (guard 1).
+KIND_FORMS: Final[Mapping[str, str]] = {
+    "object": "class",
+    "document": "class",
+    "enum": "enum",
+    "union": "type alias",
+    "single-or-many": "root model",
+    "document-union": "root model",
 }
+#: The form of a scalar alias: ``Name = Annotated[...]``.
+SCALAR_FORM: Final = "scalar alias"
+#: The longest alias line that is written on one line, as black formats it.
+LINE_LENGTH: Final = 88
 
-ROOT_RENAME = ("Model", "OscalDocument")
 
-VARIANT_RENAMES = {
-    "OscalCompleteOscalProfileMerge1": "MergeFlat",
-    "OscalCompleteOscalProfileMerge2": "MergeAsIs",
-    "OscalCompleteOscalProfileMerge3": "MergeCustom",
-    "OscalCompleteOscalCatalogGroup1": "CatalogGroupWithGroups",
-    "OscalCompleteOscalCatalogGroup2": "CatalogGroupWithControls",
-}
+class PostprocessError(ValueError):
+    """Raised when the generated module cannot be completed or fails a guard.
 
-# Classes to NEVER collapse (keep as RootModel) - unions and the root document
-PRESERVE_AS_ROOTMODEL = {"Model", "Mappings"}
+    ``failures`` holds every failure. The message lists them, one per line.
+    """
 
-# Short names that collide across modules - use module-prefixed names
-COLLISION_OVERRIDES = {
-    "oscal-complete-oscal-component-definition:control-implementation": (
-        "ComponentDefinitionControlImplementation"
-    ),
-    "oscal-complete-oscal-ssp:control-implementation": "SspControlImplementation",
-    "oscal-complete-oscal-catalog:group": "CatalogGroup",
-    "oscal-complete-oscal-profile:group": "ProfileGroup",
-    "oscal-complete-oscal-component-definition:implemented-requirement": (
-        "ComponentDefinitionImplementedRequirement"
-    ),
-    "oscal-complete-oscal-ssp:implemented-requirement": "SspImplementedRequirement",
-    "oscal-complete-oscal-control-common:select-control-by-id": (
-        "ControlCommonSelectControlById"
-    ),
-    "oscal-complete-oscal-assessment-common:select-control-by-id": (
-        "AssessmentCommonSelectControlById"
-    ),
-    "oscal-complete-oscal-component-definition:statement": (
-        "ComponentDefinitionStatement"
-    ),
-    "oscal-complete-oscal-ssp:statement": "SspStatement",
-    # These named definitions collide with inline definitions that datamodel-codegen
-    # names after their title ("Status", "Origin", "Local Definitions"). Prefix the
-    # named ones so the bare short name is left for the inline definition.
-    "oscal-complete-oscal-ssp:status": "SspStatus",
-    "oscal-complete-oscal-assessment-common:origin": "AssessmentCommonOrigin",
-    "oscal-complete-oscal-poam:local-definitions": "PoamLocalDefinitions",
-}
+    def __init__(self, failures: Iterable[str]) -> None:
+        self.failures: list[str] = list(failures)
+        lines = "\n".join(f"  {failure}" for failure in self.failures)
+        super().__init__(
+            f"The generated models fail the post-processor "
+            f"({len(self.failures)} failures):\n{lines}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: structure
+# ---------------------------------------------------------------------------
 
 
 def _kebab_to_pascal(s: str) -> str:
@@ -101,186 +105,13 @@ def _kebab_to_pascal(s: str) -> str:
     return "".join(word.capitalize() for word in s.split("-"))
 
 
-def _snake_to_pascal(s: str) -> str:
-    """Convert snake_case to PascalCase (``plan_of_action`` -> ``PlanOfAction``)."""
-    return "".join(word.capitalize() for word in s.split("_"))
+def collapse_scalar_root_models(
+    content: str, preserve: frozenset[str] = frozenset()
+) -> str:
+    """Convert scalar RootModel classes to ``Annotated`` aliases.
 
-
-def iter_class_blocks(content: str) -> Iterator[tuple[str, list[str]]]:
-    """Yield ``(class_name, body_lines)`` for every class defined in ``content``.
-
-    Blocks are yielded in source order, which is what lets the ambiguity guard report
-    the *first* offending Wrapper_Class. A block ends at the next line that starts a new
-    top-level statement; continuation lines of a multi-line class header (indented, or
-    the closing ``):``) stay inside the block.
+    A ``RootModel`` over a union, or one whose name is in ``preserve``, stays.
     """
-    class_name: str | None = None
-    body: list[str] = []
-
-    for line in content.split("\n"):
-        header = re.match(r"^class (\w+)\(", line)
-        if header:
-            if class_name is not None:
-                yield class_name, body
-            class_name = header.group(1)
-            body = []
-            continue
-        if class_name is None:
-            continue
-        if line and not line[0].isspace() and not line.startswith(")"):
-            yield class_name, body
-            class_name = None
-            body = []
-        else:
-            body.append(line)
-
-    if class_name is not None:
-        yield class_name, body
-
-
-def class_field_names(body_lines: list[str]) -> list[str]:
-    """Return the annotated field names declared directly on a class body, in order.
-
-    Only the class's own indentation level is considered, so nested ``Field(...)`` and
-    ``Annotated[...]`` continuation lines are ignored. ``model_config`` is an assignment
-    rather than an annotation and so never matches.
-    """
-    return [
-        m.group(1)
-        for m in (re.match(r"^    (\w+)\s*:", line) for line in body_lines)
-        if m is not None
-    ]
-
-
-class AmbiguousWrapperError(Exception):
-    """A candidate Wrapper_Class carries more than one body field besides ``$schema``.
-
-    Raised — not accumulated — on purpose. The derivation's core assumption (one
-    ``$schema`` field plus exactly one Root_Key field) has failed for this schema, and
-    every phase after the rename map is built on that assumption, so continuing would
-    produce output whose meaning is undefined. The first offender is the whole
-    diagnosis: the remedy is to go read the schema, not to read a list. See
-    "Why the two guards differ" in the design document for the contrast with the
-    collision guard, which deliberately accumulates.
-    """
-
-    def __init__(self, class_name: str, body_fields: Sequence[str]) -> None:
-        self.class_name = class_name
-        self.body_fields = list(body_fields)
-        super().__init__(
-            f"ambiguous wrapper class {class_name}: expected exactly one body field "
-            f"besides {SCHEMA_DIRECTIVE_FIELD}, found "
-            f"{len(self.body_fields)} ({', '.join(self.body_fields)})"
-        )
-
-
-def derive_document_renames(content: str) -> dict[str, str]:
-    """Derive the Document_Rename_Map from the generated source's own content.
-
-    A Wrapper_Class is identified by the ``$schema`` directive field it carries, never
-    by the ordinal suffix in its generated name. Its Root_Key is the single remaining
-    body field; the published name is that key in PascalCase with a ``Document`` suffix
-    (``catalog`` -> ``CatalogDocument``). Position therefore plays no part: reordering
-    the schema's document types reorders the ordinals but not the derived names.
-
-    Raises:
-        AmbiguousWrapperError: on the *first* candidate carrying more than one body
-            field. ``iter_class_blocks`` yields in source order, so the offender named
-            is the first one in the file and the remaining candidates are left
-            unscanned.
-    """
-    renames: dict[str, str] = {}
-
-    for class_name, body in iter_class_blocks(content):
-        field_names = class_field_names(body)
-        if SCHEMA_DIRECTIVE_FIELD not in field_names:
-            continue
-        body_fields = [name for name in field_names if name != SCHEMA_DIRECTIVE_FIELD]
-        if len(body_fields) > 1:
-            raise AmbiguousWrapperError(class_name, body_fields)
-        if not body_fields:
-            # The ``$schema`` directive alone: this is the union root (``Model``), not a
-            # document wrapper. Nothing to derive, and not an error.
-            continue
-        renames[class_name] = _snake_to_pascal(body_fields[0]) + "Document"
-
-    return renames
-
-
-def count_schema_document_types(schema_path: Path) -> int | None:
-    """Count the document types in a schema bundle's top-level ``oneOf``.
-
-    Returns ``None`` when the schema has no top-level ``oneOf`` list. A bundle without
-    that list does not declare document types at all, so there is no count to compare
-    against and the guard has nothing to judge — reporting a mismatch against an
-    assumed zero would be an assertion about a schema shape this function cannot
-    observe. Every real OSCAL 1.x bundle carries the list (eight entries), so the
-    guard is never skipped for the inputs it exists to police.
-    """
-    schema = json.loads(schema_path.read_text())
-    one_of = schema.get("oneOf")
-    if not isinstance(one_of, list):
-        return None
-    return len(one_of)
-
-
-def report_wrapper_count_mismatch(
-    derived: int, expected: int, models_path: Path
-) -> None:
-    """Print the count-mismatch report to stderr, naming both counts."""
-    print(
-        f"Error: derived {derived} wrapper class(es) but the schema declares "
-        f"{expected} document type(s); {models_path} was not written",
-        file=sys.stderr,
-    )
-    print(
-        "The derivation and the schema disagree on the set of document types. Check "
-        "the schema's top-level oneOf and the generated wrapper classes, then "
-        "regenerate.",
-        file=sys.stderr,
-    )
-
-
-def _def_key_to_codegen_name(key: str) -> str:
-    """Convert a schema definition key to the class name datamodel-codegen produces."""
-    # e.g. "oscal-complete-oscal-catalog:catalog" -> "OscalCompleteOscalCatalogCatalog"
-    # Split on colon, PascalCase each part (treating hyphens as word separators)
-    parts = key.split(":")
-    return "".join(_kebab_to_pascal(p) for p in parts)
-
-
-def build_namespace_renames(schema_path: Path) -> dict[str, str]:
-    """Build rename map from OscalComplete* names to short names using the schema."""
-    schema = json.loads(schema_path.read_text())
-    definitions = schema.get("definitions", {})
-
-    # Collect all oscal-complete keys and their short names
-    short_name_counts: dict[str, list[str]] = {}
-    for key in definitions:
-        if key.startswith("oscal-complete-oscal-"):
-            short_name = key.split(":")[-1]
-            short_name_counts.setdefault(short_name, []).append(key)
-
-    renames: dict[str, str] = {}
-    for key in definitions:
-        if not key.startswith("oscal-complete-oscal-"):
-            continue
-
-        codegen_name = _def_key_to_codegen_name(key)
-        short_name = key.split(":")[-1]
-
-        if key in COLLISION_OVERRIDES:
-            desired = COLLISION_OVERRIDES[key]
-        else:
-            desired = _kebab_to_pascal(short_name)
-
-        renames[codegen_name] = desired
-
-    return renames
-
-
-def collapse_scalar_root_models(content: str) -> str:
-    """Convert scalar RootModel classes to TypeAlias."""
     lines = content.split("\n")
     result_lines = []
     i = 0
@@ -294,7 +125,7 @@ def collapse_scalar_root_models(content: str) -> str:
             class_name = m.group(1)
             inner_type = m.group(2)
 
-            if class_name in PRESERVE_AS_ROOTMODEL or "|" in inner_type:
+            if class_name in preserve or "|" in inner_type:
                 result_lines.append(line)
                 i += 1
                 continue
@@ -359,7 +190,7 @@ def collapse_scalar_root_models(content: str) -> str:
                     # Normalize whitespace
                     inner_type = re.sub(r"\s+", " ", inner_type)
 
-                    if class_name in PRESERVE_AS_ROOTMODEL or "|" in inner_type:
+                    if class_name in preserve or "|" in inner_type:
                         # Keep as-is - output original lines
                         result_lines.extend(header_content.rstrip("\n").split("\n"))
                         continue
@@ -421,25 +252,6 @@ def _extract_balanced(text: str) -> str | None:
     return None
 
 
-def rename_classes(content: str, renames: dict[str, str]) -> str:
-    """Rename classes and all their references using word boundaries."""
-    for old_name, new_name in renames.items():
-        content = re.sub(rf"\b{re.escape(old_name)}\b", new_name, content)
-    return content
-
-
-def rename_root_model(content: str) -> str:
-    """Rename the root Model class carefully (avoid renaming BaseModel, ConfigDict)."""
-    # Only rename standalone 'Model' references (not part of BaseModel, RootModel, etc.)
-    # Replace class definition
-    content = re.sub(
-        r"^class Model\(", "class OscalDocument(", content, flags=re.MULTILINE
-    )
-    # Replace references that are standalone Model (word boundary, not preceded by
-    # Base/Root/Config)
-    return re.sub(r"(?<![A-Za-z])Model(?![A-Za-z0-9_])", "OscalDocument", content)
-
-
 def ensure_annotated_import(content: str) -> str:
     """Ensure Annotated is imported from typing."""
     if (
@@ -495,32 +307,472 @@ def fix_non_string_patterns(content: str) -> str:
     return "\n".join(result)
 
 
-def find_duplicate_class_definitions(content: str) -> dict[str, int]:
-    """Return every class name defined more than once, mapped to its definition count.
+# ---------------------------------------------------------------------------
+# Module-level definitions
+# ---------------------------------------------------------------------------
 
-    Run against the *fully renamed* source: a name appearing twice there means two
-    distinct schema definitions collapsed onto one published name, which
-    ``COLLISION_OVERRIDES`` did not disambiguate. The whole content is scanned in
-    one pass so all collisions are collected rather than stopping at the first.
+
+@dataclass(frozen=True)
+class Definition:
+    """One module-level name of the generated source."""
+
+    name: str
+    form: str
+    """``class``, ``enum``, ``root model``, ``type alias``, ``scalar alias``, or
+    ``assignment``."""
+    lineno: int
+    end_lineno: int
+
+
+def _is_name(node: ast.expr | None, name: str) -> bool:
+    return isinstance(node, ast.Name) and node.id == name
+
+
+def _class_form(node: ast.ClassDef) -> str:
+    if any(_is_name(base, "Enum") for base in node.bases):
+        return "enum"
+    if any(
+        isinstance(base, ast.Subscript) and _is_name(base.value, "RootModel")
+        for base in node.bases
+    ):
+        return "root model"
+    return "class"
+
+
+def module_definitions(content: str) -> list[Definition]:
+    """Return each class and assignment at module level, in source order."""
+    definitions: list[Definition] = []
+    for node in ast.parse(content).body:
+        end = node.end_lineno or node.lineno
+        if isinstance(node, ast.ClassDef):
+            definitions.append(
+                Definition(node.name, _class_form(node), node.lineno, end)
+            )
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            form = (
+                "type alias" if _is_name(node.annotation, "TypeAlias") else "assignment"
+            )
+            definitions.append(Definition(node.target.id, form, node.lineno, end))
+        elif isinstance(node, ast.Assign):
+            scalar = isinstance(node.value, ast.Subscript) and _is_name(
+                node.value.value, "Annotated"
+            )
+            form = SCALAR_FORM if scalar else "assignment"
+            definitions.extend(
+                Definition(target.id, form, node.lineno, end)
+                for target in node.targets
+                if isinstance(target, ast.Name)
+            )
+    return definitions
+
+
+def _class_node(content: str, name: str) -> ast.ClassDef | None:
+    for node in ast.parse(content).body:
+        if isinstance(node, ast.ClassDef) and node.name == name:
+            return node
+    return None
+
+
+def _union_names(node: ast.expr) -> list[str] | None:
+    """Return the names of a ``A | B | ...`` expression, else ``None``."""
+    if isinstance(node, ast.Name):
+        return [node.id]
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        left = _union_names(node.left)
+        right = _union_names(node.right)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Token-level rewrites
+# ---------------------------------------------------------------------------
+
+
+def _offsets(content: str) -> list[int]:
+    """Return the offset of the start of each line (1-based line index)."""
+    starts = [0, 0]
+    for line in content.splitlines(keepends=True):
+        starts.append(starts[-1] + len(line))
+    return starts
+
+
+def _code_tokens(content: str) -> list[tokenize.TokenInfo]:
+    """Return the tokens of ``content`` without layout and comment tokens."""
+    skip = {tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT, tokenize.INDENT}
+    skip |= {tokenize.DEDENT, tokenize.ENCODING, tokenize.ENDMARKER}
+    return [
+        token
+        for token in tokenize.generate_tokens(io.StringIO(content).readline)
+        if token.type not in skip
+    ]
+
+
+def _apply(content: str, edits: list[tuple[int, int, str]]) -> str:
+    """Replace each ``(start, end)`` slice of ``content`` with its text."""
+    for start, end, text in sorted(edits, reverse=True):
+        content = content[:start] + text + content[end:]
+    return content
+
+
+def rename_names(content: str, renames: Mapping[str, str]) -> str:
+    """Rename each NAME token in ``renames``. Strings and comments stay."""
+    if not renames:
+        return content
+    starts = _offsets(content)
+    edits = [
+        (
+            starts[token.start[0]] + token.start[1],
+            starts[token.end[0]] + token.end[1],
+            renames[token.string],
+        )
+        for token in _code_tokens(content)
+        if token.type == tokenize.NAME and token.string in renames
+    ]
+    return _apply(content, edits)
+
+
+def _name_runs(
+    tokens: list[tokenize.TokenInfo],
+) -> Iterable[tuple[int, int, list[str]]]:
+    """Yield ``(first, last, names)`` for each run ``A | B | ...`` of names.
+
+    A run that is part of an attribute, a call, or a subscript is skipped.
     """
-    counts = Counter(re.findall(r"^class (\w+)\(", content, flags=re.MULTILINE))
-    return {name: count for name, count in sorted(counts.items()) if count > 1}
+    i = 0
+    while i < len(tokens):
+        if tokens[i].type != tokenize.NAME:
+            i += 1
+            continue
+        first = last = i
+        names = [tokens[i].string]
+        while (
+            last + 2 < len(tokens)
+            and tokens[last + 1].string == "|"
+            and tokens[last + 2].type == tokenize.NAME
+        ):
+            last += 2
+            names.append(tokens[last].string)
+        before = tokens[first - 1].string if first > 0 else ""
+        after = tokens[last + 1].string if last + 1 < len(tokens) else ""
+        if len(names) > 1 and before != "." and after not in {".", "(", "["}:
+            yield first, last, names
+        i = last + 1
 
 
-def report_collisions(duplicates: dict[str, int], models_path: Path) -> None:
-    """Print the complete accumulated collision report to stderr."""
-    print(
-        f"Error: {len(duplicates)} class-name collision(s) not covered by "
-        f"COLLISION_OVERRIDES; {models_path} was not written",
-        file=sys.stderr,
+def replace_inline_unions(content: str, aliases: Mapping[str, Sequence[str]]) -> str:
+    """Replace each inline union of exactly a variant set with its alias.
+
+    ``aliases`` maps each alias name to its variant names. The match ignores
+    the order of the names and a ``None`` member, which stays at the end.
+    """
+    by_set = {frozenset(variants): alias for alias, variants in aliases.items()}
+    tokens = _code_tokens(content)
+    starts = _offsets(content)
+    edits: list[tuple[int, int, str]] = []
+    for first, last, names in _name_runs(tokens):
+        members = [name for name in names if name != "None"]
+        alias = by_set.get(frozenset(members))
+        if alias is None or len(members) != len(set(members)):
+            continue
+        text = alias + (" | None" if "None" in names else "")
+        start, end = tokens[first].start, tokens[last].end
+        edits.append((starts[start[0]] + start[1], starts[end[0]] + end[1], text))
+    return _apply(content, edits)
+
+
+def ensure_typing_import(content: str, name: str) -> str:
+    """Add ``name`` to the single-line ``from typing import ...`` statement."""
+    match = re.search(r"^from typing import ([\w, ]+)$", content, flags=re.MULTILINE)
+    if match is None:
+        future = "from __future__ import annotations\n"
+        if future in content:
+            return content.replace(future, f"{future}from typing import {name}\n", 1)
+        return f"from typing import {name}\n{content}"
+    names = {part.strip() for part in match.group(1).split(",") if part.strip()}
+    if name in names:
+        return content
+    line = f"from typing import {', '.join(sorted(names | {name}))}"
+    return content[: match.start()] + line + content[match.end() :]
+
+
+# ---------------------------------------------------------------------------
+# Manifest types that codegen does not emit with their names
+# ---------------------------------------------------------------------------
+
+
+def _entries(manifest: Mapping[str, Any], kind: str) -> list[Mapping[str, Any]]:
+    return [entry for entry in manifest.get("types", []) if entry.get("kind") == kind]
+
+
+def manifest_names(manifest: Mapping[str, Any]) -> frozenset[str]:
+    """Return every name of the manifest."""
+    return frozenset(entry["name"] for entry in manifest.get("types", []))
+
+
+def add_single_or_many(
+    content: str, manifest: Mapping[str, Any], failures: list[str]
+) -> str:
+    """Emit each ``single-or-many`` entry as a ``RootModel`` field type.
+
+    Codegen writes the field as ``Item | C``, where ``C`` is a ``RootModel`` of
+    ``list[Item]``. ``C`` becomes the entry: a ``RootModel`` of ``Item`` or the
+    list, with the list constraints of ``C``. The field takes the entry name.
+    """
+    for entry in _entries(manifest, "single-or-many"):
+        name, item = entry["name"], entry["item"]
+        candidates = [
+            node
+            for node in ast.parse(content).body
+            if isinstance(node, ast.ClassDef)
+            and len(node.bases) == 1
+            and ast.unparse(node.bases[0]) == f"RootModel[list[{item}]]"
+            and re.search(
+                rf"\b(?:{item}\s*\|\s*{node.name}|{node.name}\s*\|\s*{item})\b",
+                content,
+            )
+        ]
+        if len(candidates) != 1:
+            failures.append(
+                f"{name}: expected one RootModel of list[{item}] in a field union "
+                f"with {item}, found {len(candidates)}"
+            )
+            continue
+        node = candidates[0]
+        root = next(
+            (
+                stmt
+                for stmt in node.body
+                if isinstance(stmt, ast.AnnAssign) and _is_name(stmt.target, "root")
+            ),
+            None,
+        )
+        if root is None:
+            failures.append(f"{name}: the RootModel {node.name} has no root field")
+            continue
+        list_type = ast.unparse(root.annotation).replace('"', "'")
+        block = (
+            f"class {name}(RootModel[{item} | list[{item}]]):\n"
+            f"    root: {item} | {list_type}"
+        )
+        lines = content.split("\n")
+        end = node.end_lineno or node.lineno
+        content = "\n".join([*lines[: node.lineno - 1], block, *lines[end:]])
+        content = re.sub(
+            rf"\b(?:{item}\s*\|\s*{node.name}|{node.name}\s*\|\s*{item})\b",
+            name,
+            content,
+        )
+        if re.search(rf"\b{node.name}\b", content):
+            failures.append(f"{name}: {node.name} is still referenced")
+    return content
+
+
+def rename_document_union(
+    content: str, manifest: Mapping[str, Any], failures: list[str]
+) -> str:
+    """Rename the root ``RootModel`` over the document types to its entry name."""
+    for entry in _entries(manifest, "document-union"):
+        members = frozenset(entry.get("members", []))
+        roots = [
+            node.name
+            for node in ast.parse(content).body
+            if isinstance(node, ast.ClassDef)
+            and len(node.bases) == 1
+            and isinstance(node.bases[0], ast.Subscript)
+            and _is_name(node.bases[0].value, "RootModel")
+            and frozenset(_union_names(node.bases[0].slice) or ()) == members
+        ]
+        if len(roots) != 1:
+            failures.append(
+                f"{entry['name']}: expected one RootModel over the "
+                f"{len(members)} document types, found {len(roots)}"
+            )
+            continue
+        content = rename_names(content, {roots[0]: entry["name"]})
+    return content
+
+
+def _alias_text(name: str, variants: Sequence[str]) -> str:
+    line = f"{name}: TypeAlias = {' | '.join(variants)}"
+    if len(line) <= LINE_LENGTH:
+        return line
+    body = "\n    | ".join(variants)
+    return f"{name}: TypeAlias = (\n    {body}\n)"
+
+
+def add_union_aliases(
+    content: str, manifest: Mapping[str, Any], failures: list[str]
+) -> str:
+    """Add a ``TypeAlias`` per ``union`` entry and use it for its inline unions.
+
+    The alias lists the variants in manifest order. It follows the last variant
+    class, because the value of an alias is evaluated at import.
+    """
+    aliases = {
+        entry["name"]: [variant["type"] for variant in entry.get("variants", [])]
+        for entry in _entries(manifest, "union")
+    }
+    content = replace_inline_unions(content, aliases)
+    classes = {
+        definition.name: definition
+        for definition in module_definitions(content)
+        if definition.form != SCALAR_FORM
+    }
+    inserts: dict[int, list[str]] = {}
+    for name, variants in aliases.items():
+        missing = [variant for variant in variants if variant not in classes]
+        if missing:
+            failures.append(
+                f"{name}: the variant class(es) {', '.join(missing)} are not defined"
+            )
+            continue
+        after = max(classes[variant].end_lineno for variant in variants)
+        inserts.setdefault(after, []).append(_alias_text(name, variants))
+    if not aliases:
+        return content
+    lines = content.split("\n")
+    for after in sorted(inserts, reverse=True):
+        block: list[str] = []
+        for text in inserts[after]:
+            block += ["", "", text]
+        lines[after:after] = block
+    return ensure_typing_import("\n".join(lines), "TypeAlias")
+
+
+def scalar_renames(
+    content: str, schema: Mapping[str, Any], manifest: Mapping[str, Any]
+) -> dict[str, str]:
+    """Return the renames of the scalar aliases that keep a namespaced name.
+
+    A definition key ``oscal-complete-oscal-<module>:<local>`` gives the codegen
+    name ``OscalCompleteOscal<Module><Local>`` and the published name
+    ``<Local>``. Only a module-level scalar alias outside the manifest is
+    renamed.
+    """
+    scalars = {
+        definition.name
+        for definition in module_definitions(content)
+        if definition.form == SCALAR_FORM
+    }
+    reserved = manifest_names(manifest)
+    renames: dict[str, str] = {}
+    for key in schema.get("definitions", {}):
+        if not key.startswith(SCHEMA_KEY_PREFIX):
+            continue
+        codegen_name = "".join(_kebab_to_pascal(part) for part in key.split(":"))
+        if codegen_name in scalars and codegen_name not in reserved:
+            renames[codegen_name] = _kebab_to_pascal(key.split(":")[-1])
+    return renames
+
+
+# ---------------------------------------------------------------------------
+# Guards
+# ---------------------------------------------------------------------------
+
+
+def guard_failures(content: str, manifest: Mapping[str, Any]) -> list[str]:
+    """Return every failure of the three guards on ``content``."""
+    definitions = module_definitions(content)
+    by_name: dict[str, list[Definition]] = {}
+    for definition in definitions:
+        by_name.setdefault(definition.name, []).append(definition)
+    failures: list[str] = []
+
+    # Guard 1: each manifest name is defined in the form of its kind.
+    kinds = {entry["name"]: entry["kind"] for entry in manifest.get("types", [])}
+    for name, kind in kinds.items():
+        expected = KIND_FORMS.get(kind)
+        found = by_name.get(name, [])
+        if not found:
+            failures.append(f"[guard 1] the manifest name {name} ({kind}) is missing")
+        elif expected is not None and all(d.form != expected for d in found):
+            forms = ", ".join(d.form for d in found)
+            failures.append(
+                f"[guard 1] {name} ({kind}) is defined as {forms}, not as {expected}"
+            )
+
+    # Guard 2: each other module-level name is a scalar alias.
+    failures.extend(
+        f"[guard 2] {d.name} (line {d.lineno}) is defined as {d.form} outside "
+        "the manifest"
+        for d in definitions
+        if d.name not in kinds and d.form != SCALAR_FORM
     )
-    for name, count in duplicates.items():
-        print(f"  {name}: {count} definitions", file=sys.stderr)
-    print(
-        "Add a COLLISION_OVERRIDES entry in scripts/postprocess_models.py for each "
-        "colliding schema definition, then regenerate.",
-        file=sys.stderr,
+
+    # Guard 3: no name is defined twice, and no scalar alias has a manifest name.
+    counts = Counter(definition.name for definition in definitions)
+    for name, count in sorted(counts.items()):
+        if count > 1:
+            lines = ", ".join(str(d.lineno) for d in by_name[name])
+            failures.append(
+                f"[guard 3] {name} is defined {count} times (lines {lines})"
+            )
+    failures.extend(
+        f"[guard 3] the scalar alias {d.name} (line {d.lineno}) has a manifest name"
+        for d in definitions
+        if d.form == SCALAR_FORM and d.name in kinds
     )
+    return failures
+
+
+# ---------------------------------------------------------------------------
+# Pipeline
+# ---------------------------------------------------------------------------
+
+
+def postprocess(
+    content: str, manifest: Mapping[str, Any], schema: Mapping[str, Any]
+) -> str:
+    """Return the completed module. Raise ``PostprocessError`` with every failure.
+
+    ``content`` is the codegen output for the hoisted schema, ``manifest`` is
+    the validated ``names.json``, and ``schema`` is the vendored schema.
+    """
+    failures: list[str] = []
+    content = add_single_or_many(content, manifest, failures)
+
+    # Phase 1: structure.
+    root_models = frozenset(
+        entry["name"]
+        for entry in manifest.get("types", [])
+        if KIND_FORMS.get(entry.get("kind", "")) == "root model"
+    )
+    content = collapse_scalar_root_models(content, root_models)
+    content = ensure_annotated_import(content)
+    content = fix_email_str_patterns(content)
+    content = fix_non_string_patterns(content)
+
+    content = rename_names(content, scalar_renames(content, schema, manifest))
+    content = rename_document_union(content, manifest, failures)
+    content = add_union_aliases(content, manifest, failures)
+
+    # Remove the RootModel import if no longer used.
+    if not re.search(r"\(RootModel\[", content):
+        content = re.sub(r"\s*RootModel,?\n?", "\n", content)
+        content = re.sub(r",\s*\)", "\n)", content)
+    # Remove excessive blank lines.
+    content = re.sub(r"\n{4,}", "\n\n\n", content)
+
+    if failures:
+        raise PostprocessError(failures)
+    failures = guard_failures(content, manifest)
+    if failures:
+        raise PostprocessError(failures)
+    return content
+
+
+def load_manifest() -> dict[str, Any]:
+    """Return the validated manifest of the pinned spec artifact.
+
+    The sibling scripts are imported here, so the module loads without
+    ``scripts/`` on ``sys.path``.
+    """
+    from manifest import load_validated_manifest  # noqa: PLC0415
+    from spec_artifact import artifact_paths, ensure_spec_artifact  # noqa: PLC0415
+
+    return load_validated_manifest(artifact_paths(ensure_spec_artifact()))
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -532,7 +784,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Post-process generated models.py: collapse RootModels and rename classes."
+            "Post-process generated models.py and check it against the manifest."
         ),
     )
     parser.add_argument(
@@ -545,12 +797,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--schema",
         type=Path,
         default=DEFAULT_SCHEMA_PATH,
-        help="Path to the source OSCAL schema file (default: %(default)s)",
+        help="Path to the vendored OSCAL schema file (default: %(default)s)",
     )
     return parser.parse_args(argv)
 
 
-def main(argv: Sequence[str] | None = None) -> None:
+def main(argv: Sequence[str] | None = None) -> int:
+    """Complete and check the models file in place. Return the exit status."""
     args = parse_args(argv)
     models_path: Path = args.models
     schema_path: Path = args.schema
@@ -559,84 +812,22 @@ def main(argv: Sequence[str] | None = None) -> None:
     if missing:
         for path in missing:
             print(f"Error: {path} not found", file=sys.stderr)
-        sys.exit(1)
+        return 1
 
-    content = models_path.read_text()
-
-    # Phase 1: Collapse scalar RootModels
-    content = collapse_scalar_root_models(content)
-    content = ensure_annotated_import(content)
-    content = fix_email_str_patterns(content)
-    content = fix_non_string_patterns(content)
-
-    # Phase 2: Rename wrapper classes using names derived from their own content.
-    # Longest key first so a hypothetical Model1/Model10 pair cannot partially match.
-    # Guard (Req 3.5): an ambiguous wrapper invalidates the derivation's assumption, so
-    # stop on the first one rather than scanning the rest.
     try:
-        document_renames = derive_document_renames(content)
-    except AmbiguousWrapperError as exc:
+        manifest = load_manifest()
+        schema = json.loads(schema_path.read_bytes())
+        content = postprocess(models_path.read_text(), manifest, schema)
+    except (ValueError, OSError) as exc:
+        # ValueError covers ManifestError, PostprocessError, and invalid JSON.
         print(f"Error: {exc}", file=sys.stderr)
         print(f"{models_path} was not written", file=sys.stderr)
-        sys.exit(1)
-
-    # Guard (Req 3.6): the derived wrappers must account for exactly the document types
-    # the schema declares, or a document type has been silently gained or lost.
-    expected_documents = count_schema_document_types(schema_path)
-    if expected_documents is not None and len(document_renames) != expected_documents:
-        report_wrapper_count_mismatch(
-            len(document_renames), expected_documents, models_path
-        )
-        sys.exit(1)
-
-    content = rename_classes(
-        content, dict(sorted(document_renames.items(), key=lambda kv: -len(kv[0])))
-    )
-    # Rename root Model -> OscalDocument (careful not to hit BaseModel etc)
-    content = rename_root_model(content)
-    # Rename variant classes
-    content = rename_classes(content, VARIANT_RENAMES)
-
-    # Phase 3: Strip OscalComplete namespace prefix from all remaining classes
-    namespace_renames = build_namespace_renames(schema_path)
-    # Also handle numbered variants (e.g. OscalCompleteOscalControlCommonParameter1)
-    # by checking what's actually in the content
-    numbered_extras: dict[str, str] = {}
-    for old_name, new_name in list(namespace_renames.items()):
-        for suffix in ("1", "2", "3"):
-            variant = old_name + suffix
-            if variant in content:
-                numbered_extras[variant] = new_name + suffix
-    namespace_renames.update(numbered_extras)
-    # Skip any that were already renamed by VARIANT_RENAMES
-    already_renamed = set(VARIANT_RENAMES.keys())
-    namespace_renames = {
-        k: v for k, v in namespace_renames.items() if k not in already_renamed
-    }
-    # Sort by length descending to avoid partial replacements
-    sorted_renames = dict(sorted(namespace_renames.items(), key=lambda x: -len(x[0])))
-    content = rename_classes(content, sorted_renames)
-
-    # Remove RootModel import if no longer used
-    if not re.search(r"\(RootModel\[", content):
-        content = re.sub(r"\s*RootModel,?\n?", "\n", content)
-        # Clean up import formatting
-        content = re.sub(r",\s*\)", "\n)", content)
-
-    # Remove excessive blank lines
-    content = re.sub(r"\n{4,}", "\n\n\n", content)
-
-    # Guard: every rename phase is complete, so any duplicated class definition is a
-    # collision the overrides missed. Report the full accumulated list and refuse to
-    # write rather than emitting a file with duplicate definitions.
-    duplicates = find_duplicate_class_definitions(content)
-    if duplicates:
-        report_collisions(duplicates, models_path)
-        sys.exit(1)
+        return 1
 
     models_path.write_text(content)
     print(f"Post-processed {models_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

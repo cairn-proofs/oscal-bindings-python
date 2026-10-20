@@ -2,14 +2,14 @@
 
 ## Overview
 
-`oscal-bindings` provides typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Security Controls Assessment Language) release 1.2.3. The Pydantic v2 models are generated from the official NIST JSON Schema using `datamodel-code-generator`, then post-processed to give classes clean, ergonomic names. A thin runtime layer adds parsing/serialization/validation utilities, and a hand-written `extensions` package layers uniform accessors, back-matter builders, and element-level validation on top of the generated models.
+`oscal-bindings` provides typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Security Controls Assessment Language) release 1.2.3. The Pydantic v2 models are generated from the official NIST JSON Schema using `datamodel-code-generator`, with every type name taken from the naming manifest (`names.json`) of a pinned spec artifact of `cairn-proofs/oscal-bindings-specs`. A thin runtime layer adds parsing/serialization/validation utilities, and a hand-written `extensions` package layers uniform accessors, back-matter builders, and element-level validation on top of the generated models.
 
 The implementation lives in a **major-version package**, `oscal_bindings.v1`. The top-level `oscal_bindings` re-exports it, so both `from oscal_bindings.v1 import ...` (preferred for new code) and the flat `from oscal_bindings import ...` resolve to the same objects.
 
 - **Package name:** `oscal-bindings` (import as `oscal_bindings`, or `oscal_bindings.v1`)
 - **Repository:** `cairn-proofs/oscal-bindings-python`. The `-python` suffix is for the repo only: sibling bindings in other languages live in `oscal-bindings-<lang>` repos, while each registry package uses that ecosystem's native name.
 - **License:** Apache-2.0 (`LICENSE`); NIST attribution for the vendored schemas is in `NOTICE`.
-- **Version:** 0.1
+- **Version:** 0.3.0
 - **Language:** Python 3.11+ (test matrix: 3.11, 3.12, 3.13, 3.14)
 - **Core runtime dependency:** Pydantic v2 (with `email` extra)
 - **Build backend:** Hatchling
@@ -29,7 +29,7 @@ No other programming languages are present. There are no compiled extensions, no
 | Concern | Tool |
 |---------|------|
 | Model validation (runtime) | Pydantic v2 |
-| Code generation (dev only) | `datamodel-code-generator[http]` |
+| Code generation (dev only) | `datamodel-code-generator[http,black,isort]`, `jsonschema-rs` (manifest validation) |
 | Build system / env management / test runner | Hatch (`hatchling` backend) |
 | Lockfile generation | `hatch-pip-compile` (every Hatch env; hashed) |
 | Resolver / installer | `uv`, behind `hatch-pip-compile` (no `uv.lock`) |
@@ -58,17 +58,24 @@ oscal-bindings-python/
 │           ├── document.py      # OscalDoc facade (uniform accessors)
 │           ├── builders.py      # make_hash / make_rlink / make_resource
 │           └── validate_element.py  # Element-level schema validation
-├── scripts/
-│   └── postprocess_models.py    # Class renaming + RootModel cleanup after codegen
-│                                # (takes --schema / --models; each has its own default)
+├── scripts/                     # Not a package; tests load scripts via tests/support/scripts.py
+│   ├── spec_artifact.py         # Pin (version + sha256) of the spec artifact; shared by generate + tests
+│   ├── pinned_archive.py        # Locked, sha256-checked fetch + safe extraction
+│   ├── manifest.py              # Validates names.json of the pinned artifact
+│   ├── hoist_names.py           # Writes build/codegen/oscal_complete_schema.json (manifest-named definitions)
+│   ├── postprocess_models.py    # Structure fixes, added manifest types, guards against the manifest
+│   │                            # (takes --schema / --models; each has its own default)
+│   └── name_changes.py          # Writes build/name-changes.md (release-notes list)
 ├── schemas/                     # OSCAL JSON Schema bundles, one dir per release
 │   ├── 1.2.2/                   # Prior release, retained for reference
 │   └── 1.2.3/                   # Active_Schema_Bundle
-│       └── oscal_complete_schema.json   # The single schema fed to datamodel-codegen
+│       └── oscal_complete_schema.json   # The schema the hoist reads (codegen reads the hoisted copy)
 ├── tests/                       # pytest suite (one file per source module)
 │   └── support/                 # Importable test helpers (not collected)
 │       ├── version_package.py   # Public-surface snapshot + schema $id helpers
-│       └── corpus.py            # Remote OSCAL corpus fetcher for property tests
+│       ├── corpus.py            # Corpus helpers over the pinned spec artifact
+│       ├── spec_artifact.py     # Reads the pin from scripts/spec_artifact.py
+│       └── scripts.py           # load_script(): imports a module from scripts/
 ├── requirements.txt             # default-env lockfile (hatch-pip-compile output)
 ├── requirements/                # hatch-test (per Python) + hatch-build lockfiles
 ├── pyproject.toml               # Build config, deps, hatch envs/scripts
@@ -83,8 +90,10 @@ oscal-bindings-python/
 graph TD
     subgraph Input
         SCHEMA["schemas/1.2.3/oscal_complete_schema.json"]
+        NAMES["names.json (pinned spec artifact)"]
     end
     subgraph Codegen["Code generation (dev-time)"]
+        HOIST["scripts/hoist_names.py<br/>→ build/codegen/oscal_complete_schema.json"]
         DCG["datamodel-code-generator"]
         PP["scripts/postprocess_models.py<br/>--schema / --models"]
     end
@@ -105,8 +114,10 @@ graph TD
     NEW["from oscal_bindings.v1 import ... (preferred)"]
     OLD["from oscal_bindings import ... (equivalent)"]
 
-    SCHEMA --> DCG --> MODELS
+    SCHEMA --> HOIST
+    NAMES --> HOIST --> DCG --> MODELS
     SCHEMA --> PP
+    NAMES --> PP
     MODELS --> PP --> MODELS
     MODELS --> PARSER
     MODELS --> DOC
@@ -135,20 +146,19 @@ graph TD
 - **Facade** — `OscalDoc` (uniform `metadata` / `uuid` / `oscal_version` / `body` / `assessment_period()` over all 8 document types).
 - **Builders** — `make_hash`, `make_rlink`, `make_resource` for `back-matter` resource elements.
 - **Element validation** — `validate_element`, `get_supported_element_types`.
-- **Code-generation contract** — `schemas/1.2.3/oscal_complete_schema.json` → `src/oscal_bindings/v1/models.py` via `hatch run generate` (codegen + post-process); both paths are passed explicitly.
+- **Code-generation contract** — `schemas/1.2.3/oscal_complete_schema.json` + `names.json` → `src/oscal_bindings/v1/models.py` via `hatch run generate` (hoist + codegen + post-process). A cold cache needs network access.
 
 ## Design Principles
 
-- **Generated code stays pristine** — `v1/models.py` is a clean `datamodel-codegen` run plus a rename-only post-pass. Convenience layers live in `v1/extensions/`, never injected into generated output.
+- **Generated code stays pristine** — `v1/models.py` is a clean `datamodel-codegen` run plus a post-pass that adds manifest types and checks names. Convenience layers live in `v1/extensions/`, never injected into generated output.
 - **No RootModel wrappers for scalars** — scalar fields are plain typed values with `Annotated` constraints, not wrapper objects (see `collapse_scalar_root_models`).
-- **Clean class names** — derived from the short name after `:` in the schema `$id`; namespace prefixes stripped; 5 cross-type collisions get module-prefixed names.
-- **Document wrapper names are schema-derived, not positional** — the post-processor identifies each wrapper by its `$schema` field and names it from its single body field, so reordering or adding document types cannot silently mis-name a class.
+- **Names from the naming manifest** — every type name is a canonical name from `names.json` of the pinned spec artifact. The hoist makes each manifest site a named schema definition, and post-processor guards fail on any class name outside the manifest. The binding holds no naming rule for a manifest type.
 - **Re-export-only packages** — neither `v1/__init__.py` nor the top-level `__init__.py` defines symbols; the full API is visible in one place.
 - **Major-version namespace** — the binding namespace is scoped to the OSCAL *major* version (`v1`), because OSCAL is backward-compatible within a major version. A minor/patch refresh regenerates `v1` in place and never changes consumer import paths; OSCAL 2.0 would be the trigger for a second version package (see `DEVELOPING.md` Key Design Decisions).
 - **Top-level re-exports** — the top-level import paths (`oscal_bindings`, `oscal_bindings.models`, `oscal_bindings.parser`, `oscal_bindings.extensions`) resolve to the *identical* objects as their `v1` counterparts, via explicit alias modules (not `sys.modules` tricks).
 
 ## Testing
 
-- `pytest`, `testpaths = ["tests"]`, one test module per source module plus an import smoke test with top-level/v1 parity checks (`test_oscal_bindings.py`), post-processor tests (`test_postprocess.py`), Hypothesis property tests (`test_prop_postprocess.py`), and shared helpers in `tests/support/` (`version_package.py`, `corpus.py`).
+- `pytest`, `testpaths = ["tests"]`, one test module per source module plus an import smoke test with top-level/v1 parity checks (`test_oscal_bindings.py`), manifest, hoist, and post-processor tests (`test_manifest.py`, `test_hoist_names.py`, `test_postprocess.py`, `test_prop_postprocess.py`), closed-enum tests (`test_closed_enums.py`), and shared helpers in `tests/support/` (`version_package.py`, `corpus.py`, `spec_artifact.py`, `scripts.py`).
 - Matrix runs across Python 3.11, 3.12, 3.13, and 3.14 (`hatch test --all`), parallelized.
 - Reports: terminal coverage plus `htmlcov/` (HTML, git-ignored), both from `hatch test --cover` via the overridden `cov-report` script.

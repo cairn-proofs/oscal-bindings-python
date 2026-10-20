@@ -34,14 +34,14 @@ from typing import Any
 from hypothesis import strategies as st
 
 from oscal_bindings.v1.models import (
-    Algorithm,
+    BackMatterResourceRlink,
     DocumentId,
+    DocumentIdScheme,
     Hash,
+    HashAlgorithm,
     Link,
+    LinkRel,
     Property,
-    Rel,
-    Rlink,
-    Scheme2,
 )
 
 __all__ = [
@@ -82,10 +82,10 @@ tokens = st.builds(
 #: Hex-encoded digests.
 hex_digests = st.text(alphabet="0123456789abcdef", min_size=1, max_size=128)
 
-#: `Algorithm` enum members.
-algorithm_members = st.sampled_from(list(Algorithm))
+#: `HashAlgorithm` enum members.
+algorithm_members = st.sampled_from(list(HashAlgorithm))
 
-#: `Algorithm` members or their string values (`make_hash` accepts both).
+#: `HashAlgorithm` members or their string values (`make_hash` accepts both).
 algorithms = algorithm_members | algorithm_members.map(lambda a: a.value)
 
 _HOST_LABEL = st.text(
@@ -139,18 +139,19 @@ def _alias_dict(
 #: `Hash` instances.
 hash_models = st.builds(Hash, algorithm=algorithm_members, value=hex_digests)
 
-#: `Rlink` instances, validated from alias-keyed dicts (``model_validate`` is
-#: alias-only; only the constructor accepts field names like ``media_type``).
+#: `BackMatterResourceRlink` instances, validated from alias-keyed dicts
+#: (``model_validate`` is alias-only; only the constructor accepts field names like
+#: ``media_type``).
 rlink_models = _alias_dict(
     {"href": hrefs},
     {
         "media-type": media_type_values,
         "hashes": st.lists(hash_models, min_size=1, max_size=3),
     },
-).map(Rlink.model_validate)
+).map(BackMatterResourceRlink.model_validate)
 
 #: Document-id schemes: the enumerated DOI scheme or an arbitrary URI.
-document_id_schemes = st.sampled_from(list(Scheme2)) | hrefs
+document_id_schemes = st.sampled_from(list(DocumentIdScheme)) | hrefs
 
 #: `DocumentId` instances.
 document_id_models = _alias_dict(
@@ -167,7 +168,7 @@ document_id_models = _alias_dict(
 def hash_strategy() -> st.SearchStrategy[dict[str, Any]]:
     """Kwargs for `make_hash`: ``value`` always, ``algorithm`` optionally.
 
-    ``algorithm`` is an `Algorithm` member or its string value; omitting it
+    ``algorithm`` is a `HashAlgorithm` member or its string value; omitting it
     exercises the builder's SHA-256 default.
     """
     return _alias_dict({"value": hex_digests}, {"algorithm": algorithms})
@@ -177,7 +178,8 @@ def rlink_strategy() -> st.SearchStrategy[dict[str, Any]]:
     """Kwargs for `make_rlink`: ``href`` always; ``media_type``/``hashes`` optionally.
 
     Uses the Python kwarg name ``media_type`` (the builder passes it to the
-    `Rlink` constructor by name). ``media_type`` may be explicitly ``None``.
+    `BackMatterResourceRlink` constructor by name). ``media_type`` may be
+    explicitly ``None``.
     """
     return _alias_dict(
         {"href": hrefs},
@@ -225,7 +227,8 @@ def resource_strategy() -> st.SearchStrategy[dict[str, Any]]:
 # name here and a matching entry in `_LEAF_FIELD_STRATEGIES`.
 LEAF_ELEMENT_TYPES: tuple[str, ...] = (
     "hash",  # Hash: {algorithm, value}
-    "rlink",  # Rlink: {href, media-type?, hashes?}
+    # BackMatterResourceRlink: {href, media-type?, hashes?}
+    "back-matter-resource-rlink",
     "link",  # Link: {href, rel?, media-type?, resource-fragment?, text?}
     "property",  # Property: {name, value, uuid?, ns?, class?, group?, remarks?}
     "document-id",  # DocumentId: {identifier, scheme?}
@@ -239,8 +242,8 @@ _LEAF_FIELD_STRATEGIES: dict[str, tuple[type[Any], _FieldStrategy]] = {
         Hash,
         _alias_dict({"algorithm": algorithm_members, "value": hex_digests}),
     ),
-    "rlink": (
-        Rlink,
+    "back-matter-resource-rlink": (
+        BackMatterResourceRlink,
         _alias_dict(
             {"href": hrefs},
             {
@@ -254,7 +257,7 @@ _LEAF_FIELD_STRATEGIES: dict[str, tuple[type[Any], _FieldStrategy]] = {
         _alias_dict(
             {"href": hrefs},
             {
-                "rel": tokens | st.sampled_from(list(Rel)),
+                "rel": tokens | st.sampled_from(list(LinkRel)),
                 "media-type": media_type_values,
                 "resource-fragment": _PATH_SEGMENT,
                 "text": trimmed_text,

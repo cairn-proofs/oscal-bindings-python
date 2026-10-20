@@ -10,22 +10,28 @@ from __future__ import annotations
 
 import uuid as _uuid
 
-from oscal_bindings.v1.models import Algorithm, DocumentId, Hash, Resource, Rlink
+from oscal_bindings.v1.models import (
+    BackMatterResource,
+    BackMatterResourceRlink,
+    DocumentId,
+    Hash,
+    HashAlgorithm,
+)
 
 
 def make_hash(
     value: str,
-    algorithm: str | Algorithm = Algorithm.SHA_256,
+    algorithm: str | HashAlgorithm = HashAlgorithm.SHA_256,
 ) -> Hash:
     """Build a `Hash` element.
 
     Args:
         value: The hex-encoded digest.
-        algorithm: Either an `Algorithm` enum member or its string value
+        algorithm: Either a `HashAlgorithm` enum member or its string value
             (e.g., `"SHA-256"`). Defaults to SHA-256.
     """
     if isinstance(algorithm, str):
-        algorithm = Algorithm(algorithm)
+        algorithm = HashAlgorithm(algorithm)
     return Hash(algorithm=algorithm, value=value)
 
 
@@ -34,32 +40,33 @@ def make_rlink(
     *,
     media_type: str | None = None,
     hashes: list[Hash] | None = None,
-) -> Rlink:
-    """Build an `Rlink` element pointing at an external resource."""
-    return Rlink(href=href, media_type=media_type, hashes=hashes)
+) -> BackMatterResourceRlink:
+    """Build a `BackMatterResourceRlink` element pointing at an external resource."""
+    return BackMatterResourceRlink(href=href, media_type=media_type, hashes=hashes)
 
 
 def make_resource(
     *,
     title: str | None = None,
     description: str | None = None,
-    rlinks: list[Rlink] | None = None,
+    rlinks: list[BackMatterResourceRlink] | None = None,
     uuid: str | None = None,
     document_ids: list[DocumentId] | None = None,
-) -> Resource:
-    """Build a `Resource` element for inclusion in `back-matter.resources`.
+) -> BackMatterResource:
+    """Build a `BackMatterResource` element for `back-matter.resources`.
 
     Args:
         title: Optional display title.
         description: Optional short summary.
-        rlinks: Optional list of `Rlink`s pointing at equivalent URIs.
+        rlinks: Optional list of `BackMatterResourceRlink`s pointing at equivalent
+            URIs.
         uuid: Resource UUID. A fresh UUID4 is generated if not provided.
         document_ids: Optional list of `DocumentId`s recording document
             identities qualified by scheme. Omitted from the resource when
             not provided. Validated like `rlinks`: an empty list or items
             that are not valid `DocumentId`s raise `pydantic.ValidationError`.
     """
-    return Resource(
+    return BackMatterResource(
         uuid=uuid if uuid is not None else str(_uuid.uuid4()),
         title=title,
         description=description,

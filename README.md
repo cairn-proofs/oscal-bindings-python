@@ -59,6 +59,46 @@ This raises `pydantic.ValidationError`, not `OscalParseError`. Pinning `pydantic
 
 This is an upstream pydantic-core bug in its new 2.13 JSON validation path. The fix is [pydantic/pydantic#13275](https://github.com/pydantic/pydantic/pull/13275), which hasn't merged yet. Once a fixed release ships, this library will raise its pydantic floor to that release.
 
+## Upgrading to 0.3.0
+
+Version 0.3.0 is a breaking release. The class names now follow the naming manifest of the
+[OSCAL bindings specs](https://github.com/cairn-proofs/oscal-bindings-specs), so each OSCAL type has the same name in
+every language binding. The OSCAL JSON that you parse and serialize does not change. The release has no deprecated
+aliases, because an alias for a reused name would point at the wrong type.
+
+1. About 95 classes have a new name. Some examples:
+
+   | 0.2.x | 0.3.0 |
+   | --- | --- |
+   | `Algorithm` | `HashAlgorithm` |
+   | `Type3` | `DefinedComponentType` |
+   | `ProfileGroup1` | `ProfileGroupWithGroups` |
+   | `Resource` | `BackMatterResource` |
+   | `Rlink` | `BackMatterResourceRlink` |
+
+2. Five names now name a different type. Check each use of these names:
+
+   | Name | Type in 0.3.0 | Name of the 0.2.x type in 0.3.0 |
+   | --- | --- | --- |
+   | `Status` | Status of the system in an SSP | `SystemComponentStatus` |
+   | `Origin` | Origin of a finding, observation, or risk, with `related_tasks` | `PoamItemOrigin` |
+   | `LocalDefinitions` | Local definitions of a POA&M | `AssessmentPlanLocalDefinitions` |
+   | `MergeFlat` | The `flat` directive of a profile merge (no fields) | `MergeWithFlat` |
+   | `MergeCustom` | The `custom` grouping of a profile merge | `MergeWithCustom` |
+
+3. `ExternalId` and `ExternalId1` are one class now: `MetadataPartyExternalId`.
+4. Each union of OSCAL types has a type alias, for example `CatalogGroup` for
+   `CatalogGroupWithControls | CatalogGroupWithGroups`.
+5. Closed enums reject values outside the enum
+   ([#21](https://github.com/cairn-proofs/oscal-bindings-python/issues/21)). For example, a field of type
+   `ParameterSelectionHowMany` accepts `one` and `one-or-more`, and a document with `"how-many": "many"` raises
+   `OscalParseError`.
+6. The strings of `get_supported_element_types()` follow the new class names, for example `rlink` is now
+   `back-matter-resource-rlink`.
+
+The [release notes of v0.3.0](https://github.com/cairn-proofs/oscal-bindings-python/releases/tag/v0.3.0) list each
+renamed, removed, and added name, and each changed element-type string.
+
 ## Import paths
 
 The bindings live under a namespace scoped to the OSCAL **major** version:
@@ -212,7 +252,7 @@ Opt-outs:
 
 Python code can use field names; OSCAL data must use OSCAL names.
 
-- Constructor keyword arguments accept either: `Rlink(href=..., media_type=...)` and `Rlink(href=..., **{"media-type": ...})` build the same model. Plain dicts nested inside the kwargs are OSCAL data and must use OSCAL names.
+- Constructor keyword arguments accept either: `BackMatterResourceRlink(href=..., media_type=...)` and `BackMatterResourceRlink(href=..., **{"media-type": ...})` build the same model. Plain dicts nested inside the kwargs are OSCAL data and must use OSCAL names.
 - Dict input (`Model.model_validate(...)`, `validate_element`) rejects a field name at any depth with `extra_forbidden`.
 - JSON input (`parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed `parse_*` functions, `model_validate_json`) never populates a field from a field name key.
 
@@ -259,12 +299,15 @@ hatch build
 hatch run release  # generate + lint + typing + security + test + coverage + docs
 ```
 
+`hatch run generate` and `hatch test` download the pinned spec artifact once into `tests/.corpus_cache/`, so the first run needs network access.
+
 ## Architecture
 
 - **Version package** (`src/oscal_bindings/v1/`) — everything below, scoped to the OSCAL major version. Exposes `__oscal_schema_version__`.
 - **Generated models** (`src/oscal_bindings/v1/models.py`) — Pydantic v2 classes with `Annotated` field constraints, produced by `datamodel-code-generator` from the OSCAL JSON Schema.
 - **Model base** (`src/oscal_bindings/v1/_base.py`) — hand-written `OscalBaseModel`, which every generated object model inherits via `--base-class`: OSCAL keys and no nulls by default, field-name constructor kwargs.
-- **Post-processing** (`scripts/postprocess_models.py`) — renames classes from schema namespace paths to clean short names and names each document wrapper after its root key (e.g. `CatalogDocument`).
+- **Names** — every type name comes from the naming manifest (`names.json`) of the pinned spec artifact of [oscal-bindings-specs](https://github.com/cairn-proofs/oscal-bindings-specs). `scripts/hoist_names.py` writes a copy of the schema in which each manifest type is a definition with its canonical name, and codegen reads that copy.
+- **Post-processing** (`scripts/postprocess_models.py`) — collapses scalar root models, adds the union type aliases, `MappingCollectionMappings`, and `OscalDocument`, and checks every module-level name against the manifest.
 - **Vendored schemas** (`schemas/<release>/`) — one directory per OSCAL release; the active bundle is chosen by explicit path.
 - **Runtime** (`src/oscal_bindings/v1/parser.py`) — parse / serialize / validate utilities and per-type typed parsers.
 - **Extensions** (`src/oscal_bindings/v1/extensions/`) — hand-written helpers layered on top of the generated models:

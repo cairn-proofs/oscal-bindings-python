@@ -76,12 +76,13 @@ CONSTRUCTION = (
 # any unexplained change, means the parametrizations below have gone stale.
 
 # `class X(OscalBaseModel)` in models.py (design.md, Fix Implementation 5).
-N_DIRECT_SUBCLASSES = 183
-# Plus `ExternalId1(ExternalId)`, which inherits the base indirectly.
-N_OBJECT_MODELS = 184
+N_DIRECT_SUBCLASSES = 185
+# Every object model subclasses the base directly: no generated class inherits
+# it through another generated class.
+N_OBJECT_MODELS = 185
 N_ALIAS_FIELDS = 278
 N_ALIAS_CLASSES = 138
-N_NESTED_CASES = 437
+N_NESTED_CASES = 436
 
 # Classes in ALIAS_FIELDS with no valid instance in INSTANCES. Neither the
 # corpus nor `synthesize_instance` leaves a gap today, so this is empty. If a
@@ -189,7 +190,10 @@ def test_inventory_is_pinned() -> None:
         f"{N_DIRECT_SUBCLASSES}. Did codegen stop passing --base-class?"
     )
     indirect = sorted(c.__name__ for c in OBJECT_MODELS if c not in direct)
-    assert indirect == ["ExternalId1"], f"unexpected indirect subclasses {indirect}"
+    assert indirect == [], (
+        f"{indirect} inherit OscalBaseModel through another generated class; "
+        f"every object model must subclass it directly"
+    )
     assert len(OBJECT_MODELS) == N_OBJECT_MODELS
     assert len(ALIAS_FIELDS) == N_ALIAS_FIELDS, (
         f"{len(ALIAS_FIELDS)} alias-differing fields, pinned {N_ALIAS_FIELDS}"
@@ -243,9 +247,9 @@ class Canary:
 
     def media_type(self, result: BaseModel) -> object:
         """``media_type`` of the Rlink the name key was placed in."""
-        if isinstance(result, models.Rlink):
+        if isinstance(result, models.BackMatterResourceRlink):
             return result.media_type
-        if isinstance(result, models.Resource):
+        if isinstance(result, models.BackMatterResource):
             return result.rlinks[0].media_type  # type: ignore[index]
         catalog = result.root.catalog  # type: ignore[attr-defined]
         return catalog.back_matter.resources[0].rlinks[0].media_type
@@ -253,9 +257,9 @@ class Canary:
 
 _RLINK = {"href": "x", "media_type": "t"}
 CANARIES = {
-    "rlink-top": Canary(models.Rlink, dict(_RLINK), ("media_type",)),
+    "rlink-top": Canary(models.BackMatterResourceRlink, dict(_RLINK), ("media_type",)),
     "resource-nested": Canary(
-        models.Resource,
+        models.BackMatterResource,
         {"uuid": UUID, "rlinks": [dict(_RLINK)]},
         ("rlinks", 0, "media_type"),
     ),
@@ -638,7 +642,7 @@ def test_nothing_but_construction_calls_init(
 
     monkeypatch.setattr(OscalBaseModel, "__init__", boom)
     with pytest.raises(_InitCalledError):
-        models.Rlink(href="x")  # the patch is live
+        models.BackMatterResourceRlink(href="x")  # the patch is live
     try:
         _assert_copies_equal(_all_models(instances, sample_docs))
         for m in instances.values():

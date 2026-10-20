@@ -10,7 +10,7 @@
 
 ## What This Codebase Is
 
-Typed Python data bindings for **OSCAL** (Open Security Controls Assessment Language), currently generated from release **1.2.3**. Pydantic v2 models are **generated** from the NIST JSON Schema and post-processed for clean names; a runtime layer adds parse/serialize/validate; a hand-written `extensions/` package adds a uniform facade, back-matter builders, and element validation. Single runtime dependency: Pydantic v2.
+Typed Python data bindings for **OSCAL** (Open Security Controls Assessment Language), currently generated from release **1.2.3**. Pydantic v2 models are **generated** from the NIST JSON Schema, with every type name taken from the naming manifest of the pinned spec artifact; a runtime layer adds parse/serialize/validate; a hand-written `extensions/` package adds a uniform facade, back-matter builders, and element validation. Single runtime dependency: Pydantic v2.
 
 The implementation lives in the major-version package **`oscal_bindings.v1`**; the top-level `oscal_bindings` re-exports it, so both `from oscal_bindings.v1 import ...` (preferred) and the flat `from oscal_bindings import ...` work and yield the same objects.
 
@@ -19,11 +19,11 @@ The implementation lives in the major-version package **`oscal_bindings.v1`**; t
 | Document | Read it when you need… | Key contents |
 |----------|------------------------|--------------|
 | **codebase_info.md** | High-level orientation: stack, layout, languages | Directory tree, tech stack table, structure Mermaid map, design principles, testing setup |
-| **architecture.md** | The "why" and layering; design patterns; codegen architecture | Layered diagram, Facade/Adapter/generated-code patterns, post-processor phases, architectural decision table |
-| **components.md** | What each source file does and its public symbols | Per-file responsibilities for `v1/models.py`, `v1/parser.py`, the 3 extensions, the version-package surface, the top-level re-exports, the post-processor, tests |
+| **architecture.md** | The "why" and layering; design patterns; codegen architecture | Layered diagram, Facade/Adapter/generated-code patterns, hoist + post-processor guards, architectural decision table |
+| **components.md** | What each source file does and its public symbols | Per-file responsibilities for `v1/models.py`, `v1/parser.py`, the 3 extensions, the version-package surface, the top-level re-exports, the `scripts/` modules, tests |
 | **interfaces.md** | The public API, signatures, error contract | Full symbol list, function signatures, interaction sequence diagrams, error-handling table, codegen contract |
-| **data_models.md** | Model structure, wrappers vs bodies, naming/collisions | Document-type class diagram, wrapper→body map, shared elements, conventions, collision overrides, enums |
-| **workflows.md** | Step-by-step processes (build & runtime) | Codegen flow + post-processor phases, parse flow, `OscalDoc`/`assessment_period` flows, builder & validation flows, dev/release workflow |
+| **data_models.md** | Model structure, wrappers vs bodies, naming manifest | Document-type class diagram, wrapper→body map, shared elements, conventions, manifest kinds → Python forms, enums |
+| **workflows.md** | Step-by-step processes (build & runtime) | Codegen flow (hoist, codegen, post-processor steps), parse flow, `OscalDoc`/`assessment_period` flows, builder & validation flows, dev/release workflow |
 | **dependencies.md** | External deps and toolchain, version support | Runtime (Pydantic only), codegen extra, dev tools, Python version matrix, risk notes |
 | **review_notes.md** | Consistency/completeness audit of these docs | Findings, gaps, recommendations |
 
@@ -34,7 +34,7 @@ The implementation lives in the major-version package **`oscal_bindings.v1`**; t
 - "How do I parse / serialize / validate an OSCAL document?" → **interfaces.md**, then **workflows.md** (parse flow)
 - "What does `OscalDoc` do / how does `assessment_period()` work?" → **components.md** + **workflows.md**
 - "How are the models generated? Why is `v1/models.py` huge / not to be edited?" → **architecture.md** + **workflows.md** (codegen)
-- "Why are there names like `SspControlImplementation`?" → **data_models.md** (collision handling)
+- "Where do class names like `BackMatterResourceRlink` come from? How do I change one?" → **data_models.md** (naming) + `DEVELOPING.md`
 - "What are the document types and their body fields?" → **data_models.md** (wrapper→body map)
 - "How do I build a back-matter resource / hash / rlink?" → **interfaces.md** (builders) + **workflows.md** (builder flow)
 - "What exceptions can be raised and when?" → **interfaces.md** (error-handling table)
@@ -46,14 +46,14 @@ The implementation lives in the major-version package **`oscal_bindings.v1`**; t
 
 - **8 OSCAL document types:** Catalog, Profile, Component Definition, System Security Plan, Assessment Plan, Assessment Results, Plan of Action and Milestones, Mapping Collection.
 - **Layout:** implementation under `src/oscal_bindings/v1/`; top-level package re-exports it through explicit alias modules at `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py`.
-- **Active schema:** `schemas/1.2.3/oscal_complete_schema.json`. Bundles are vendored one directory per OSCAL release (`schemas/1.2.2/` is retained); the active one is selected by the explicitly passed path only — no glob, no "newest wins".
+- **Active schema:** `schemas/1.2.3/oscal_complete_schema.json`. Bundles are vendored one directory per OSCAL release (`schemas/1.2.2/` is retained); the active one is selected by the explicit pin and paths only — no glob, no "newest wins".
 - **`__oscal_schema_version__`** (`"1.2.3"`) on `oscal_bindings.v1`, re-exported at the top level, records the exact release the models came from.
 - **Entry points:** `parse_oscal`, `parse_oscal_file`, 8 typed `parse_*` functions, `serialize_oscal`, `validate_oscal`, `OscalDoc`, `make_hash`/`make_rlink`/`make_resource`, `validate_element`/`get_supported_element_types`.
 - **Parsers accept `str | bytes`;** bytes skips a UTF-8 decode (useful for HTTP/S3/file byte-sources).
-- **`v1/models.py` is GENERATED** by `datamodel-codegen` + `scripts/postprocess_models.py`. Change the schema/post-processor and run `hatch run generate` — never hand-edit. (`oscal_bindings/models.py` at the top level is a hand-written alias module, not generated.)
+- **`v1/models.py` is GENERATED** by `scripts/hoist_names.py` + `datamodel-codegen` + `scripts/postprocess_models.py`. Change the hoist/post-processor (or the store manifest for names) and run `hatch run generate` — never hand-edit. A cold cache needs network access. (`oscal_bindings/models.py` at the top level is a hand-written alias module, not generated.)
 - **`v1/__init__.py` only re-exports** — the entire public API is visible there; the top level derives its `__all__` from it.
 - **Extensions pattern:** new helpers go in `src/oscal_bindings/v1/extensions/`, re-exported up through `v1/extensions/__init__.py` then `v1/__init__.py`.
-- **Wrapper rename map is schema-derived**, not positional: each wrapper is found by its `$schema` field and named from its single body field, with guards for ambiguous wrappers, count mismatch against the schema's top-level `oneOf`, and uncovered class-name collisions.
+- **Names come only from `names.json`** of the spec artifact pinned in `scripts/spec_artifact.py` (`0.2.0+oscal.1.2.3`). The hoist makes each manifest site a named definition; post-processor guards fail on any name outside the manifest. Never rename in the post-processor.
 - **Namespaces are major-scoped** (`v1`); minor-version namespacing was considered and rejected on compatibility-boundary grounds. OSCAL 2.0 is the trigger for a second version package (see `DEVELOPING.md` Key Design Decisions).
 - **Exceptions:** `OscalParseError` (has `.errors`), `OscalAccessError`.
 
@@ -67,7 +67,9 @@ The implementation lives in the major-version package **`oscal_bindings.v1`**; t
 | `src/oscal_bindings/v1/extensions/document.py` | `OscalDoc` facade + `assessment_period()` |
 | `src/oscal_bindings/v1/extensions/builders.py` | Back-matter builders |
 | `src/oscal_bindings/v1/extensions/validate_element.py` | Element validation |
-| `scripts/postprocess_models.py` | Wrapper-name derivation, class renaming, codegen guards |
+| `scripts/spec_artifact.py` | The pin of the spec artifact (naming manifest + corpus) |
+| `scripts/manifest.py`, `scripts/hoist_names.py` | Manifest validation; the hoisted schema that codegen reads |
+| `scripts/postprocess_models.py` | Structure fixes, added manifest types, codegen guards |
 | `pyproject.toml` | Deps, hatch envs, scripts |
 | `DEVELOPING.md` | Dev workflow & design rationale |
 

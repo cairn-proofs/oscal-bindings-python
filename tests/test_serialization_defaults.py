@@ -43,11 +43,11 @@ from oscal_bindings import (
     serialize_oscal,
 )
 from oscal_bindings.models import (
+    BackMatterResource,
+    BackMatterResourceRlink,
     Capability,
     DocumentId,
     Hash,
-    Resource,
-    Rlink,
 )
 from oscal_bindings.v1 import models as v1_models
 from oscal_bindings.v1._base import OscalBaseModel
@@ -107,15 +107,15 @@ def _capability() -> BaseModel:
 
 
 def _rlink_plain() -> BaseModel:
-    return Rlink(href=HREF)
+    return BackMatterResourceRlink(href=HREF)
 
 
 def _rlink_media_type() -> BaseModel:
-    return Rlink(**{"href": HREF, "media-type": "text/plain"})
+    return BackMatterResourceRlink(**{"href": HREF, "media-type": "text/plain"})
 
 
 def _resource_document_ids() -> BaseModel:
-    return Resource(
+    return BackMatterResource(
         **{"uuid": UUID, "document-ids": [DocumentId(identifier="x")]},
     )
 
@@ -163,14 +163,14 @@ def test_catalog_model_dump_json_equals_serialize_oscal(catalog_bytes: bytes) ->
 
 def test_resource_document_ids_by_name_equals_alias() -> None:
     ids = [DocumentId(identifier="x")]
-    by_name = Resource(uuid=UUID, document_ids=ids)
-    by_alias = Resource(**{"uuid": UUID, "document-ids": ids})
+    by_name = BackMatterResource(uuid=UUID, document_ids=ids)
+    by_alias = BackMatterResource(**{"uuid": UUID, "document-ids": ids})
     assert by_name == by_alias
 
 
 def test_rlink_media_type_by_name_equals_alias() -> None:
-    by_name = Rlink(href=HREF, media_type="text/plain")
-    by_alias = Rlink(**{"href": HREF, "media-type": "text/plain"})
+    by_name = BackMatterResourceRlink(href=HREF, media_type="text/plain")
+    by_alias = BackMatterResourceRlink(**{"href": HREF, "media-type": "text/plain"})
     assert by_name == by_alias
 
 
@@ -267,8 +267,8 @@ def test_exclude_none_false_is_a_no_op(model: str, small_catalog_bytes: bytes) -
     assert pydantic_core.to_json(m, exclude_none=False) == pydantic_core.to_json(m)
 
 
-def _full_rlink() -> Rlink:
-    return Rlink(
+def _full_rlink() -> BackMatterResourceRlink:
+    return BackMatterResourceRlink(
         href=HREF,
         media_type="text/plain",
         hashes=[Hash(algorithm="SHA-256", value="ab")],
@@ -294,7 +294,9 @@ def test_exclude_is_honored() -> None:
 def test_exclude_unset_is_honored() -> None:
     # No generated field has a non-None default, so build an instance whose
     # unset field carries a value to observe exclude_unset dropping it.
-    m = Rlink.model_construct(href=HREF, media_type="text/plain", _fields_set={"href"})
+    m = BackMatterResourceRlink.model_construct(
+        href=HREF, media_type="text/plain", _fields_set={"href"}
+    )
     assert m.model_dump() == {"href": HREF, "media-type": "text/plain"}
     assert m.model_dump(exclude_unset=True) == {"href": HREF}
     assert json.loads(m.model_dump_json(exclude_unset=True)) == {"href": HREF}
@@ -305,8 +307,10 @@ def test_exclude_unset_is_honored() -> None:
 
 def test_rlink_construction_by_name_alias_and_mixed() -> None:
     hashes = [Hash(algorithm="SHA-256", value="ab")]
-    by_name = Rlink(href=HREF, media_type="text/plain", hashes=hashes)
-    by_alias = Rlink(**{"href": HREF, "media-type": "text/plain", "hashes": hashes})
+    by_name = BackMatterResourceRlink(href=HREF, media_type="text/plain", hashes=hashes)
+    by_alias = BackMatterResourceRlink(
+        **{"href": HREF, "media-type": "text/plain", "hashes": hashes}
+    )
     assert by_name == by_alias
     assert by_name.media_type == "text/plain"
     assert by_name.model_dump() == {
@@ -318,12 +322,14 @@ def test_rlink_construction_by_name_alias_and_mixed() -> None:
 
 def test_resource_construction_by_name_alias_and_mixed() -> None:
     ids = [DocumentId(identifier="x")]
-    rlinks = [Rlink(href=HREF, media_type="text/plain")]
-    by_name = Resource(uuid=UUID, title="t", document_ids=ids, rlinks=rlinks)
-    by_alias = Resource(
+    rlinks = [BackMatterResourceRlink(href=HREF, media_type="text/plain")]
+    by_name = BackMatterResource(uuid=UUID, title="t", document_ids=ids, rlinks=rlinks)
+    by_alias = BackMatterResource(
         **{"uuid": UUID, "title": "t", "document-ids": ids, "rlinks": rlinks}
     )
-    mixed = Resource(uuid=UUID, title="t", rlinks=rlinks, **{"document-ids": ids})
+    mixed = BackMatterResource(
+        uuid=UUID, title="t", rlinks=rlinks, **{"document-ids": ids}
+    )
     assert by_name == by_alias == mixed
     assert by_name.document_ids == ids
 
@@ -331,8 +337,8 @@ def test_resource_construction_by_name_alias_and_mixed() -> None:
 @pytest.mark.parametrize(
     ("cls", "kwargs"),
     [
-        pytest.param(Rlink, {"href": HREF, "bogus": 1}, id="rlink"),
-        pytest.param(Resource, {"uuid": UUID, "bogus": 1}, id="resource"),
+        pytest.param(BackMatterResourceRlink, {"href": HREF, "bogus": 1}, id="rlink"),
+        pytest.param(BackMatterResource, {"uuid": UUID, "bogus": 1}, id="resource"),
     ],
 )
 def test_unknown_kwarg_is_rejected(
@@ -348,13 +354,13 @@ def test_unknown_kwarg_is_rejected(
 
 
 def test_rlink_serialization_schema_lists_alias_properties() -> None:
-    schema = Rlink.model_json_schema(mode="serialization")
+    schema = BackMatterResourceRlink.model_json_schema(mode="serialization")
     assert {"href", "media-type", "hashes"} <= set(schema["properties"])
 
 
 # --- Structure: every object model uses the base (3.12) ----------------------
 
-PRESERVED_ROOT_MODELS = {"OscalDocument", "Mappings"}
+PRESERVED_ROOT_MODELS = {"OscalDocument", "MappingCollectionMappings"}
 IMPORTED_BASES = {BaseModel, RootModel, OscalBaseModel}
 
 

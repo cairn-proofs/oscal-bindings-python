@@ -14,9 +14,10 @@ contract ([MDL-009]). Closed enums are plain `str`, so the binding accepts value
 2. The post-processor loses its naming rules: `derive_document_renames`, `VARIANT_RENAMES`, `COLLISION_OVERRIDES`,
    the namespace renames, and the positional snapshot. It keeps its structure phases, and it adds guards that compare
    the output with the manifest.
-3. **BREAKING:** about 97 public names go away, and about 131 manifest names are new. Four names now name a
-   different type: `Status`, `Origin`, `LocalDefinitions`, and `MergeFlat`. No deprecated aliases stay, because an
-   alias for a reused name points at the wrong type.
+3. **BREAKING:** 95 public names change to a manifest name, and 35 manifest names are new. Five names now name a
+   different type: `Status`, `Origin`, `LocalDefinitions`, `MergeFlat`, and `MergeCustom`. `ExternalId` and
+   `ExternalId1` merge into `MetadataPartyExternalId`. No deprecated aliases stay, because an alias for a reused name
+   points at the wrong type.
 4. **BREAKING:** each closed enum is an `Enum` type, so a value outside the enum fails validation.
 5. **BREAKING:** the strings of `get_supported_element_types()` follow the new class names, for example
    `profile-group-with-groups` for `profile-group1`.

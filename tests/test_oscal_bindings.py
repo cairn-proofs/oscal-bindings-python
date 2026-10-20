@@ -50,7 +50,14 @@ LEGACY_MODULE_PATHS = {
 #: A sample of generated model names that must stay importable straight off the
 #: top-level package (the pre-move ``from .models import *`` behavior, Req 5.4).
 #: A sample, not the full ~180: the exhaustive check is the star-import itself.
-GENERATED_MODEL_NAMES = ("Catalog", "Profile", "Metadata", "Resource", "Rlink", "Hash")
+GENERATED_MODEL_NAMES = (
+    "Catalog",
+    "Profile",
+    "Metadata",
+    "BackMatterResource",
+    "BackMatterResourceRlink",
+    "Hash",
+)
 
 
 def test_import():
