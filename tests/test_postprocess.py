@@ -1,587 +1,819 @@
-"""Tests for the codegen post-processor CLI (`scripts/postprocess_models.py`).
+"""Tests for the codegen post-processor (`scripts/postprocess_models.py`).
 
-Covers the argparse surface: independent `--models` / `--schema` defaults and
-the missing-path exit behavior.
+The post-processor completes the codegen output of the hoisted schema: phase 1
+(scalar collapse and pattern fixes), the union aliases, `OscalDocument`,
+`MappingCollectionMappings`, and the scalar names. Then three guards compare
+the module with the naming manifest. The tests run the steps on small copies
+of generated source with a small manifest, and they check the committed
+`models.py` against the released manifest.
 """
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import json
 import sys
-from pathlib import Path
-from typing import TYPE_CHECKING
+import typing
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from pydantic import RootModel, TypeAdapter, ValidationError
+from support.scripts import load_script
+from support.spec_artifact import ensure_spec_artifact
+
+from oscal_bindings.v1 import models
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
     from types import ModuleType
 
-REPO_ROOT = Path(__file__).parent.parent
-SCRIPT_PATH = REPO_ROOT / "scripts" / "postprocess_models.py"
+pp: ModuleType = load_script("postprocess_models")
+PostprocessError = pp.PostprocessError
+
+HEADER = (
+    "from __future__ import annotations\n"
+    "\n"
+    "from enum import Enum\n"
+    "from typing import Annotated\n"
+    "\n"
+    "from oscal_bindings.v1._base import OscalBaseModel\n"
+    "from pydantic import ConfigDict, EmailStr, Field, RootModel\n"
+)
+
+#: A schema whose namespaced definition keys name the scalar aliases.
+SCHEMA: dict[str, Any] = {
+    "definitions": {
+        "oscal-complete-oscal-metadata:location-uuid": {"type": "string"},
+        "oscal-complete-oscal-metadata:email-address": {"type": "string"},
+        "TokenDatatype": {"type": "string"},
+    }
+}
 
 
-def _load_postprocess() -> ModuleType:
-    """Load the post-processor script as a module (it lives outside the package)."""
-    spec = importlib.util.spec_from_file_location("postprocess_models", SCRIPT_PATH)
+def _object(name: str, *fields: str) -> str:
+    body = "".join(f"    {field}\n" for field in fields) or "    pass\n"
+    return f"\n\nclass {name}(OscalBaseModel):\n{body}"
+
+
+def _enum(name: str, *values: str) -> str:
+    body = "".join(f"    {v} = '{v}'\n" for v in values)
+    return f"\n\nclass {name}(Enum):\n{body}"
+
+
+#: The codegen output for the small manifest below, before post-processing.
+RAW = (
+    HEADER
+    + _enum("HashAlgorithm", "sha")
+    + _object("Mapping", "uuid: str")
+    # Phase 1 reads the 10 lines above a pattern, so the imports stay out of reach.
+    + "\n\nclass OscalCompleteOscalMetadataLocationUuid(RootModel[str]):\n"
+    "    root: Annotated[str, Field(pattern='^[0-9a-f]+$', title='Location')]\n"
+    + "\n\nclass TokenDatatype(RootModel[str]):\n"
+    "    root: Annotated[str, Field(pattern='^\\\\S+$')]\n"
+    + "\n\nclass MappingCollectionMappings1(RootModel[list[Mapping]]):\n"
+    "    root: Annotated[list[Mapping], Field(min_length=1)]\n"
+    + _object("GroupWithControls", "controls: list[str]")
+    + _object(
+        "GroupWithGroups",
+        "groups: list[GroupWithControls | GroupWithGroups] | None = None",
+        "location: OscalCompleteOscalMetadataLocationUuid | None = None",
+    )
+    + _object(
+        "Catalog",
+        "groups: Annotated[\n"
+        "        list[GroupWithGroups | GroupWithControls] | None,\n"
+        "        Field(min_length=1),\n"
+        "    ] = None",
+        "algorithm: TokenDatatype | HashAlgorithm | None = None",
+    )
+    + _object("MappingCollection", "mappings: Mapping | MappingCollectionMappings1")
+    + _object("CatalogDocument", "catalog: Catalog")
+    + _object("MappingCollectionDocument", "mapping_collection: MappingCollection")
+    + "\n\nclass Model(RootModel[CatalogDocument | MappingCollectionDocument]):\n"
+    "    root: CatalogDocument | MappingCollectionDocument\n"
+    + "\n\nGroupWithGroups.model_rebuild()\n"
+)
+
+
+def _manifest(*extra: dict[str, Any]) -> dict[str, Any]:
+    types: list[dict[str, Any]] = [
+        {"name": "HashAlgorithm", "kind": "enum", "closed": False},
+        {"name": "Mapping", "kind": "object"},
+        {
+            "name": "MappingCollectionMappings",
+            "kind": "single-or-many",
+            "item": "Mapping",
+        },
+        {"name": "GroupWithControls", "kind": "object"},
+        {"name": "GroupWithGroups", "kind": "object"},
+        {
+            "name": "Group",
+            "kind": "union",
+            "variants": [
+                {"type": "GroupWithControls", "property": "controls"},
+                {"type": "GroupWithGroups", "property": "groups"},
+            ],
+        },
+        {"name": "Catalog", "kind": "object"},
+        {"name": "MappingCollection", "kind": "object"},
+        {"name": "CatalogDocument", "kind": "document"},
+        {"name": "MappingCollectionDocument", "kind": "document"},
+        {
+            "name": "OscalDocument",
+            "kind": "document-union",
+            "members": ["CatalogDocument", "MappingCollectionDocument"],
+        },
+    ]
+    return {"format": 1, "types": [*types, *extra]}
+
+
+@functools.cache
+def _vendored() -> dict[str, Any]:
+    """The vendored schema that the committed ``models.py`` was generated from."""
+    schema: dict[str, Any] = json.loads(pp.DEFAULT_SCHEMA_PATH.read_bytes())
+    return schema
+
+
+@pytest.fixture(scope="module")
+def done() -> str:
+    result: str = pp.postprocess(RAW, _manifest(), SCHEMA)
+    return result
+
+
+def _failures(content: str, manifest: dict[str, Any] | None = None) -> list[str]:
+    with pytest.raises(PostprocessError) as info:
+        pp.postprocess(content, manifest or _manifest(), SCHEMA)
+    failures: list[str] = info.value.failures
+    return failures
+
+
+@pytest.fixture(scope="module")
+def generated(done: str, tmp_path_factory: pytest.TempPathFactory) -> Iterator[Any]:
+    """The post-processed small module, imported from a file."""
+    path = tmp_path_factory.mktemp("generated") / "generated_under_test.py"
+    path.write_text(done)
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    try:
+        spec.loader.exec_module(module)
+        yield module
+    finally:
+        del sys.modules[spec.name]
 
 
-@pytest.fixture(scope="module")
-def pp() -> ModuleType:
-    return _load_postprocess()
+# ---------------------------------------------------------------------------
+# Added types
+# ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def fake_models(tmp_path: Path) -> Path:
-    """A minimal generated-source file the post-processor can rewrite."""
-    path = tmp_path / "models.py"
-    path.write_text(
-        "from __future__ import annotations\n"
-        "\n"
-        "from pydantic import BaseModel\n"
-        "\n"
-        "\n"
-        "class OscalCompleteOscalCatalogCatalog(BaseModel):\n"
-        "    uuid: str\n"
-    )
-    return path
+class TestUnionAliases:
+    def test_alias_lists_the_variants_in_manifest_order(self, done: str) -> None:
+        assert "Group: TypeAlias = GroupWithControls | GroupWithGroups\n" in done
 
+    def test_alias_follows_the_last_variant_class(self, done: str) -> None:
+        lines = done.split("\n")
+        alias = lines.index("Group: TypeAlias = GroupWithControls | GroupWithGroups")
+        last_variant = lines.index("class GroupWithGroups(OscalBaseModel):")
+        catalog = lines.index("class Catalog(OscalBaseModel):")
+        assert last_variant < alias < catalog
 
-@pytest.fixture
-def fake_schema(tmp_path: Path) -> Path:
-    """A minimal schema with one namespaced definition."""
-    path = tmp_path / "schema.json"
-    path.write_text(
-        json.dumps({"definitions": {"oscal-complete-oscal-catalog:catalog": {}}})
-    )
-    return path
+    def test_inline_unions_of_the_variant_set_use_the_alias(self, done: str) -> None:
+        """The match ignores the order of the names and keeps ``None``."""
+        assert "groups: list[Group] | None = None" in done
+        assert "list[Group] | None,\n" in done
+        assert "GroupWithGroups | GroupWithControls" not in done
+        assert "GroupWithControls | GroupWithGroups]" not in done
 
+    def test_type_alias_is_imported(self, done: str) -> None:
+        assert "from typing import Annotated, TypeAlias\n" in done
 
-class TestDefaultsResolveIndependently:
-    """Each argument falls back to its own default regardless of the other."""
-
-    def test_both_supplied(self, pp: ModuleType, fake_models: Path, fake_schema: Path):
-        args = pp.parse_args(
-            ["--models", str(fake_models), "--schema", str(fake_schema)]
+    def test_a_partial_or_larger_set_stays_inline(self) -> None:
+        source = (
+            RAW
+            + _object("Other", "x: GroupWithControls | None = None")
+            + _object("Wider", "y: GroupWithControls | GroupWithGroups | Mapping")
         )
-        assert args.models == fake_models
-        assert args.schema == fake_schema
+        manifest = _manifest(
+            {"name": "Other", "kind": "object"}, {"name": "Wider", "kind": "object"}
+        )
+        result = pp.postprocess(source, manifest, SCHEMA)
+        assert "x: GroupWithControls | None = None" in result
+        assert "y: GroupWithControls | GroupWithGroups | Mapping" in result
 
-    def test_schema_only(self, pp: ModuleType, fake_schema: Path):
-        args = pp.parse_args(["--schema", str(fake_schema)])
-        assert args.schema == fake_schema
-        assert args.models == pp.DEFAULT_MODELS_PATH
+    def test_a_long_alias_is_wrapped(self) -> None:
+        text = pp._alias_text("Name", ["A" * 40, "B" * 40])  # noqa: SLF001
+        assert text == f"Name: TypeAlias = (\n    {'A' * 40}\n    | {'B' * 40}\n)"
 
-    def test_models_only(self, pp: ModuleType, fake_models: Path):
-        args = pp.parse_args(["--models", str(fake_models)])
-        assert args.models == fake_models
+    def test_a_missing_variant_class_fails(self) -> None:
+        source = RAW.replace(
+            "class GroupWithControls(OscalBaseModel):",
+            "class Elsewhere(OscalBaseModel):",
+        )
+        failures = _failures(source)
+        assert any("GroupWithControls are not defined" in f for f in failures)
+
+    def test_the_generated_module_resolves_the_alias(self, generated: Any) -> None:
+        catalog = generated.Catalog.model_validate(
+            {"groups": [{"controls": ["a"]}, {"groups": [{"controls": ["b"]}]}]}
+        )
+        assert type(catalog.groups[0]).__name__ == "GroupWithControls"
+        assert type(catalog.groups[1]).__name__ == "GroupWithGroups"
+
+
+class TestOscalDocument:
+    def test_root_model_over_the_documents_takes_the_manifest_name(
+        self, done: str
+    ) -> None:
+        assert "class OscalDocument(RootModel[CatalogDocument | " in done
+        assert "class Model(" not in done
+
+    def test_no_matching_root_model_fails(self) -> None:
+        source = RAW.replace(
+            "class Model(RootModel[CatalogDocument | MappingCollectionDocument]):",
+            "class Model(RootModel[CatalogDocument]):",
+        )
+        failures = _failures(source)
+        assert any(
+            "OscalDocument: expected one RootModel over the 2 document types" in f
+            for f in failures
+        )
+
+
+class TestMappingCollectionMappings:
+    def test_root_model_of_one_item_or_a_list(self, done: str) -> None:
+        assert (
+            "class MappingCollectionMappings(RootModel[Mapping | list[Mapping]]):\n"
+            "    root: Mapping | Annotated[list[Mapping], Field(min_length=1)]\n"
+        ) in done
+        assert "MappingCollectionMappings1" not in done
+
+    def test_field_takes_the_entry_name(self, done: str) -> None:
+        assert "mappings: MappingCollectionMappings\n" in done
+
+    def test_one_item_or_a_non_empty_list_validates(self, generated: Any) -> None:
+        cls = generated.MappingCollection
+        one = cls.model_validate({"mappings": {"uuid": "u"}})
+        many = cls.model_validate({"mappings": [{"uuid": "u"}, {"uuid": "v"}]})
+        assert one.model_dump()["mappings"] == {"uuid": "u"}
+        assert many.model_dump()["mappings"] == [{"uuid": "u"}, {"uuid": "v"}]
+        with pytest.raises(ValidationError):
+            cls.model_validate({"mappings": []})
+
+    def test_no_list_root_model_fails(self) -> None:
+        source = RAW.replace(
+            "mappings: Mapping | MappingCollectionMappings1", "mappings: Mapping"
+        )
+        failures = _failures(source)
+        assert any(
+            "MappingCollectionMappings: expected one RootModel of list[Mapping]" in f
+            for f in failures
+        )
+
+
+class TestScalarAliases:
+    def test_namespaced_scalar_keeps_its_local_name(self, done: str) -> None:
+        assert "LocationUuid = Annotated[str, Field(pattern=" in done
+        assert "location: LocationUuid | None = None" in done
+        assert "OscalCompleteOscal" not in done
+
+    def test_scalar_without_a_prefix_keeps_its_name(self, done: str) -> None:
+        assert "TokenDatatype = Annotated[str, Field(pattern=" in done
+
+    def test_open_enum_field_keeps_the_base_alias(self, done: str) -> None:
+        assert "algorithm: TokenDatatype | HashAlgorithm | None = None" in done
+
+    @pytest.mark.parametrize(
+        ("local", "published"),
+        [("2fa-code", "2faCode"), ("x_y", "X_y"), ("caf\u00e9", "Caf\u00e9")],
+    )
+    def test_a_published_name_that_is_not_pascal_case_fails(
+        self, local: str, published: str
+    ) -> None:
+        key = f"oscal-complete-oscal-metadata:{local}"
+        codegen = "OscalCompleteOscalMetadata" + published
+        schema = {"definitions": {**SCHEMA["definitions"], key: {"type": "string"}}}
+        source = RAW + f"\n\n{codegen} = Annotated[str, Field(min_length=1)]\n"
+        failures: list[str] = []
+        renames = pp.scalar_renames(source, schema, _manifest(), failures)
+        assert codegen not in renames
+        assert failures == [
+            (
+                f"the scalar alias {codegen} cannot take the name {published!r}: "
+                "it is not a PascalCase identifier"
+            )
+        ]
+
+    def test_a_published_name_bound_by_an_import_fails(self) -> None:
+        key = "oscal-complete-oscal-metadata:field"
+        schema = {"definitions": {**SCHEMA["definitions"], key: {"type": "string"}}}
+        source = RAW + "\n\nOscalCompleteOscalMetadataField = Annotated[str, Field()]\n"
+        with pytest.raises(PostprocessError) as info:
+            pp.postprocess(source, _manifest(), schema)
+        assert info.value.failures == [
+            (
+                "the scalar alias OscalCompleteOscalMetadataField cannot take the name "
+                "'Field': an import statement binds it"
+            )
+        ]
+
+    def test_only_scalar_aliases_are_renamed(self) -> None:
+        """A class with a namespaced name is not renamed, so guard 2 reports it."""
+        source = RAW + (
+            "\n\nclass OscalCompleteOscalMetadataEmailAddress(OscalBaseModel):\n"
+            "    x: str\n"
+        )
+        failures = _failures(source)
+        assert any(
+            "OscalCompleteOscalMetadataEmailAddress" in f and "[guard 2]" in f
+            for f in failures
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase 1
+# ---------------------------------------------------------------------------
+
+
+class TestPhase1:
+    def test_scalar_root_model_collapses_to_annotated(self) -> None:
+        source = (
+            "class Token(RootModel[str]):\n"
+            "    root: Annotated[str, Field(pattern='^x$')]\n"
+        )
+        assert pp.collapse_scalar_root_models(source).startswith(
+            "Token = Annotated[str, Field(pattern='^x$')]"
+        )
+
+    def test_multi_line_scalar_root_model_collapses(self) -> None:
+        source = (
+            "class Token(\n    RootModel[str]\n):\n"
+            "    root: Annotated[\n        str, Field(pattern='^x$')\n    ]\n"
+        )
+        result = pp.collapse_scalar_root_models(source)
+        assert result.startswith("Token = Annotated[\n        str, Field(")
+
+    def test_preserved_and_union_root_models_stay(self) -> None:
+        source = (
+            "class Keep(RootModel[str]):\n    root: str\n\n\n"
+            "class Either(RootModel[A | B]):\n    root: A | B\n"
+        )
+        result = pp.collapse_scalar_root_models(source, frozenset({"Keep"}))
+        assert result == source
+
+    def test_email_pattern_is_removed(self) -> None:
+        source = "x: Annotated[EmailStr, Field(pattern='^.+@.+$', title='E')]"
+        assert pp.fix_email_str_patterns(source) == (
+            "x: Annotated[EmailStr, Field(title='E')]"
+        )
+
+    def test_non_string_pattern_is_removed(self) -> None:
+        source = (
+            "x: Annotated[\n    AwareDatetime,\n    Field(pattern='^d$', title='T'),\n]"
+        )
+        assert "pattern=" not in pp.fix_non_string_patterns(source)
+
+    def test_string_pattern_stays(self) -> None:
+        source = "x: Annotated[\n    str,\n    Field(pattern='^d$', title='T'),\n]"
+        assert pp.fix_non_string_patterns(source) == source
+
+
+# ---------------------------------------------------------------------------
+# Guards
+# ---------------------------------------------------------------------------
+
+
+class TestGuards:
+    def test_output_of_the_small_manifest_passes(self, done: str) -> None:
+        assert pp.guard_failures(done, _manifest(), SCHEMA) == []
+
+    def test_every_missing_manifest_name_is_listed(self, done: str) -> None:
+        manifest = _manifest(
+            {"name": "Absent", "kind": "object"},
+            {"name": "AlsoAbsent", "kind": "union", "variants": []},
+        )
+        failures = pp.guard_failures(done, manifest, SCHEMA)
+        assert failures == [
+            "[guard 1] the manifest name Absent (object) is missing",
+            "[guard 1] the manifest name AlsoAbsent (union) is missing",
+        ]
+
+    def test_a_name_in_the_wrong_form_fails(self, done: str) -> None:
+        manifest = _manifest()
+        for entry in manifest["types"]:
+            if entry["name"] == "Mapping":
+                entry["kind"] = "enum"
+        failures = pp.guard_failures(done, manifest, SCHEMA)
+        assert failures == ["[guard 1] Mapping (enum) is defined as class, not as enum"]
+
+    def test_every_class_outside_the_manifest_is_listed(self, done: str) -> None:
+        content = done + _object("Stray", "x: str") + _enum("StrayEnum", "a")
+        failures = pp.guard_failures(content, _manifest(), SCHEMA)
+        assert len(failures) == 2
+        assert failures[0].startswith("[guard 2] Stray (line ")
+        assert failures[0].endswith(") is defined as class outside the manifest")
+        assert failures[1].startswith("[guard 2] StrayEnum (line ")
+        assert failures[1].endswith(") is defined as enum outside the manifest")
+
+    def test_every_scalar_alias_with_a_manifest_name_is_listed(self) -> None:
+        manifest = _manifest(
+            {"name": "LocationUuid", "kind": "object"},
+            {"name": "TokenDatatype", "kind": "object"},
+        )
+        failures = _failures(RAW, manifest)
+        scalar = [f for f in failures if "has a manifest name" in f]
+        assert len(scalar) == 2
+        assert "the scalar alias LocationUuid" in scalar[0]
+        assert "the scalar alias TokenDatatype" in scalar[1]
+
+    def test_every_duplicate_name_is_listed(self, done: str) -> None:
+        content = (
+            done
+            + _object("Catalog", "again: str")
+            + _object("Mapping", "again: str")
+            + _object("Mapping", "third: str")
+        )
+        failures = pp.guard_failures(content, _manifest(), SCHEMA)
+        duplicates = [f for f in failures if "is defined" in f]
+        assert len(duplicates) == 2
+        assert duplicates[0].startswith("[guard 3] Catalog is defined 2 times")
+        assert duplicates[1].startswith("[guard 3] Mapping is defined 3 times")
+
+    def test_every_scalar_alias_outside_the_schema_is_listed(self, done: str) -> None:
+        content = (
+            done
+            + "\n\nFoo1 = Annotated[str, Field(min_length=1)]\n"
+            + "\n\nBar = Annotated[int, Field(ge=0)]\n"
+        )
+        failures = pp.guard_failures(content, _manifest(), SCHEMA)
+        assert len(failures) == 2, failures
+        assert failures[0].startswith("[guard 2] the scalar alias Foo1 (line ")
+        assert failures[0].endswith(") names no scalar definition of the schema")
+        assert failures[1].startswith("[guard 2] the scalar alias Bar (line ")
+
+    def test_a_scalar_alias_of_a_site_key_is_outside_the_schema(
+        self, done: str
+    ) -> None:
+        """A definition key that is a manifest site is not a scalar definition."""
+        manifest = _manifest()
+        manifest["types"][1]["sites"] = ["#/definitions/TokenDatatype"]
+        failures = pp.guard_failures(done, manifest, SCHEMA)
+        assert len(failures) == 1, failures
+        assert failures[0].startswith("[guard 2] the scalar alias TokenDatatype ")
+
+    def test_a_manifest_name_bound_by_an_import_fails(self, done: str) -> None:
+        manifest = _manifest({"name": "Field", "kind": "object"})
+        failures = pp.guard_failures(done, manifest, SCHEMA)
+        assert "[guard 3] the manifest name Field is bound by an import statement" in (
+            failures
+        )
+
+    def test_a_scalar_alias_bound_by_an_import_fails(self) -> None:
+        content = (
+            HEADER
+            + "\n\nimport json as TokenDatatype\n"
+            + ("\n\nTokenDatatype = Annotated[str, Field(min_length=1)]\n")
+        )
+        failures = pp.guard_failures(content, {"types": []}, SCHEMA)
+        assert len(failures) == 1, failures
+        assert failures[0].startswith("[guard 3] the scalar alias TokenDatatype ")
+        assert failures[0].endswith("is bound by an import statement")
+
+    def test_import_bindings_cover_names_and_asnames(self) -> None:
+        source = (
+            "import os.path\nimport json as j\nfrom typing import Any, Final as F\n"
+            "def f():\n    import sys\n"
+        )
+        assert pp.import_bindings(source) == {"os", "j", "Any", "F"}
+
+    def test_all_guards_report_in_one_error(self) -> None:
+        source = RAW + _object("Stray", "x: str") + _object("Catalog", "again: str")
+        manifest = _manifest({"name": "Absent", "kind": "object"})
+        failures = _failures(source, manifest)
+        assert [f[:9] for f in failures] == ["[guard 1]", "[guard 2]", "[guard 3]"]
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+class TestCli:
+    def test_defaults_resolve_independently(self, tmp_path: Path) -> None:
+        models_path = tmp_path / "models.py"
+        args = pp.parse_args(["--models", str(models_path)])
+        assert args.models == models_path
+        assert args.output == models_path
         assert args.schema == pp.DEFAULT_SCHEMA_PATH
-
-    def test_neither_supplied(self, pp: ModuleType):
         args = pp.parse_args([])
         assert args.models == pp.DEFAULT_MODELS_PATH
+        assert args.output == pp.DEFAULT_MODELS_PATH
         assert args.schema == pp.DEFAULT_SCHEMA_PATH
+        output = tmp_path / "out.py"
+        args = pp.parse_args(["--models", str(models_path), "--output", str(output)])
+        assert args.output == output
 
-    def test_defaults_point_at_existing_files(self, pp: ModuleType):
+    def test_defaults_point_at_existing_files(self) -> None:
         assert pp.DEFAULT_MODELS_PATH.exists()
         assert pp.DEFAULT_SCHEMA_PATH.exists()
 
+    def test_active_schema_release_is_the_release_of_the_pin(self) -> None:
+        assert load_script("spec_artifact").OSCAL_RELEASE == pp.ACTIVE_SCHEMA_RELEASE
 
-class TestMainHonorsResolvedPaths:
-    """End-to-end: main() reads and writes exactly the resolved paths."""
+    def test_load_manifest_checks_the_schema_hash(self, tmp_path: Path) -> None:
+        """The manifest must record the sha256 of the ``--schema`` file."""
+        other = tmp_path / "schema.json"
+        other.write_text(json.dumps(SCHEMA))
+        manifest_error = load_script("manifest").ManifestError
+        with pytest.raises(manifest_error, match=r"schema\.sha256"):
+            pp.load_manifest(other)
+        assert pp.load_manifest(pp.DEFAULT_SCHEMA_PATH)["types"]
 
-    def test_both_supplied(
-        self, pp: ModuleType, fake_models: Path, fake_schema: Path, capsys
-    ):
-        pp.main(["--models", str(fake_models), "--schema", str(fake_schema)])
-        assert "Catalog" in fake_models.read_text()
-        assert "OscalCompleteOscalCatalogCatalog" not in fake_models.read_text()
-        assert str(fake_models) in capsys.readouterr().out
+    @pytest.fixture
+    def files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        monkeypatch.setattr(pp, "load_manifest", lambda _schema: _manifest())
+        (tmp_path / "schema.json").write_text(json.dumps(SCHEMA))
+        (tmp_path / "models.py").write_text(RAW)
+        return tmp_path
 
-    def test_models_only_uses_default_schema(
-        self,
-        pp: ModuleType,
-        fake_models: Path,
-        fake_schema: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        monkeypatch.setattr(pp, "DEFAULT_SCHEMA_PATH", fake_schema)
-        pp.main(["--models", str(fake_models)])
-        assert "class Catalog(BaseModel):" in fake_models.read_text()
+    def _run(self, files: Path, *extra: str) -> int:
+        status: int = pp.main(
+            [
+                "--models",
+                str(files / "models.py"),
+                "--schema",
+                str(files / "schema.json"),
+                *extra,
+            ]
+        )
+        return status
 
-    def test_schema_only_uses_default_models(
-        self,
-        pp: ModuleType,
-        fake_models: Path,
-        fake_schema: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        monkeypatch.setattr(pp, "DEFAULT_MODELS_PATH", fake_models)
-        pp.main(["--schema", str(fake_schema)])
-        assert "class Catalog(BaseModel):" in fake_models.read_text()
+    def test_main_writes_the_completed_module(
+        self, files: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert self._run(files) == 0
+        written = (files / "models.py").read_text()
+        assert "Group: TypeAlias = GroupWithControls | GroupWithGroups" in written
+        assert str(files / "models.py") in capsys.readouterr().out
+        assert sorted(p.name for p in files.iterdir()) == ["models.py", "schema.json"]
 
-    def test_neither_supplied_uses_both_defaults(
-        self,
-        pp: ModuleType,
-        fake_models: Path,
-        fake_schema: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        monkeypatch.setattr(pp, "DEFAULT_MODELS_PATH", fake_models)
-        monkeypatch.setattr(pp, "DEFAULT_SCHEMA_PATH", fake_schema)
-        pp.main([])
-        assert "class Catalog(BaseModel):" in fake_models.read_text()
-
-
-class TestMissingPaths:
-    def test_missing_models_exits_nonzero_with_path(
-        self, pp: ModuleType, fake_schema: Path, tmp_path: Path, capsys
-    ):
-        absent = tmp_path / "nope.py"
-        with pytest.raises(SystemExit) as exc:
-            pp.main(["--models", str(absent), "--schema", str(fake_schema)])
-        assert exc.value.code != 0
-        assert str(absent) in capsys.readouterr().err
-
-    def test_missing_schema_exits_nonzero_with_path(
-        self, pp: ModuleType, fake_models: Path, tmp_path: Path, capsys
-    ):
-        absent = tmp_path / "nope.json"
-        with pytest.raises(SystemExit) as exc:
-            pp.main(["--models", str(fake_models), "--schema", str(absent)])
-        assert exc.value.code != 0
-        assert str(absent) in capsys.readouterr().err
-
-    def test_models_left_untouched_when_schema_missing(
-        self, pp: ModuleType, fake_models: Path, tmp_path: Path
-    ):
-        before = fake_models.read_text()
-        with pytest.raises(SystemExit):
-            pp.main(
-                ["--models", str(fake_models), "--schema", str(tmp_path / "nope.json")]
-            )
-        assert fake_models.read_text() == before
-
-
-def test_build_namespace_renames_uses_supplied_schema(
-    pp: ModuleType, fake_schema: Path
-):
-    renames = pp.build_namespace_renames(fake_schema)
-    assert renames == {"OscalCompleteOscalCatalogCatalog": "Catalog"}
-
-
-class TestCollisionGuard:
-    """The guard accumulates every uncovered collision and refuses to write."""
-
-    @staticmethod
-    def _colliding_source(names: list[str]) -> str:
-        """Generated source where each supplied name is defined twice."""
-        lines = [
-            "from __future__ import annotations",
-            "",
-            "from pydantic import BaseModel",
-            "",
+    def test_main_writes_the_output_and_keeps_the_input(self, files: Path) -> None:
+        output = files / "out.py"
+        output.write_text("old\n")
+        output.chmod(0o640)
+        assert self._run(files, "--output", str(output)) == 0
+        assert (files / "models.py").read_text() == RAW
+        assert "Group: TypeAlias" in output.read_text()
+        assert output.stat().st_mode & 0o777 == 0o640
+        assert sorted(p.name for p in files.iterdir()) == [
+            "models.py",
+            "out.py",
+            "schema.json",
         ]
-        for name in names:
-            for field in ("uuid", "title"):
-                lines += ["", f"class {name}(BaseModel):", f"    {field}: str", ""]
-        return "\n".join(lines)
 
-    def test_finds_every_duplicate_not_just_the_first(self, pp: ModuleType):
-        source = self._colliding_source(["Alpha", "Beta", "Gamma"])
-        assert pp.find_duplicate_class_definitions(source) == {
-            "Alpha": 2,
-            "Beta": 2,
-            "Gamma": 2,
-        }
+    def test_main_writes_nothing_to_the_output_on_a_guard_failure(
+        self, files: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (files / "models.py").write_text(RAW + _object("Stray", "x: str"))
+        output = files / "out.py"
+        output.write_text("committed\n")
+        assert self._run(files, "--output", str(output)) == 1
+        assert output.read_text() == "committed\n"
+        assert f"{output} was not written" in capsys.readouterr().err
+        assert sorted(p.name for p in files.iterdir()) == [
+            "models.py",
+            "out.py",
+            "schema.json",
+        ]
 
-    def test_clean_source_has_no_duplicates(self, pp: ModuleType):
-        source = (
-            "class Alpha(BaseModel):\n    uuid: str\n\n\n"
-            "class Beta(BaseModel):\n    uuid: str\n"
-        )
-        assert pp.find_duplicate_class_definitions(source) == {}
+    def test_a_failed_write_leaves_no_temporary_file(
+        self, files: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = files / "out.py"
+        output.write_text("committed\n")
 
-    def test_detects_multi_line_class_headers(self, pp: ModuleType):
-        source = (
-            "class Alpha(\n    BaseModel\n):\n    uuid: str\n"
-            "\n\nclass Alpha(\n    BaseModel\n):\n    title: str\n"
-        )
-        assert pp.find_duplicate_class_definitions(source) == {"Alpha": 2}
+        def fail(*_args: object) -> None:
+            msg = "disk full"
+            raise OSError(msg)
 
-    def test_counts_more_than_two_definitions(self, pp: ModuleType):
-        source = "".join(
-            f"class Alpha(BaseModel):\n    f{i}: str\n\n\n" for i in range(3)
-        )
-        assert pp.find_duplicate_class_definitions(source) == {"Alpha": 3}
+        monkeypatch.setattr(pp.Path, "replace", fail)
+        assert self._run(files, "--output", str(output)) == 1
+        assert output.read_text() == "committed\n"
+        assert sorted(p.name for p in files.iterdir()) == [
+            "models.py",
+            "out.py",
+            "schema.json",
+        ]
 
-    def test_main_exits_nonzero_and_reports_all(
-        self, pp: ModuleType, fake_models: Path, fake_schema: Path, capsys
-    ):
-        """Every collision appears in the single report produced by one run."""
-        names = ["Alpha", "Beta", "Gamma", "Delta"]
-        fake_models.write_text(self._colliding_source(names))
-
-        with pytest.raises(SystemExit) as exc:
-            pp.main(["--models", str(fake_models), "--schema", str(fake_schema)])
-
-        assert exc.value.code != 0
+    def test_main_writes_nothing_on_a_guard_failure(
+        self, files: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        before = RAW + _object("Stray", "x: str") + _object("Lost", "y: str")
+        (files / "models.py").write_text(before)
+        assert self._run(files) == 1
+        assert (files / "models.py").read_text() == before
         err = capsys.readouterr().err
-        for name in names:
-            assert f"{name}: 2 definitions" in err
-        # One run, one report: a single error header covering all four collisions.
-        assert err.count("Error:") == 1
-        assert f"{len(names)} class-name collision(s)" in err
+        assert "Stray" in err
+        assert "Lost" in err
+        assert "was not written" in err
 
-    def test_main_leaves_models_unwritten_on_collision(
-        self, pp: ModuleType, fake_models: Path, fake_schema: Path
-    ):
-        before = self._colliding_source(["Alpha", "Beta"])
-        fake_models.write_text(before)
-
-        with pytest.raises(SystemExit):
-            pp.main(["--models", str(fake_models), "--schema", str(fake_schema)])
-
-        assert fake_models.read_text() == before
-
-    def test_real_schema_output_has_no_collisions(self, pp: ModuleType):
-        """The committed models output must not trip the guard (no false positives)."""
-        content = pp.DEFAULT_MODELS_PATH.read_text()
-        assert pp.find_duplicate_class_definitions(content) == {}
+    @pytest.mark.parametrize("absent", ["models.py", "schema.json"])
+    def test_a_missing_path_fails_with_its_name(
+        self, files: Path, absent: str, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (files / absent).unlink()
+        before = {p.name: p.read_text() for p in files.iterdir()}
+        assert self._run(files) == 1
+        assert str(files / absent) in capsys.readouterr().err
+        assert {p.name: p.read_text() for p in files.iterdir()} == before
 
 
-HEADER = "from __future__ import annotations\n\nfrom pydantic import BaseModel\n"
-
-#: The eight OSCAL document root keys as they appear as generated field names
-#: (snake_case, because ``datamodel-codegen`` sanitizes the kebab-case JSON keys).
-ROOT_KEYS = (
-    "catalog",
-    "profile",
-    "component_definition",
-    "system_security_plan",
-    "assessment_plan",
-    "assessment_results",
-    "plan_of_action_and_milestones",
-    "mapping_collection",
-)
+# ---------------------------------------------------------------------------
+# The committed models.py
+# ---------------------------------------------------------------------------
 
 
-def _wrapper(name: str, *root_keys: str) -> str:
-    fields = "".join(f"    {key}: str\n" for key in root_keys)
-    return (
-        f"\n\nclass {name}(BaseModel):\n    field_schema: str | None = None\n{fields}"
+@pytest.fixture(scope="module")
+def released_manifest() -> dict[str, Any]:
+    manifest_mod = load_script("manifest")
+    pin = load_script("spec_artifact")
+    manifest: dict[str, Any] = manifest_mod.load_validated_manifest(
+        pin.artifact_paths(ensure_spec_artifact())
     )
+    return manifest
 
 
-def _schema_with_document_types(path: Path, count: int) -> Path:
-    """Write a schema declaring ``count`` document types in its top-level ``oneOf``."""
-    path.write_text(
-        json.dumps(
+class TestCommittedModels:
+    def test_passes_the_guards(self, released_manifest: dict[str, Any]) -> None:
+        content = pp.DEFAULT_MODELS_PATH.read_text()
+        assert pp.guard_failures(content, released_manifest, _vendored()) == []
+
+    def test_each_union_alias_is_the_union_of_its_variants(
+        self, released_manifest: dict[str, Any]
+    ) -> None:
+        for entry in released_manifest["types"]:
+            if entry["kind"] != "union":
+                continue
+            alias = getattr(models, entry["name"])
+            variants = [getattr(models, v["type"]) for v in entry["variants"]]
+            assert list(typing.get_args(alias)) == variants, entry["name"]
+
+    def test_mapping_collection_mappings_is_a_root_model(self) -> None:
+        cls = models.MappingCollectionMappings
+        assert issubclass(cls, RootModel)
+        field = models.MappingCollection.model_fields["mappings"]
+        assert field.annotation is cls
+
+    def test_oscal_document_is_the_root_model_of_the_documents(
+        self, released_manifest: dict[str, Any]
+    ) -> None:
+        (entry,) = [
+            e for e in released_manifest["types"] if e["kind"] == "document-union"
+        ]
+        root = models.OscalDocument.model_fields["root"].annotation
+        assert {t.__name__ for t in typing.get_args(root)} == set(entry["members"])
+
+    def test_union_alias_validates_each_variant(self) -> None:
+        adapter = TypeAdapter(models.CatalogGroup)
+        group = adapter.validate_python(
             {
-                "definitions": {"oscal-complete-oscal-catalog:catalog": {}},
-                "oneOf": [{"required": [f"doc-{i}"]} for i in range(count)],
+                "id": "g",
+                "title": "G",
+                "groups": [
+                    {"id": "h", "title": "H", "controls": [{"id": "c", "title": "C"}]}
+                ],
             }
         )
+        assert isinstance(group, models.CatalogGroupWithGroups)
+
+
+# ---------------------------------------------------------------------------
+# Drift between the committed models.py and the released manifest
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def committed() -> str:
+    """The source of the committed ``models.py``."""
+    return pp.DEFAULT_MODELS_PATH.read_text()
+
+
+def _without(manifest: dict[str, Any], name: str) -> dict[str, Any]:
+    return {**manifest, "types": [t for t in manifest["types"] if t["name"] != name]}
+
+
+class TestRealDrift:
+    """The guards on the real module and manifest, with one change each."""
+
+    @pytest.mark.parametrize(
+        ("name", "form"),
+        [
+            ("Catalog", "class"),
+            ("CatalogDocument", "class"),
+            ("HashAlgorithm", "enum"),
+            ("CatalogGroup", "type alias"),
+            ("MappingCollectionMappings", "root model"),
+            ("OscalDocument", "root model"),
+        ],
     )
-    return path
+    def test_a_manifest_without_an_entry_names_its_definition(
+        self, committed: str, released_manifest: dict[str, Any], name: str, form: str
+    ) -> None:
+        failures = pp.guard_failures(
+            committed, _without(released_manifest, name), _vendored()
+        )
+        assert len(failures) == 1, failures
+        assert failures[0].startswith(f"[guard 2] {name} (line ")
+        assert failures[0].endswith(f") is defined as {form} outside the manifest")
 
+    def test_a_renamed_class_is_missing_and_stray(
+        self, committed: str, released_manifest: dict[str, Any]
+    ) -> None:
+        renamed = pp.rename_names(
+            committed, {"CatalogGroupWithControls": "CatalogGroupWithControls1"}
+        )
+        failures = pp.guard_failures(renamed, released_manifest, _vendored())
+        assert len(failures) == 2, failures
+        assert failures[0] == (
+            "[guard 1] the manifest name CatalogGroupWithControls (object) is missing"
+        )
+        assert failures[1].startswith("[guard 2] CatalogGroupWithControls1 (line ")
 
-def _generated_source(ordinal_for_key: dict[str, int]) -> str:
-    """Synthesize generated source mapping each root key onto ``Model<ordinal>``.
-
-    Wrapper classes are emitted in ordinal order, mirroring ``datamodel-codegen``,
-    so shuffling the assignment shuffles both the names *and* the source positions.
-    """
-    ordered = sorted(ordinal_for_key.items(), key=lambda kv: kv[1])
-    return HEADER + "".join(
-        _wrapper(f"Model{ordinal}", key) for key, ordinal in ordered
-    )
-
-
-class TestDerivationTracksContentNotPosition:
-    """Req 3.1-3.4: names come from each wrapper's Root_Key, never its ordinal."""
-
-    def test_pascal_case_document_names_derived_from_root_keys(self, pp: ModuleType):
-        source = _generated_source({key: i + 1 for i, key in enumerate(ROOT_KEYS)})
-        assert pp.derive_document_renames(source) == {
-            "Model1": "CatalogDocument",
-            "Model2": "ProfileDocument",
-            "Model3": "ComponentDefinitionDocument",
-            "Model4": "SystemSecurityPlanDocument",
-            "Model5": "AssessmentPlanDocument",
-            "Model6": "AssessmentResultsDocument",
-            "Model7": "PlanOfActionAndMilestonesDocument",
-            "Model8": "MappingCollectionDocument",
+    def test_a_manifest_entry_of_another_kind_fails(
+        self, committed: str, released_manifest: dict[str, Any]
+    ) -> None:
+        manifest = {
+            **released_manifest,
+            "types": [
+                {**t, "kind": "union", "variants": []}
+                if t["name"] == "HashAlgorithm"
+                else t
+                for t in released_manifest["types"]
+            ],
         }
+        assert pp.guard_failures(committed, manifest, _vendored()) == [
+            "[guard 1] HashAlgorithm (union) is defined as enum, not as type alias"
+        ]
 
-    def test_shuffled_ordinals_follow_their_content(self, pp: ModuleType):
-        """Deliberately shuffled ordinals: each name tracks its own body field.
-
-        ``Model1`` now holds ``plan_of_action_and_milestones``, which the retired
-        positional map called ``CatalogDocument``. The derivation must disagree with
-        the positional map here — that disagreement is the defect being fixed.
-        """
-        shuffled = {
-            "plan_of_action_and_milestones": 1,
-            "assessment_results": 2,
-            "mapping_collection": 3,
-            "catalog": 4,
-            "profile": 5,
-            "system_security_plan": 6,
-            "component_definition": 7,
-            "assessment_plan": 8,
-        }
-        derived = pp.derive_document_renames(_generated_source(shuffled))
-
-        assert derived == {
-            "Model1": "PlanOfActionAndMilestonesDocument",
-            "Model2": "AssessmentResultsDocument",
-            "Model3": "MappingCollectionDocument",
-            "Model4": "CatalogDocument",
-            "Model5": "ProfileDocument",
-            "Model6": "SystemSecurityPlanDocument",
-            "Model7": "ComponentDefinitionDocument",
-            "Model8": "AssessmentPlanDocument",
-        }
-        assert derived != pp.POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT
-
-    def test_published_name_set_is_invariant_under_shuffling(self, pp: ModuleType):
-        """Whatever the ordinal assignment, the same eight names come out."""
-        forward = {key: i + 1 for i, key in enumerate(ROOT_KEYS)}
-        reversed_ = {key: len(ROOT_KEYS) - i for i, key in enumerate(ROOT_KEYS)}
-
-        assert set(
-            pp.derive_document_renames(_generated_source(forward)).values()
-        ) == set(pp.derive_document_renames(_generated_source(reversed_)).values())
-
-    def test_main_renames_wrappers_by_content(
-        self, pp: ModuleType, fake_models: Path, tmp_path: Path
-    ):
-        """End-to-end: the written file carries the content-derived names."""
-        schema = _schema_with_document_types(tmp_path / "schema.json", 2)
-        fake_models.write_text(
-            HEADER + _wrapper("Model1", "profile") + _wrapper("Model2", "catalog")
-        )
-        pp.main(["--models", str(fake_models), "--schema", str(schema)])
-
-        written = fake_models.read_text()
-        assert "class ProfileDocument(BaseModel):" in written
-        assert "class CatalogDocument(BaseModel):" in written
-        assert "class Model1(" not in written
-        assert "class Model2(" not in written
-
-    def test_schema_only_wrapper_is_not_a_document(self, pp: ModuleType):
-        """The union root carries ``field_schema`` alone.
-
-        Nothing to derive, and no error.
-        """
-        source = HEADER + _wrapper("Model") + _wrapper("Model1", "catalog")
-        assert pp.derive_document_renames(source) == {"Model1": "CatalogDocument"}
-
-    def test_classes_without_the_directive_field_are_ignored(self, pp: ModuleType):
-        """Ordinary model classes have many fields but no ``field_schema``."""
-        source = (
-            HEADER
-            + "\n\nclass Catalog(BaseModel):\n    uuid: str\n    metadata: str\n"
-            + _wrapper("Model1", "catalog")
-        )
-        assert pp.derive_document_renames(source) == {"Model1": "CatalogDocument"}
+    def test_a_second_definition_of_a_manifest_name_fails(
+        self, committed: str, released_manifest: dict[str, Any]
+    ) -> None:
+        content = committed + _object("HashAlgorithm", "x: str")
+        failures = pp.guard_failures(content, released_manifest, _vendored())
+        assert len(failures) == 1, failures
+        assert failures[0].startswith("[guard 3] HashAlgorithm is defined 2 times")
 
 
-class TestAmbiguityGuardFailsFast:
-    """Req 3.5: report the first ambiguous wrapper and stop scanning."""
-
-    def test_derivation_raises_on_first_offender(self, pp: ModuleType):
-        source = (
-            HEADER
-            + _wrapper("Model1", "catalog", "profile")
-            + _wrapper("Model2", "assessment_plan", "assessment_results")
-        )
-        with pytest.raises(pp.AmbiguousWrapperError) as exc:
-            pp.derive_document_renames(source)
-        assert exc.value.class_name == "Model1"
-        assert exc.value.body_fields == ["catalog", "profile"]
-        assert "Model2" not in str(exc.value)
-
-    def test_main_exits_nonzero_naming_only_the_first(
-        self, pp: ModuleType, fake_models: Path, fake_schema: Path, capsys
-    ):
-        fake_models.write_text(
-            HEADER
-            + _wrapper("Alpha", "catalog", "profile")
-            + _wrapper("Bravo", "assessment_plan", "assessment_results")
-        )
-        with pytest.raises(SystemExit) as exc:
-            pp.main(["--models", str(fake_models), "--schema", str(fake_schema)])
-
-        assert exc.value.code != 0
-        err = capsys.readouterr().err
-        assert "Alpha" in err
-        assert "Bravo" not in err
-
-    def test_wrappers_after_the_offender_are_left_unscanned(
-        self, pp: ModuleType, fake_models: Path, fake_schema: Path, capsys
-    ):
-        """A *valid* wrapper following the offender is absent from the report too.
-
-        If the scan had continued, this wrapper would have been derived and could
-        surface downstream; its absence is the evidence the scan stopped.
-        """
-        fake_models.write_text(
-            HEADER
-            + _wrapper("Alpha", "catalog", "profile")
-            + _wrapper("Charlie", "system_security_plan")
-        )
-        with pytest.raises(SystemExit):
-            pp.main(["--models", str(fake_models), "--schema", str(fake_schema)])
-
-        err = capsys.readouterr().err
-        assert "Charlie" not in err
-        assert "SystemSecurityPlanDocument" not in err
-
-    def test_models_left_unwritten_on_ambiguity(
-        self, pp: ModuleType, fake_models: Path, fake_schema: Path
-    ):
-        before = HEADER + _wrapper("Alpha", "catalog", "profile")
-        fake_models.write_text(before)
-        with pytest.raises(SystemExit):
-            pp.main(["--models", str(fake_models), "--schema", str(fake_schema)])
-        assert fake_models.read_text() == before
-
-    def test_real_bundle_output_is_unambiguous(self, pp: ModuleType):
-        """No false positives against the committed models output."""
-        pp.derive_document_renames(pp.DEFAULT_MODELS_PATH.read_text())
+# ---------------------------------------------------------------------------
+# A second run on the post-processed output
+# ---------------------------------------------------------------------------
 
 
-class TestWrapperCountGuard:
-    """Req 3.6: derived wrapper count must match the schema's document-type count."""
+class TestRerun:
+    """A second run is rejected: the single-or-many step needs the codegen form.
 
-    def test_mismatch_reports_both_counts(
-        self, pp: ModuleType, fake_models: Path, tmp_path: Path, capsys
-    ):
-        schema = _schema_with_document_types(tmp_path / "schema.json", 3)
-        fake_models.write_text(HEADER + _wrapper("Alpha", "catalog"))
-
-        with pytest.raises(SystemExit) as exc:
-            pp.main(["--models", str(fake_models), "--schema", str(schema)])
-
-        assert exc.value.code != 0
-        err = capsys.readouterr().err
-        assert "1 wrapper" in err
-        assert "3 document type" in err
-
-    def test_surplus_wrappers_also_report_both_counts(
-        self, pp: ModuleType, fake_models: Path, tmp_path: Path, capsys
-    ):
-        """The guard is symmetric.
-
-        More derived wrappers than declared types fails too.
-        """
-        schema = _schema_with_document_types(tmp_path / "schema.json", 1)
-        fake_models.write_text(
-            HEADER + _wrapper("Alpha", "catalog") + _wrapper("Bravo", "profile")
-        )
-
-        with pytest.raises(SystemExit) as exc:
-            pp.main(["--models", str(fake_models), "--schema", str(schema)])
-
-        assert exc.value.code != 0
-        err = capsys.readouterr().err
-        assert "2 wrapper" in err
-        assert "1 document type" in err
-
-    def test_models_left_unwritten_on_mismatch(
-        self, pp: ModuleType, fake_models: Path, tmp_path: Path
-    ):
-        schema = _schema_with_document_types(tmp_path / "schema.json", 3)
-        before = HEADER + _wrapper("Alpha", "catalog")
-        fake_models.write_text(before)
-
-        with pytest.raises(SystemExit):
-            pp.main(["--models", str(fake_models), "--schema", str(schema)])
-
-        assert fake_models.read_text() == before
-
-    def test_match_passes(self, pp: ModuleType, fake_models: Path, tmp_path: Path):
-        schema = _schema_with_document_types(tmp_path / "schema.json", 1)
-        fake_models.write_text(HEADER + _wrapper("Alpha", "catalog"))
-        pp.main(["--models", str(fake_models), "--schema", str(schema)])
-        assert "class CatalogDocument(BaseModel):" in fake_models.read_text()
-
-    def test_schema_without_one_of_is_not_judged(
-        self, pp: ModuleType, fake_schema: Path
-    ):
-        """No top-level ``oneOf`` means no declared document types to compare."""
-        assert pp.count_schema_document_types(fake_schema) is None
-
-    def test_real_bundle_counts_eight(self, pp: ModuleType):
-        assert pp.count_schema_document_types(pp.DEFAULT_SCHEMA_PATH) == 8
-
-
-class TestParityWithPositionalMap:
-    """Req 3.7: against the active bundle, derivation reproduces the published eight.
-
-    The committed ``models.py`` is *already* post-processed, so its wrappers are named
-    ``CatalogDocument`` rather than ``Model1``. Deriving from it therefore cannot
-    reproduce the positional map's ``Model1`` keys, and asserting on them would be
-    theater. The real claim of Req 3.7 is about the published names, so these tests
-    assert on the map's *values* — plus a reconstruction that puts the ordinal names
-    back, shuffled, to show the derivation reaches the same eight names from the real
-    schema's content regardless of ordinal assignment.
+    The committed module holds ``MappingCollectionMappings`` as a ``RootModel``
+    of ``Mapping | list[Mapping]`` already, so no ``RootModel[list[Mapping]]``
+    is left to convert.
     """
 
-    @staticmethod
-    def _derived_from_real_output(pp: ModuleType) -> dict[str, str]:
-        return pp.derive_document_renames(pp.DEFAULT_MODELS_PATH.read_text())
-
-    def test_derived_names_equal_the_positional_maps_names(self, pp: ModuleType):
-        derived = self._derived_from_real_output(pp)
-        assert set(derived.values()) == set(
-            pp.POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT.values()
+    EXPECTED: typing.ClassVar[list[str]] = [
+        (
+            "MappingCollectionMappings: expected one RootModel of list[Mapping] in a "
+            "field union with Mapping, found 0"
         )
-        assert len(derived) == len(pp.POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT)
+    ]
 
-    def test_derivation_is_a_fixed_point_on_post_processed_output(self, pp: ModuleType):
-        """Re-deriving from already-renamed output maps each name onto itself.
+    def test_postprocess_of_its_own_output_raises(
+        self, released_manifest: dict[str, Any]
+    ) -> None:
+        schema = json.loads(pp.DEFAULT_SCHEMA_PATH.read_bytes())
+        with pytest.raises(PostprocessError) as info:
+            pp.postprocess(
+                pp.DEFAULT_MODELS_PATH.read_text(), released_manifest, schema
+            )
+        assert info.value.failures == self.EXPECTED
 
-        This is what makes the value-set assertion above load-bearing: the wrappers in
-        the committed file carry exactly their published names, so re-running codegen
-        over an unchanged schema cannot drift.
-        """
-        derived = self._derived_from_real_output(pp)
-        assert all(old == new for old, new in derived.items())
-
-    def test_ordinal_names_restored_in_shuffled_order_still_derive_the_eight(
-        self, pp: ModuleType
-    ):
-        """Rename the real wrappers back to ``Model1..Model8``, shuffled, then derive.
-
-        Only the class *headers* are rewritten, which is all the derivation reads. The
-        bodies stay as generated, so the Root_Keys are the real bundle's.
-        """
-        content = pp.DEFAULT_MODELS_PATH.read_text()
-        published = sorted(pp.POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT.values())
-        # A rotation by three: no wrapper keeps the ordinal the positional map gave it.
-        shuffled = published[3:] + published[:3]
-
-        for ordinal, name in enumerate(shuffled, start=1):
-            header = f"class {name}(OscalBaseModel):"
-            assert header in content, f"expected wrapper header for {name}"
-            content = content.replace(header, f"class Model{ordinal}(OscalBaseModel):")
-
-        derived = pp.derive_document_renames(content)
-
-        assert set(derived) == {f"Model{i}" for i in range(1, 9)}
-        assert set(derived.values()) == set(
-            pp.POSITIONAL_DOCUMENT_RENAMES_SNAPSHOT.values()
+    def test_main_on_its_own_output_writes_nothing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        released_manifest: dict[str, Any],
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(pp, "load_manifest", lambda _schema: released_manifest)
+        models_path = tmp_path / "models.py"
+        before = pp.DEFAULT_MODELS_PATH.read_bytes()
+        models_path.write_bytes(before)
+        status = pp.main(
+            ["--models", str(models_path), "--schema", str(pp.DEFAULT_SCHEMA_PATH)]
         )
-
-    def test_wrapper_count_matches_the_bundles_document_types(self, pp: ModuleType):
-        derived = self._derived_from_real_output(pp)
-        assert len(derived) == pp.count_schema_document_types(pp.DEFAULT_SCHEMA_PATH)
+        assert status == 1
+        assert models_path.read_bytes() == before
+        err = capsys.readouterr().err
+        assert self.EXPECTED[0] in err
+        assert f"{models_path} was not written" in err

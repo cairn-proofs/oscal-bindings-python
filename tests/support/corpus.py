@@ -15,27 +15,43 @@ Fetch/cache logic (``ensure_corpus``) provides atomic, concurrency-safe
 extraction; ``load_corpus_docs`` walks the cached tree and filters it down to
 OSCAL documents. ``load_local_corpus_docs`` reads an optional local corpus in
 place from the path in ``OSCAL_BINDINGS_LOCAL_CORPUS`` (Req 11).
+
+The lock, download, safe extraction, and atomic publish live in
+``scripts/pinned_archive.py``, which code generation shares. This module
+re-exports ``CorpusError``, ``PinnedArchive``, and ``ensure_pinned_archive``
+from there. Every fetch made through this module goes through the module
+attribute ``_http_get``, so a test can replace it with ``monkeypatch``.
 """
 
 from __future__ import annotations
 
-import hashlib
-import http.client
-import io
 import json
 import os
 import shutil
-import tarfile
 import threading
-import time
-import urllib.request
-import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
+
+from support.scripts import load_script
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+_pinned = load_script("pinned_archive")
+
+CorpusError = _pinned.CorpusError
+PinnedArchive = _pinned.PinnedArchive
+
+_http_get = _pinned.http_get
+_FileLock = _pinned.FileLock
+_thread_lock_for = _pinned.thread_lock_for
+_extract_tar_gz = _pinned.extract_tar_gz
+_tarball_root = _pinned.tarball_root
+_is_complete = _pinned.is_complete
+_COMPLETE_MARKER: str = _pinned.COMPLETE_MARKER
+_FETCH_ERRORS: tuple[type[BaseException], ...] = _pinned.FETCH_ERRORS
+_EXTRACT_ERRORS: tuple[type[BaseException], ...] = _pinned.EXTRACT_ERRORS
 
 # The 8 recognized OSCAL document root keys. A parseable OSCAL document is a
 # JSON object with exactly one of these as its single top-level key. The NIST
@@ -58,16 +74,6 @@ OSCAL_ROOT_KEYS: frozenset[str] = frozenset(
 # tests/.corpus_cache — git-ignored cache directory (Req 3.3). ``corpus.py``
 # lives at tests/support/corpus.py, so two parents up is ``tests/``.
 CACHE_ROOT: Path = Path(__file__).parent.parent / ".corpus_cache"
-
-
-class CorpusError(RuntimeError):
-    """Raised when a corpus cannot be fetched or loaded.
-
-    For a remote corpus the message always includes the corpus name and the
-    pinned commit SHA so an unreachable corpus is reported with enough context
-    to diagnose (Req 5.1-5.3). For the local corpus it names
-    ``LOCAL_CORPUS_ENV`` and never includes document content (Req 11.11-11.13).
-    """
 
 
 @dataclass(frozen=True)
@@ -135,195 +141,6 @@ AWS_CORPUS = CorpusSpec(
     include_globs=("component-definitions/**/*.json",),  # scope (Req 2.3)
     require_oscal_root=True,
 )
-
-
-# Marker file written into a fully-extracted cache dir. Its presence is the
-# signal that the dir is complete and safe to treat as a cache hit (Req 3.2,
-# 4.2) — a partial/interrupted extraction never has it.
-_COMPLETE_MARKER = ".complete"
-
-# HTTP fetch timeout (seconds) for the codeload tarball request.
-_HTTP_TIMEOUT = 60
-
-# FileLock spin-with-backoff tuning.
-_LOCK_POLL_INITIAL = 0.01  # first back-off sleep (seconds)
-_LOCK_POLL_MAX = 0.5  # back-off ceiling (seconds)
-_LOCK_TIMEOUT = 300  # max seconds to wait for the lock before giving up
-# A lock file older than this was left by a holder that died without releasing
-# it (e.g. a killed worker). Far longer than any real fetch, so a live holder is
-# never mistaken for a dead one.
-_LOCK_STALE_AFTER = 900
-
-# Network-layer failures that mean "the corpus could not be fetched" (Req 5).
-# ``OSError`` covers ``URLError``/``HTTPError`` (both subclass it), socket
-# errors, and ``TimeoutError``; ``HTTPException`` covers protocol-level faults
-# such as ``IncompleteRead`` that are not ``OSError`` subclasses.
-_FETCH_ERRORS: tuple[type[BaseException], ...] = (
-    OSError,
-    http.client.HTTPException,
-)
-
-# Failures while unpacking a downloaded tarball (corrupt/truncated archive,
-# unsafe member, disk error). Surfaced as ``CorpusError`` with name + SHA too.
-_EXTRACT_ERRORS: tuple[type[BaseException], ...] = (
-    CorpusError,  # raised by ``_check_member_safe`` for an unsafe member
-    tarfile.TarError,
-    EOFError,
-    zlib.error,
-    OSError,
-)
-
-
-class _FileLock:
-    """A cross-process, cross-thread lock backed by an exclusively-created file.
-
-    Uses ``os.open(..., O_CREAT | O_EXCL)`` with exponential spin-with-backoff.
-    Exclusive creation is atomic at the filesystem level, so it serializes
-    ``pytest-xdist`` worker processes (separate interpreters, shared filesystem)
-    and threads within one process alike. The first caller to create the lock
-    file holds the lock; others spin until it is released, then re-check the
-    cache (Req 4.1). Unlike ``fcntl.flock`` this is portable to Windows.
-
-    A lock file older than ``stale_after`` is treated as abandoned by a dead
-    holder and removed, so a crashed run cannot wedge every later run.
-    """
-
-    def __init__(
-        self,
-        path: Path,
-        *,
-        timeout: float = _LOCK_TIMEOUT,
-        stale_after: float = _LOCK_STALE_AFTER,
-    ) -> None:
-        self._path = path
-        self._timeout = timeout
-        self._stale_after = stale_after
-        self._fd: int | None = None
-
-    def __enter__(self) -> Self:
-        deadline = time.monotonic() + self._timeout
-        delay = _LOCK_POLL_INITIAL
-        while True:
-            try:
-                self._fd = os.open(self._path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:
-                if self._break_if_stale():
-                    continue  # retry immediately — the stale lock is gone
-                if time.monotonic() >= deadline:
-                    msg = (
-                        f"Timed out after {self._timeout}s waiting for lock "
-                        f"{self._path}"
-                    )
-                    raise TimeoutError(msg) from None
-                time.sleep(delay)
-                delay = min(delay * 2, _LOCK_POLL_MAX)
-            else:
-                # Record the holder for anyone debugging a leftover lock file.
-                os.write(self._fd, f"{os.getpid()}:{threading.get_ident()}\n".encode())
-                return self
-
-    def __exit__(self, *_exc: object) -> None:
-        if self._fd is not None:
-            os.close(self._fd)
-            self._fd = None
-        self._path.unlink(missing_ok=True)
-
-    def _break_if_stale(self) -> bool:
-        """Remove the lock file if its holder has evidently died.
-
-        Returns True if a stale lock was removed (or vanished meanwhile).
-        """
-        try:
-            age = time.time() - self._path.stat().st_mtime
-        except FileNotFoundError:
-            return True  # released between our O_EXCL attempt and the stat
-        if age < self._stale_after:
-            return False
-        self._path.unlink(missing_ok=True)
-        return True
-
-
-# In-process companion to ``_FileLock``: threads of one process queue on a
-# ``threading.Lock`` per lock path instead of all spinning on the filesystem.
-# ``_FileLock`` alone is already thread-safe; this just makes waiting cheap.
-_THREAD_LOCKS: dict[Path, threading.Lock] = {}
-_THREAD_LOCKS_GUARD = threading.Lock()
-
-
-def _thread_lock_for(path: Path) -> threading.Lock:
-    """Return the process-wide ``threading.Lock`` for ``path`` (created once)."""
-    with _THREAD_LOCKS_GUARD:
-        return _THREAD_LOCKS.setdefault(path, threading.Lock())
-
-
-def _http_get(url: str, *, timeout: int = _HTTP_TIMEOUT) -> bytes:
-    """Fetch ``url`` and return the response body as bytes (stdlib ``urllib``).
-
-    No third-party HTTP client is used — only ``pydantic`` is a runtime
-    dependency, and stdlib ``urllib.request`` covers an HTTPS GET of a tarball.
-    Non-2xx responses raise ``urllib.error.HTTPError`` from ``urlopen``.
-    """
-    if not url.startswith("https://"):
-        msg = f"Refusing non-HTTPS corpus URL: {url!r}"
-        raise ValueError(msg)
-    request = urllib.request.Request(url, method="GET")  # noqa: S310 — https checked
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-        return bytes(response.read())
-
-
-def _is_within_directory(directory: Path, target: Path) -> bool:
-    """Return True if ``target`` resolves to a path inside ``directory``."""
-    directory = directory.resolve()
-    target = target.resolve()
-    return directory == target or directory in target.parents
-
-
-def _check_member_safe(member: tarfile.TarInfo, *, into: Path) -> None:
-    """Reject tar members that could write outside ``into`` ("tar slip").
-
-    Used as the fallback on Python builds whose ``tarfile`` lacks extraction
-    filters (3.11 before 3.11.4). Rejects absolute names, ``..`` traversal,
-    links whose target escapes ``into``, and device/FIFO nodes.
-    """
-    name = member.name
-    unsafe = (
-        Path(name).is_absolute()
-        or ".." in Path(name).parts
-        or not _is_within_directory(into, into / name)
-        or member.isdev()
-    )
-    if not unsafe and member.issym():
-        link_target = (into / name).parent / member.linkname
-        unsafe = Path(member.linkname).is_absolute() or not _is_within_directory(
-            into, link_target
-        )
-    if not unsafe and member.islnk():
-        unsafe = Path(member.linkname).is_absolute() or not _is_within_directory(
-            into, into / member.linkname
-        )
-    if unsafe:
-        msg = f"Refusing to extract unsafe tar member: {name!r}"
-        raise CorpusError(msg)
-
-
-def _extract_tar_gz(data: bytes, *, into: Path) -> None:
-    """Extract a gzipped tarball from ``data`` into the ``into`` directory.
-
-    Every member is validated with ``_check_member_safe`` before anything is
-    written, so an unsafe archive is rejected outright (the ``"data"`` filter
-    alone would silently strip a leading ``/`` rather than refuse). Extraction
-    then also applies ``tarfile``'s ``"data"`` filter where available (3.12 and
-    3.11.4+), which additionally drops unsafe permission bits and ownership.
-    """
-    into.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
-        members = tar.getmembers()
-        for member in members:
-            _check_member_safe(member, into=into)
-        if hasattr(tarfile, "data_filter"):
-            tar.extractall(into, members=members, filter="data")
-        else:  # pragma: no cover — only on Python 3.11.0-3.11.3
-            tar.extractall(into, members=members)  # noqa: S202 — validated above
 
 
 def ensure_corpus(spec: CorpusSpec, *, cache_root: Path = CACHE_ROOT) -> Path:
@@ -417,102 +234,28 @@ def _corpus_failure(spec: CorpusSpec, what: str, exc: BaseException) -> str:
     return f"Corpus {spec.name!r} at commit {spec.sha}: {what}: {exc}"
 
 
-def _tarball_root(extracted: Path) -> Path:
-    """Return the effective repo root within a freshly extracted tarball.
+def _fetch(url: str) -> bytes:
+    """Fetch ``url`` through the module attribute ``_http_get``.
 
-    GitHub codeload archives wrap the entire tree in a single top-level
-    directory named ``{repo}-{sha}``. When the extraction contains exactly one
-    entry and it is a directory, that directory is the repo root and is returned
-    so callers publish it directly (stripping the wrapper). Otherwise the
-    extraction directory itself is returned unchanged.
+    The attribute is read at call time, so a test that replaces
+    ``support.corpus._http_get`` also controls ``ensure_pinned_archive``.
     """
-    entries = list(extracted.iterdir())
-    if len(entries) == 1 and entries[0].is_dir():
-        return entries[0]
-    return extracted
+    return _http_get(url)
 
 
-def _is_complete(target: Path) -> bool:
-    """Return True if ``target`` is an extracted cache dir with its marker."""
-    return target.is_dir() and (target / _COMPLETE_MARKER).exists()
-
-
-@dataclass(frozen=True)
-class PinnedArchive:
-    """A .tar.gz at a fixed HTTPS URL, pinned by the sha256 of its bytes."""
-
-    name: str
-    url: str
-    sha256: str
-    cache_dir: str
-    """Directory name under the cache root. Include the version and the hash."""
-
-
-def ensure_pinned_archive(
-    archive: PinnedArchive, *, cache_root: Path = CACHE_ROOT
-) -> Path:
+def ensure_pinned_archive(archive: Any, *, cache_root: Path = CACHE_ROOT) -> Path:
     """Ensure ``archive`` is downloaded, hash-checked, and extracted in the cache.
 
-    Same cache, lock, safe extraction, and atomic publish as ``ensure_corpus``.
-    The sha256 of the downloaded bytes is checked before anything is extracted.
-    A fetch failure or a hash mismatch raises ``CorpusError`` and publishes
-    nothing. It never skips. A single top-level directory in the archive is
-    stripped, so the returned path is the archive's content root.
+    ``archive`` is a ``PinnedArchive``. Delegates to
+    ``scripts/pinned_archive.py``: same cache, lock, safe extraction, and atomic
+    publish as ``ensure_corpus``, with the sha256 checked before extraction. A
+    fetch failure or a hash mismatch raises ``CorpusError`` and publishes
+    nothing. It never skips.
     """
-    target = cache_root / archive.cache_dir
-    if _is_complete(target):
-        return target
-    cache_root.mkdir(parents=True, exist_ok=True)
-    lock_path = cache_root / f"{archive.cache_dir}.lock"
-    with _thread_lock_for(lock_path.resolve()):
-        try:
-            with _FileLock(lock_path):
-                if not _is_complete(target):
-                    _fetch_verify_publish(archive, target=target, cache_root=cache_root)
-        except TimeoutError as exc:
-            msg = (
-                f"Archive {archive.name!r}: timed out waiting for the cache lock: {exc}"
-            )
-            raise CorpusError(msg) from exc
-    return target
-
-
-def _fetch_verify_publish(
-    archive: PinnedArchive, *, target: Path, cache_root: Path
-) -> None:
-    """Download, hash-check, and atomically publish ``archive`` at ``target``.
-
-    Must be called with the archive lock held.
-    """
-    try:
-        data = _http_get(archive.url)
-    except _FETCH_ERRORS as exc:
-        msg = f"Archive {archive.name!r} at {archive.url}: fetch failed: {exc}"
-        raise CorpusError(msg) from exc
-    actual = hashlib.sha256(data).hexdigest()
-    if actual != archive.sha256:
-        msg = (
-            f"Archive {archive.name!r} at {archive.url}: sha256 mismatch: "
-            f"expected {archive.sha256}, got {actual}"
-        )
-        raise CorpusError(msg)
-    tmp = cache_root / f".tmp-{archive.cache_dir}-{os.getpid()}-{threading.get_ident()}"
-    try:
-        if tmp.exists():
-            shutil.rmtree(tmp)
-        _extract_tar_gz(data, into=tmp)
-        root = _tarball_root(tmp)
-        (root / _COMPLETE_MARKER).touch()
-        if _is_complete(target):
-            return
-        if target.exists():
-            shutil.rmtree(target)
-        root.replace(target)
-    except _EXTRACT_ERRORS as exc:
-        msg = f"Archive {archive.name!r}: extraction failed: {exc}"
-        raise CorpusError(msg) from exc
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+    root: Path = _pinned.ensure_pinned_archive(
+        archive, cache_root=cache_root, fetch=_fetch
+    )
+    return root
 
 
 def _single_top_level_key(raw_bytes: bytes) -> str | None:

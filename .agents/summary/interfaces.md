@@ -59,9 +59,9 @@ OscalDoc.assessment_period() -> tuple[date | None, date | None]   # AP/AR only
 ### Builders
 
 ```python
-make_hash(value: str, algorithm: str | Algorithm = Algorithm.SHA_256) -> Hash
-make_rlink(href: str, *, media_type: str | None = None, hashes: list[Hash] | None = None) -> Rlink
-make_resource(*, title=None, description=None, rlinks=None, uuid=None, document_ids=None) -> Resource
+make_hash(value: str, algorithm: str | HashAlgorithm = HashAlgorithm.SHA_256) -> Hash
+make_rlink(href: str, *, media_type: str | None = None, hashes: list[Hash] | None = None) -> BackMatterResourceRlink
+make_resource(*, title=None, description=None, rlinks=None, uuid=None, document_ids=None) -> BackMatterResource
 ```
 
 ### Element validation
@@ -134,16 +134,17 @@ sequenceDiagram
 
 Not a runtime interface, but a contract between the schema and the models:
 
-- **Input:** `schemas/1.2.3/oscal_complete_schema.json` (the Active_Schema_Bundle, selected by explicit path only)
-- **Command:** `hatch run generate` → `datamodel-codegen --input <schema> --output <models> ... && python scripts/postprocess_models.py --schema <schema> --models <models>`
-- **Output:** `src/oscal_bindings/v1/models.py` (overwritten)
+- **Inputs:** `schemas/1.2.3/oscal_complete_schema.json` (the Active_Schema_Bundle, selected by explicit pin and path only) and `names.json` of the spec artifact pinned in `scripts/spec_artifact.py`
+- **Command:** `hatch run generate` → `python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output ./build/codegen/models.py ... && python scripts/postprocess_models.py --schema <schema> --models ./build/codegen/models.py --output src/oscal_bindings/v1/models.py`
+- **Output:** `src/oscal_bindings/v1/models.py` (replaced atomically, only when every guard passes); `build/codegen/oscal_complete_schema.json` and `build/codegen/models.py` as intermediate build files
 
-The post-processor's own CLI contract:
+The scripts' CLI contracts:
 
 ```
-postprocess_models.py [--models PATH] [--schema PATH]
+hoist_names.py [--output PATH]
+postprocess_models.py [--models PATH] [--schema PATH] [--output PATH]   # --output defaults to --models
 ```
 
-Each argument has its own independent default, so a bare invocation and a one-argument invocation both work. A missing path exits non-zero naming the path. So do an ambiguous wrapper class, a wrapper-count mismatch against the schema's top-level `oneOf`, and any class-name collision not covered by `COLLISION_OVERRIDES` — in the collision case, all of them are reported at once.
+Each post-processor argument has its own independent default, so a bare invocation and a one-argument invocation both work. A missing path exits non-zero naming the path. An invalid manifest (including a `schema.sha256` that does not match `--schema`), a hoist guard, or a post-processor guard also exits non-zero, and each lists every failure at once. On a failure nothing is written to the output path; the post-processor writes `--output` through a temp file and `os.replace`.
 
-Downstream code must not depend on raw generator names (`Model`, `Model1..8`, `OscalComplete*`); those are renamed by the post-processor. Wrapper names are derived from each class's body field rather than its ordinal. See `data_models.md` and `workflows.md`.
+Every type name in `models.py` is a canonical name from the naming manifest, and the only other module-level names are scalar aliases. Downstream code uses those names. See `data_models.md` and `workflows.md`.

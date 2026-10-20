@@ -1,38 +1,27 @@
-"""The pinned spec artifact of the OSCAL bindings contract.
+"""The pinned spec artifact of the OSCAL bindings contract, for the tests.
 
-The artifact is published by the spec store cairn-proofs/oscal-bindings-specs.
-It holds the contract's main specs, the vendored schemas, and the conformance
-corpus. The sha256 is the pin: the tag only names the release. To move to a new
-artifact, change all three values together.
+The pin lives in ``scripts/spec_artifact.py``, which code generation shares.
+This module re-exports it and fetches through ``support.corpus``, so the tests
+and generation read one cache, and a test can replace
+``support.corpus._http_get``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from support.corpus import CACHE_ROOT, PinnedArchive, ensure_pinned_archive
+from support.corpus import CACHE_ROOT, ensure_pinned_archive
+from support.scripts import load_script
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-SPEC_ARTIFACT_VERSION = "0.1.0+oscal.1.2.3"
-SPEC_ARTIFACT_SHA256 = (
-    "89462f32e54d120c667e3744c3c27da761889d8a8fdd2c6f03b29a70a43ae33a"
-)
-# The `+` of the version is written as %2B in the URL path.
-_URL_VERSION = SPEC_ARTIFACT_VERSION.replace("+", "%2B")
-SPEC_ARTIFACT = PinnedArchive(
-    name=f"oscal-bindings-specs {SPEC_ARTIFACT_VERSION}",
-    url=(
-        "https://github.com/cairn-proofs/oscal-bindings-specs/releases/download/"
-        f"v{_URL_VERSION}/oscal-bindings-specs-{_URL_VERSION}.tar.gz"
-    ),
-    sha256=SPEC_ARTIFACT_SHA256,
-    cache_dir=f"oscal-bindings-specs-{SPEC_ARTIFACT_VERSION}-{SPEC_ARTIFACT_SHA256[:12]}",
-)
+_pin = load_script("spec_artifact")
 
-# The OSCAL release the corpus is for, from the build metadata of the version.
-OSCAL_RELEASE = SPEC_ARTIFACT_VERSION.split("+oscal.")[1]
+SPEC_ARTIFACT_VERSION: str = _pin.SPEC_ARTIFACT_VERSION
+SPEC_ARTIFACT_SHA256: str = _pin.SPEC_ARTIFACT_SHA256
+SPEC_ARTIFACT = _pin.SPEC_ARTIFACT
+OSCAL_RELEASE: str = _pin.OSCAL_RELEASE
 
 
 def ensure_spec_artifact(*, cache_root: Path = CACHE_ROOT) -> Path:
@@ -42,4 +31,7 @@ def ensure_spec_artifact(*, cache_root: Path = CACHE_ROOT) -> Path:
 
 def corpus_root(*, cache_root: Path = CACHE_ROOT) -> Path:
     """Return the conformance corpus directory inside the spec artifact."""
-    return ensure_spec_artifact(cache_root=cache_root) / "corpus" / OSCAL_RELEASE
+    corpus: Path = _pin.artifact_paths(
+        ensure_spec_artifact(cache_root=cache_root)
+    ).corpus
+    return corpus

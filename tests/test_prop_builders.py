@@ -33,7 +33,7 @@ from hypothesis import given
 from strategies import hash_strategy, resource_strategy, rlink_strategy
 
 from oscal_bindings import make_hash, make_resource, make_rlink
-from oscal_bindings.v1.models import Algorithm
+from oscal_bindings.v1.models import HashAlgorithm
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -62,7 +62,7 @@ def test_make_hash_produces_schema_valid_hash(kwargs: dict[str, Any]) -> None:
     assert element.value == kwargs["value"]
     # The builder coerces a string algorithm to the (plain, non-str) enum;
     # an omitted algorithm exercises the SHA-256 default.
-    expected = Algorithm(kwargs.get("algorithm", Algorithm.SHA_256))
+    expected = HashAlgorithm(kwargs.get("algorithm", HashAlgorithm.SHA_256))
     assert element.algorithm is expected
 
 

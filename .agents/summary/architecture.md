@@ -11,7 +11,7 @@ There is no network server, no persistence layer, and no long-running process. T
 ```mermaid
 graph TB
     subgraph L0["Layer 0 — Schema (input)"]
-        S["schemas/1.2.3/oscal_complete_schema.json"]
+        S["schemas/1.2.3/oscal_complete_schema.json<br/>+ names.json (pinned spec artifact)"]
     end
     subgraph L1["Layer 1 — Generated models"]
         BASE["v1/_base.py<br/>OscalBaseModel (hand-written)"]
@@ -61,19 +61,19 @@ Consequences of that choice, as implemented:
 Every OSCAL top-level document carries `metadata` and a body-level `uuid`, but the path to them differs per type (`doc.catalog.metadata` vs `doc.system_security_plan.metadata`). `OscalDoc` collapses that dispatch behind uniform properties. A class-level dict `_WRAPPER_TO_BODY_ATTR` maps each of the 8 wrapper types to its body attribute name, so `body` is a single `getattr` rather than an 8-way `if`/`elif` chain.
 
 ### Adapter / Convenience constructors — builders
-`make_hash`, `make_rlink`, `make_resource` wrap the models in kwarg-friendly constructors with sensible defaults (e.g. auto UUID4, string `algorithm` coercion). Because `OscalBaseModel` accepts field-name kwargs, they construct directly (`Rlink(media_type=...)`, `Resource(document_ids=...)`), so every argument, `document_ids` included, is validated at construction.
+`make_hash`, `make_rlink`, `make_resource` wrap the models in kwarg-friendly constructors with sensible defaults (e.g. auto UUID4, string `algorithm` coercion). Because `OscalBaseModel` accepts field-name kwargs, they construct directly (`BackMatterResourceRlink(media_type=...)`, `BackMatterResource(document_ids=...)`), so every argument, `document_ids` included, is validated at construction.
 
 ### Hand-written base class — `OscalBaseModel`
 `v1/_base.py` is the one piece of hand-written behavior generated code inherits, wired in by codegen's `--base-class` rather than by editing output. It makes default serialization valid OSCAL (`serialize_by_alias=True` plus a wrap serializer that drops None) and maps field-name constructor kwargs to aliases. Its `__init__` carries `__pydantic_base_init__` so `model_validate*` never routes through it, keeping OSCAL input alias-only. It imports only `pydantic` and stdlib, so `models.py → _base` can't cycle.
 
 ### Generated-code + post-processor
-Rather than hand-maintaining ~7000 lines of models, the library generates them and applies a deterministic rename pass. This keeps the models faithful to the schema while giving them clean names. The generator output is never hand-edited — regeneration is idempotent.
+Rather than hand-maintaining ~7000 lines of models, the library generates them from a hoisted copy of the schema and applies a deterministic post-pass. This keeps the models faithful to the schema while giving them the canonical names of the naming manifest. The generator output is never hand-edited — regeneration is idempotent.
 
 ### Re-export facade for the package
 `v1/__init__.py` and `v1/extensions/__init__.py` contain only imports and `__all__`. This makes the entire public surface auditable in one file and decouples callers from internal module layout.
 
 ### Top-level re-exports with explicit alias modules
-The top-level `oscal_bindings/__init__.py` re-exports from `oscal_bindings.v1` and derives its `__all__` from `v1.__all__` rather than restating it, so the two surfaces cannot drift. It star-imports `oscal_bindings.v1.models` *directly* (not via `v1`) because `v1.__all__` would otherwise bound the star-import to the curated surface and drop the ~180 generated model names that line exists to carry.
+The top-level `oscal_bindings/__init__.py` re-exports from `oscal_bindings.v1` and derives its `__all__` from `v1.__all__` rather than restating it, so the two surfaces cannot drift. It star-imports `oscal_bindings.v1.models` *directly* (not via `v1`) because `v1.__all__` would otherwise bound the star-import to the curated surface and drop the generated model names that line exists to carry.
 
 The top-level submodule paths get real files — `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py` — each re-exporting from its `v1` counterpart. Explicit alias modules rather than `sys.modules` aliasing: they are greppable and survive `mypy` and `pdoc` without special cases. Because everything is a re-export rather than a wrapper, a class reached through the top level **is** the same object as the one reached through `v1`, so `isinstance` agrees across paths.
 
@@ -81,47 +81,39 @@ The top-level submodule paths get real files — `oscal_bindings/models.py`, `os
 
 ```mermaid
 flowchart LR
-    A["schemas/&lt;release&gt;/oscal_complete_schema.json"] -->|"datamodel-codegen<br/>--input / --output"| B["v1/models.py<br/>(raw: Model, Model1-8,<br/>OscalComplete* names,<br/>RootModel scalars)"]
-    B -->|"postprocess_models.py<br/>--schema / --models"| C["v1/models.py<br/>(clean: OscalDocument,<br/>*Document, short names,<br/>scalar TypeAliases)"]
+    N["spec artifact 0.2.0+oscal.1.2.3<br/>names.json (sha256-pinned)"] -->|"manifest.py<br/>validate"| H
+    A["schemas/&lt;release&gt;/oscal_complete_schema.json"] --> H["hoist_names.py"]
+    H --> HS["build/codegen/oscal_complete_schema.json<br/>(each manifest site = definitions/&lt;Name&gt;)"]
+    HS -->|"datamodel-codegen"| B["build/codegen/models.py<br/>(raw: manifest-named classes,<br/>RootModel scalars)"]
+    B -->|"postprocess_models.py<br/>--schema / --models / --output"| C["v1/models.py<br/>(final: + union TypeAliases,<br/>MappingCollectionMappings, OscalDocument,<br/>scalar aliases; guards passed)"]
+    N --> C
 ```
 
-Both the schema path and the models path are passed explicitly, and each `--` argument carries its own independent default, so a bare invocation works and supplying exactly one argument works too. The Active_Schema_Bundle is selected **by the passed path alone** — no directory scan, no glob, no "newest release wins" — so adding a schema bundle directory changes nothing until the passed path changes.
+Names come from the store's naming manifest, and the binding holds no naming rule for a manifest type. Codegen names a class from its definition key, so the hoist moves each manifest site into `definitions/<CanonicalName>` and leaves a `$ref` at the site. The post-processor adds the manifest types that codegen does not emit (13 union `TypeAlias`es, `MappingCollectionMappings`, `OscalDocument`), names scalar aliases from their definition keys, and checks the module against the manifest.
 
-The post-processor performs, in order:
-1. **Collapse scalar RootModels** into `TypeAlias`es (except unions and `PRESERVE_AS_ROOTMODEL = {Model, Mappings}`).
-2. **Fix constraints** invalid on non-string types (strip `pattern=` from `AwareDatetime`, `AnyUrl`, numeric, `EmailStr` fields).
-3. **Derive and apply the document rename map** — see below — and rename the root `Model` → `OscalDocument`.
-4. **Rename variants** (`...Merge1/2/3` → `MergeFlat/MergeAsIs/MergeCustom`, catalog group variants).
-5. **Strip the `OscalComplete...` namespace prefix** from remaining class names, using the schema definitions to compute short names and applying `COLLISION_OVERRIDES` for the names that collide across document types.
-6. **Guard against collisions** — scan the fully renamed source for duplicate `class <Name>(` definitions and refuse to write if any remain.
+Guards:
 
-### Content-based wrapper naming
+| Step | Guard | Behavior |
+|------|-------|----------|
+| `manifest.py` | `names.json` fails its JSON Schema, format/release, vendored-schema sha256, uniqueness, keyword/builtin, or pointer checks | `ManifestError` with every failure; nothing generated |
+| `hoist_names.py` | Merged sites with different bodies; closed-enum value that its base datatype rejects | `HoistError` naming the sites |
+| `postprocess_models.py` | Manifest name missing or in the wrong form; a name outside the manifest that is not a scalar alias of a scalar definition of the schema; a name defined twice, a scalar alias with a manifest name, or a manifest name or scalar alias bound by an import | `PostprocessError` with every offender; `v1/models.py` not written |
 
-Document wrapper names are derived from the generated source's own **content**, never from the ordinal suffix `datamodel-codegen` assigns. A wrapper is identified by the `$schema` directive field it carries; its root key is the single remaining body field; the published name is that key in PascalCase plus a `Document` suffix (`catalog` → `CatalogDocument`, `system_security_plan` → `SystemSecurityPlanDocument`). A class carrying only the `$schema` field is the union root, not a wrapper.
-
-A positional map (`Model1` → `CatalogDocument`, …) would silently produce wrong names if a schema revision reordered or added document types. Three guards back the derivation:
-
-| Guard | Behavior |
-|-------|----------|
-| Ambiguous wrapper (>1 body field besides `$schema`) | **Fail fast** — report the *first* offender and exit non-zero, leaving the rest unscanned; the derivation's premise is already void |
-| Derived wrapper count ≠ document types in the schema's top-level `oneOf` | Exit non-zero reporting both counts (skipped only if the schema has no top-level `oneOf`) |
-| Duplicate class definitions after all renames | **Accumulate** — finish the scan, then exit non-zero reporting *every* uncovered collision in one report, rather than writing a file with duplicate definitions |
-
-The asymmetry is deliberate: ambiguity invalidates the scan's own assumption, so continuing is meaningless, whereas collisions are independent findings and a maintainer wants the complete list in one run rather than discovering them one regeneration at a time.
+The post-processor's schema, models, and output paths are passed explicitly, and each argument carries its own default (`--output` defaults to `--models`). `generate` has codegen write `build/codegen/models.py`, and the post-processor writes `v1/models.py` atomically (temp file + `os.replace`), so a failed run leaves the committed module untouched. The active bundle is selected **by explicit path and pin alone** — no directory scan, no glob, no "newest release wins" — so adding a schema bundle directory changes nothing until the pin and paths change.
 
 ## Key Architectural Decisions
 
 | Decision | Rationale |
 |----------|-----------|
 | Generate models, don't hand-write | Faithful to NIST schema; regenerable when OSCAL updates |
-| Keep generated code pristine; helpers in `extensions/` | Codegen pipeline stays a clean run + rename pass; helpers evolve independently |
+| Keep generated code pristine; helpers in `extensions/` | Codegen pipeline stays a clean run + post-pass; helpers evolve independently |
 | Model behavior via `--base-class OscalBaseModel` | Valid OSCAL from every serialization path, by-name construction, alias-only validation; no post-processor rewriting — see `DEVELOPING.md` "Valid OSCAL by default" |
 | Collapse scalar RootModels to TypeAliases | Callers access `catalog.metadata.version` directly, no `.root` unwrapping |
-| Module-prefixed names for 5 collisions | Disambiguate e.g. `SspControlImplementation` vs `ComponentDefinitionControlImplementation` |
+| Names from the store's naming manifest, via a hoisted schema | Every binding uses the same canonical names; `--model-name-map` cannot match inline types, and renaming after codegen needs structural matching — see `DEVELOPING.md` Key Design Decisions |
+| Closed enums as `Enum` classes | A value outside a closed enum fails validation, as the schema requires |
 | Major-version namespace (`oscal_bindings.v1`) | The compatibility boundary is the major version, matching NIST's `$id` split; minor-version namespacing rejected as it would force import churn on every routine refresh — see `DEVELOPING.md` Key Design Decisions |
 | Top level as a pure re-export of `v1` | Short import paths for callers who don't need to name the major version; both paths resolve to the identical objects |
 | Release-versioned schema bundles (`schemas/<release>/`) | The schema a binding set came from is unambiguous, and a refresh is a visible, reviewable change |
-| Wrapper names derived from content, not ordinals | A schema revision that reorders or adds document types cannot silently mis-name classes |
 | `__oscal_schema_version__` constant, written as a literal | The package name carries only the major version; a literal avoids parsing a multi-megabyte schema at import time (and the bundle is not guaranteed to ship in the wheel). A test asserts it against the real `$id` |
 | `bytes`-accepting parsers | Skip a UTF-8 decode + one document-size allocation for byte-sources (HTTP/S3/file) |
 

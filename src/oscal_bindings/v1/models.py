@@ -4,10 +4,19 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, TypeAlias
 
 from oscal_bindings.v1._base import OscalBaseModel
 from pydantic import AnyUrl, AwareDatetime, ConfigDict, EmailStr, Field, RootModel
+
+
+class ParameterSelectionHowMany(Enum):
+    """
+    Describes the number of selections that must occur. Without this setting, only one value should be assumed to be permitted.
+    """
+
+    one = 'one'
+    one_or_more = 'one-or-more'
 
 
 class IncludeAll(OscalBaseModel):
@@ -19,7 +28,16 @@ class IncludeAll(OscalBaseModel):
         extra='forbid')
 
 
-class Scheme(Enum):
+class ControlCommonSelectControlByIdChildControls(Enum):
+    """
+    When a control is included, whether its child (dependent) controls are also included.
+    """
+
+    yes = 'yes'
+    no = 'no'
+
+
+class MetadataPartyExternalIdScheme(Enum):
     """
     Indicates the type of external identifier.
     """
@@ -27,7 +45,16 @@ class Scheme(Enum):
     http___orcid_org_ = 'http://orcid.org/'
 
 
-class Rel(Enum):
+class MetadataPartyType(Enum):
+    """
+    A category describing the kind of party the object describes.
+    """
+
+    person = 'person'
+    organization = 'organization'
+
+
+class LinkRel(Enum):
     """
     Describes the type of relationship provided by the link's hypertext reference. This can be an indicator of the link's purpose.
     """
@@ -35,7 +62,7 @@ class Rel(Enum):
     reference = 'reference'
 
 
-class Algorithm(Enum):
+class HashAlgorithm(Enum):
     """
     The digest method by which a hash is derived.
     """
@@ -50,7 +77,7 @@ class Algorithm(Enum):
     SHA3_512 = 'SHA3-512'
 
 
-class Type(Enum):
+class TelephoneNumberType(Enum):
     """
     Indicates the type of phone number.
     """
@@ -60,7 +87,7 @@ class Type(Enum):
     mobile = 'mobile'
 
 
-class Type1(Enum):
+class AddressType(Enum):
     """
     Indicates the type of address.
     """
@@ -69,7 +96,7 @@ class Type1(Enum):
     work = 'work'
 
 
-class Scheme2(Enum):
+class DocumentIdScheme(Enum):
     """
     Qualifies the kind of document identifier using a URI. If the scheme is not provided the value of the element will be interpreted as a string of characters.
     """
@@ -77,7 +104,26 @@ class Scheme2(Enum):
     http___www_doi_org_ = 'http://www.doi.org/'
 
 
-class Type2(Enum):
+class MappingMatchingRationale(Enum):
+    """
+    The method used for relating controls within the mapping. The supported methods are aligned with the NIST Interagency Report (IR) 8477, Section 4.3 Set Theory Relationship Mapping.
+    """
+
+    syntactic = 'syntactic'
+    semantic = 'semantic'
+    functional = 'functional'
+
+
+class MappingItemType(Enum):
+    """
+    The semantic type of the subject.
+    """
+
+    control = 'control'
+    statement = 'statement'
+
+
+class MappingResourceReferenceType(Enum):
     """
     The semantic type of the resource.
     """
@@ -86,7 +132,58 @@ class Type2(Enum):
     profile = 'profile'
 
 
-class GenerationMethod(Enum):
+class QualifierItemCategory(Enum):
+    """
+    The category expresses the resolvable nature of the predicate.
+    """
+
+    restricted = 'restricted'
+    addressable = 'addressable'
+    blocked = 'blocked'
+
+
+class QualifierItemPredicate(Enum):
+    """
+    The predicate describes how the qualifer applies to the subject.
+    """
+
+    has_requirement = 'has-requirement'
+    has_incompatibility = 'has-incompatibility'
+
+
+class QualifierItemSubject(Enum):
+    """
+    The focus of the qualifier.
+    """
+
+    source = 'source'
+    target = 'target'
+    both = 'both'
+
+
+class MappingMethod(Enum):
+    """
+    The method used to complete the overall mapping.
+    """
+
+    human = 'human'
+    automation = 'automation'
+    hybrid = 'hybrid'
+
+
+class MappingStatus(Enum):
+    """
+    The current status of this mapping document.
+    """
+
+    complete = 'complete'
+    not_complete = 'not-complete'
+    draft = 'draft'
+    deprecated = 'deprecated'
+    superseded = 'superseded'
+
+
+class CoverageGenerationMethod(Enum):
     """
     The method used to determine the coverage value.
     """
@@ -94,7 +191,25 @@ class GenerationMethod(Enum):
     arbitrary = 'arbitrary'
 
 
+class MergeCombine(OscalBaseModel):
+    """
+    A Combine element defines how to resolve duplicate instances of the same control (e.g., controls with the same ID).
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+
+
 class MergeFlat(OscalBaseModel):
+    """
+    Directs that controls appear without any grouping structure.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+
+
+class MergeWithFlat(OscalBaseModel):
     """
     Provides structuring directives that instruct how controls are organized after profile resolution.
     """
@@ -102,22 +217,54 @@ class MergeFlat(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     combine: Annotated[
-        dict[str, Any] | None,
+        MergeCombine | None,
         Field(
             description='A Combine element defines how to resolve duplicate instances of the same control (e.g., controls with the same ID).',
-            max_length=0,
             title='Combination Rule'),
     ] = None
     flat: Annotated[
-        dict[str, Any],
+        MergeFlat,
         Field(
             description='Directs that controls appear without any grouping structure.',
-            max_length=0,
             title='Flat Without Grouping'),
     ]
 
 
-class Type3(Enum):
+class ModifyAlterAddPosition(Enum):
+    """
+    Where to add the new content with respect to the targeted element (beside it or inside it).
+    """
+
+    before = 'before'
+    after = 'after'
+    starting = 'starting'
+    ending = 'ending'
+
+
+class ModifyAlterRemoveByItemName(Enum):
+    """
+    Identify items to remove by the name of the item's information object name, e.g. prop or link.
+    """
+
+    param = 'param'
+    prop = 'prop'
+    link = 'link'
+    part = 'part'
+    mapping = 'mapping'
+    map = 'map'
+
+
+class InsertControlsOrder(Enum):
+    """
+    A designation of how a selection of controls in a profile is to be ordered.
+    """
+
+    keep = 'keep'
+    ascending = 'ascending'
+    descending = 'descending'
+
+
+class DefinedComponentType(Enum):
     """
     A category describing the purpose of the component.
     """
@@ -139,7 +286,18 @@ class Type3(Enum):
     network = 'network'
 
 
-class Type4(Enum):
+class SystemComponentStatusState(Enum):
+    """
+    The operational status.
+    """
+
+    under_development = 'under-development'
+    operational = 'operational'
+    disposition = 'disposition'
+    other = 'other'
+
+
+class SystemComponentType(Enum):
     """
     A category describing the purpose of the component.
     """
@@ -163,7 +321,16 @@ class Type4(Enum):
     network = 'network'
 
 
-class State(Enum):
+class PortRangeTransport(Enum):
+    """
+    Indicates the transport type.
+    """
+
+    TCP = 'TCP'
+    UDP = 'UDP'
+
+
+class ImplementationStatusState(Enum):
     """
     Identifies the implementation status of the control or control objective.
     """
@@ -175,7 +342,7 @@ class State(Enum):
     not_applicable = 'not-applicable'
 
 
-class IdentifierType(Enum):
+class SystemIdIdentifierType(Enum):
     """
     Identifies the identification system from which the provided identifier was assigned.
     """
@@ -189,7 +356,7 @@ class IdentifierType(Enum):
     )
 
 
-class System(Enum):
+class InformationTypeCategorizationSystem(Enum):
     """
     Specifies the information type identification system used.
     """
@@ -199,7 +366,32 @@ class System(Enum):
     )
 
 
-class Type5(Enum):
+class StatusState(Enum):
+    """
+    The current operating status.
+    """
+
+    operational = 'operational'
+    under_development = 'under-development'
+    under_major_modification = 'under-major-modification'
+    disposition = 'disposition'
+    other = 'other'
+
+
+class TaskTimingAtFrequencyUnit(Enum):
+    """
+    The unit of time for the period.
+    """
+
+    seconds = 'seconds'
+    minutes = 'minutes'
+    hours = 'hours'
+    days = 'days'
+    months = 'months'
+    years = 'years'
+
+
+class TaskType(Enum):
     """
     The type of task.
     """
@@ -208,7 +400,7 @@ class Type5(Enum):
     action = 'action'
 
 
-class Type6(Enum):
+class AssessmentSubjectType(Enum):
     """
     Indicates the type of assessment subject, such as a component, inventory, item, location, or party represented by this selection statement.
     """
@@ -220,7 +412,7 @@ class Type6(Enum):
     user = 'user'
 
 
-class Type8(Enum):
+class SubjectType(Enum):
     """
     Used to indicate the type of object pointed to by the uuid-ref within a subject.
     """
@@ -233,7 +425,7 @@ class Type8(Enum):
     resource = 'resource'
 
 
-class Reason(Enum):
+class FindingTargetStatusReason(Enum):
     """
     The reason the objective was given it's status.
     """
@@ -243,7 +435,25 @@ class Reason(Enum):
     other = 'other'
 
 
-class Methods(Enum):
+class FindingTargetStatusState(Enum):
+    """
+    An indication as to whether the objective is satisfied or not.
+    """
+
+    satisfied = 'satisfied'
+    not_satisfied = 'not-satisfied'
+
+
+class FindingTargetType(Enum):
+    """
+    Identifies the type of the target.
+    """
+
+    statement_id = 'statement-id'
+    objective_id = 'objective-id'
+
+
+class ObservationMethod(Enum):
     """
     Identifies how the observation was made.
     """
@@ -254,7 +464,7 @@ class Methods(Enum):
     UNKNOWN = 'UNKNOWN'
 
 
-class Types(Enum):
+class ObservationType(Enum):
     """
     Identifies the nature of the observation. More than one may be used to further qualify and enable filtering.
     """
@@ -267,7 +477,17 @@ class Types(Enum):
     historic = 'historic'
 
 
-class System1(Enum):
+class OriginActorType(Enum):
+    """
+    The kind of actor.
+    """
+
+    tool = 'tool'
+    assessment_platform = 'assessment-platform'
+    party = 'party'
+
+
+class ThreatIdSystem(Enum):
     """
     Specifies the source of the threat information.
     """
@@ -276,7 +496,7 @@ class System1(Enum):
     http___fedramp_gov_ns_oscal = 'http://fedramp.gov/ns/oscal'
 
 
-class RiskStatus1(Enum):
+class RiskStatus(Enum):
     """
     Describes the status of the associated risk.
     """
@@ -289,7 +509,7 @@ class RiskStatus1(Enum):
     closed = 'closed'
 
 
-class System2(Enum):
+class CharacterizationFacetSystem(Enum):
     """
     Specifies the naming system under which this risk metric is organized, which allows for the same names to be used in different systems controlled by different parties. This avoids the potential of a name clash.
     """
@@ -305,7 +525,7 @@ class System2(Enum):
     https___www_first_org_cvss_v4_0 = 'https://www.first.org/cvss/v4-0'
 
 
-class Lifecycle(Enum):
+class ResponseLifecycle(Enum):
     """
     Identifies whether this is a recommendation, such as from an assessor or tool, or an actual plan accepted by the system owner.
     """
@@ -315,7 +535,7 @@ class Lifecycle(Enum):
     completed = 'completed'
 
 
-class Name(Enum):
+class AssessmentPartName(Enum):
     """
     A textual label that uniquely identifies the part's semantic type.
     """
@@ -400,11 +620,10 @@ class ParameterSelection(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     how_many: Annotated[
-        str | None,
+        ParameterSelectionHowMany | None,
         Field(
             alias='how-many',
             description='Describes the number of selections that must occur. Without this setting, only one value should be assumed to be permitted.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Parameter Cardinality'),
     ] = None
     choice: Annotated[list[MarkupLineDatatype] | None, Field(min_length=1)] = None
@@ -419,7 +638,7 @@ WithId = Annotated[
     ]
 
 
-class ExternalId(OscalBaseModel):
+class MetadataPartyExternalId(OscalBaseModel):
     """
     An identifier for a person or organization using a designated scheme. e.g. an Open Researcher and Contributor ID (ORCID).
     """
@@ -427,7 +646,7 @@ class ExternalId(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     scheme: Annotated[
-        URIDatatype | Scheme,
+        URIDatatype | MetadataPartyExternalIdScheme,
         Field(
             description='Indicates the type of external identifier.',
             title='External Identifier Schema'),
@@ -438,12 +657,6 @@ class ExternalId(OscalBaseModel):
             description='A non-empty string with leading and trailing whitespace disallowed. Whitespace is: U+9, U+10, U+32 or [ \n\t]+',
             pattern='^\\S(.*\\S)?$'),
     ]
-
-
-class ExternalId1(ExternalId):
-    """
-    An identifier for a person or organization using a designated scheme. e.g. an Open Researcher and Contributor ID (ORCID).
-    """
 
 
 LocationUuid = Annotated[
@@ -473,7 +686,7 @@ RoleId = Annotated[
     ]
 
 
-class Base64(OscalBaseModel):
+class BackMatterResourceBase64(OscalBaseModel):
     """
     A resource encoded using the Base64 alphabet defined by RFC 2045.
     """
@@ -518,7 +731,7 @@ class Link(OscalBaseModel):
             title='Hypertext Reference'),
     ]
     rel: Annotated[
-        TokenDatatype | Rel | None,
+        TokenDatatype | LinkRel | None,
         Field(
             description="Describes the type of relationship provided by the link's hypertext reference. This can be an indicator of the link's purpose.",
             title='Link Relation Type'),
@@ -556,7 +769,7 @@ class Hash(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     algorithm: Annotated[
-        StringDatatype | Algorithm,
+        StringDatatype | HashAlgorithm,
         Field(
             description='The digest method by which a hash is derived.',
             title='Hash algorithm'),
@@ -585,7 +798,7 @@ class TelephoneNumber(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     type: Annotated[
-        StringDatatype | Type | None,
+        StringDatatype | TelephoneNumberType | None,
         Field(description='Indicates the type of phone number.', title='type flag'),
     ] = None
     number: Annotated[
@@ -613,7 +826,7 @@ class DocumentId(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     scheme: Annotated[
-        URIDatatype | Scheme2 | None,
+        URIDatatype | DocumentIdScheme | None,
         Field(
             description='Qualifies the kind of document identifier using a URI. If the scheme is not provided the value of the element will be interpreted as a string of characters.',
             title='Document Identification Scheme'),
@@ -634,24 +847,19 @@ class QualifierItem(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     subject: Annotated[
-        str,
-        Field(
-            description='The focus of the qualifier.',
-            pattern='^\\S(.*\\S)?$',
-            title='Subject'),
+        QualifierItemSubject,
+        Field(description='The focus of the qualifier.', title='Subject'),
     ]
     predicate: Annotated[
-        str,
+        QualifierItemPredicate,
         Field(
             description='The predicate describes how the qualifer applies to the subject.',
-            pattern='^\\S(.*\\S)?$',
             title='Predicate'),
     ]
     category: Annotated[
-        str,
+        QualifierItemCategory,
         Field(
             description='The category expresses the resolvable nature of the predicate.',
-            pattern='^\\S(.*\\S)?$',
             title='Category'),
     ]
     description: Annotated[
@@ -668,7 +876,7 @@ class QualifierItem(OscalBaseModel):
     ] = None
 
 
-class ConfidenceScore1(OscalBaseModel):
+class ConfidenceScoreWithCategory(OscalBaseModel):
     """
     This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.
     """
@@ -691,7 +899,7 @@ class Coverage(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     generation_method: Annotated[
-        StringDatatype | GenerationMethod | None,
+        StringDatatype | CoverageGenerationMethod | None,
         Field(
             alias='generation-method',
             description='The method used to determine the coverage value.',
@@ -706,7 +914,7 @@ class Coverage(OscalBaseModel):
     ]
 
 
-class MergeAsIs(OscalBaseModel):
+class MergeWithAsIs(OscalBaseModel):
     """
     Provides structuring directives that instruct how controls are organized after profile resolution.
     """
@@ -714,10 +922,9 @@ class MergeAsIs(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     combine: Annotated[
-        dict[str, Any] | None,
+        MergeCombine | None,
         Field(
             description='A Combine element defines how to resolve duplicate instances of the same control (e.g., controls with the same ID).',
-            max_length=0,
             title='Combination Rule'),
     ] = None
     as_is: Annotated[
@@ -729,7 +936,7 @@ class MergeAsIs(OscalBaseModel):
     ]
 
 
-class Remove(OscalBaseModel):
+class ModifyAlterRemove(OscalBaseModel):
     """
     Specifies objects to be removed from a control based on specific aspects of the object that must all match.
     """
@@ -761,11 +968,10 @@ class Remove(OscalBaseModel):
             title='Reference by ID'),
     ] = None
     by_item_name: Annotated[
-        str | None,
+        ModifyAlterRemoveByItemName | None,
         Field(
             alias='by-item-name',
             description="Identify items to remove by the name of the item's information object name, e.g. prop or link.",
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Item Name Reference'),
     ] = None
     by_ns: Annotated[
@@ -827,7 +1033,7 @@ class IncorporatesComponent(OscalBaseModel):
     ]
 
 
-class Status(OscalBaseModel):
+class SystemComponentStatus(OscalBaseModel):
     """
     Describes the operational status of the system component.
     """
@@ -835,11 +1041,8 @@ class Status(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     state: Annotated[
-        str,
-        Field(
-            description='The operational status.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='State'),
+        SystemComponentStatusState,
+        Field(description='The operational status.', title='State'),
     ]
     remarks: Annotated[
         str | None,
@@ -871,11 +1074,8 @@ class PortRange(OscalBaseModel):
             title='End'),
     ] = None
     transport: Annotated[
-        str | None,
-        Field(
-            description='Indicates the transport type.',
-
-            title='Transport'),
+        PortRangeTransport | None,
+        Field(description='Indicates the transport type.', title='Transport'),
     ] = None
     remarks: Annotated[
         str | None,
@@ -893,7 +1093,7 @@ class ImplementationStatus(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     state: Annotated[
-        TokenDatatype | State,
+        TokenDatatype | ImplementationStatusState,
         Field(
             description='Identifies the implementation status of the control or control objective.',
             title='Implementation State'),
@@ -947,7 +1147,7 @@ class SystemId(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     identifier_type: Annotated[
-        URIDatatype | IdentifierType | None,
+        URIDatatype | SystemIdIdentifierType | None,
         Field(
             alias='identifier-type',
             description='Identifies the identification system from which the provided identifier was assigned.',
@@ -982,7 +1182,7 @@ class ImportProfile(OscalBaseModel):
     ] = None
 
 
-class Categorization(OscalBaseModel):
+class InformationTypeCategorization(OscalBaseModel):
     """
     A set of information type identifiers qualified by the given identification system used, such as NIST SP 800-60.
     """
@@ -990,7 +1190,7 @@ class Categorization(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     system: Annotated[
-        URIDatatype | System,
+        URIDatatype | InformationTypeCategorizationSystem,
         Field(
             description='Specifies the information type identification system used.',
             title='Information Type Identification System'),
@@ -1033,7 +1233,7 @@ class SecurityImpactLevel(OscalBaseModel):
     ]
 
 
-class SspStatus(OscalBaseModel):
+class Status(OscalBaseModel):
     """
     Describes the operational status of the system.
     """
@@ -1041,11 +1241,7 @@ class SspStatus(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     state: Annotated[
-        str,
-        Field(
-            description='The current operating status.',
-            pattern='^\\S(.*\\S)?$',
-            title='State'),
+        StatusState, Field(description='The current operating status.', title='State')
     ]
     remarks: Annotated[
         str | None,
@@ -1076,19 +1272,20 @@ class ImportSsp(OscalBaseModel):
     ] = None
 
 
-class OnDate(OscalBaseModel):
+class TaskDependency(OscalBaseModel):
     """
-    The task is intended to occur on the specified date.
+    Used to indicate that a task is dependent on another task.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    date: Annotated[
-        AwareDatetime,
+    task_uuid: Annotated[
+        str,
         Field(
-            description='The task must occur on the specified date.',
-
-            title='On Date Condition'),
+            alias='task-uuid',
+            description='A machine-oriented identifier reference to a unique task.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Task Universally Unique Identifier Reference'),
     ]
     remarks: Annotated[
         str | None,
@@ -1098,23 +1295,33 @@ class OnDate(OscalBaseModel):
     ] = None
 
 
-class Timing(OscalBaseModel):
+class TaskTimingAtFrequency(OscalBaseModel):
     """
-    The timing under which the task is intended to occur.
+    The task is intended to occur at the specified frequency.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    on_date: Annotated[
-        OnDate,
+    period: Annotated[
+        int,
         Field(
-            alias='on-date',
-            description='The task is intended to occur on the specified date.',
-            title='On Date Condition'),
+            description='The task must occur after the specified period has elapsed.',
+            ge=1,
+            title='Period'),
     ]
+    unit: Annotated[
+        TaskTimingAtFrequencyUnit,
+        Field(description='The unit of time for the period.', title='Time Unit'),
+    ]
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
 
 
-class WithinDateRange(OscalBaseModel):
+class TaskTimingDateRange(OscalBaseModel):
     """
     The task is intended to occur within the specified date range.
     """
@@ -1143,42 +1350,19 @@ class WithinDateRange(OscalBaseModel):
     ] = None
 
 
-class Timing1(OscalBaseModel):
+class TaskTimingOnDate(OscalBaseModel):
     """
-    The timing under which the task is intended to occur.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    within_date_range: Annotated[
-        WithinDateRange,
-        Field(
-            alias='within-date-range',
-            description='The task is intended to occur within the specified date range.',
-            title='On Date Range Condition'),
-    ]
-
-
-class AtFrequency(OscalBaseModel):
-    """
-    The task is intended to occur at the specified frequency.
+    The task is intended to occur on the specified date.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    period: Annotated[
-        int,
+    date: Annotated[
+        AwareDatetime,
         Field(
-            description='The task must occur after the specified period has elapsed.',
-            ge=1,
-            title='Period'),
-    ]
-    unit: Annotated[
-        str,
-        Field(
-            description='The unit of time for the period.',
+            description='The task must occur on the specified date.',
 
-            title='Time Unit'),
+            title='On Date Condition'),
     ]
     remarks: Annotated[
         str | None,
@@ -1188,7 +1372,7 @@ class AtFrequency(OscalBaseModel):
     ] = None
 
 
-class Timing2(OscalBaseModel):
+class TaskTimingWithAtFrequency(OscalBaseModel):
     """
     The timing under which the task is intended to occur.
     """
@@ -1196,7 +1380,7 @@ class Timing2(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     at_frequency: Annotated[
-        AtFrequency,
+        TaskTimingAtFrequency,
         Field(
             alias='at-frequency',
             description='The task is intended to occur at the specified frequency.',
@@ -1204,27 +1388,43 @@ class Timing2(OscalBaseModel):
     ]
 
 
-class Dependency(OscalBaseModel):
+class TaskTimingWithDateRange(OscalBaseModel):
     """
-    Used to indicate that a task is dependent on another task.
+    The timing under which the task is intended to occur.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    task_uuid: Annotated[
-        str,
+    within_date_range: Annotated[
+        TaskTimingDateRange,
         Field(
-            alias='task-uuid',
-            description='A machine-oriented identifier reference to a unique task.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Task Universally Unique Identifier Reference'),
+            alias='within-date-range',
+            description='The task is intended to occur within the specified date range.',
+            title='On Date Range Condition'),
     ]
-    remarks: Annotated[
-        str | None,
+
+
+class TaskTimingWithOnDate(OscalBaseModel):
+    """
+    The timing under which the task is intended to occur.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    on_date: Annotated[
+        TaskTimingOnDate,
         Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
+            alias='on-date',
+            description='The task is intended to occur on the specified date.',
+            title='On Date Condition'),
+    ]
+
+
+TaskTiming: TypeAlias = (
+    TaskTimingWithAtFrequency
+    | TaskTimingWithDateRange
+    | TaskTimingWithOnDate
+)
 
 
 class AssessmentCommonSelectControlById(OscalBaseModel):
@@ -1270,7 +1470,7 @@ class SelectObjectiveById(OscalBaseModel):
     ] = None
 
 
-class Source(OscalBaseModel):
+class AssessmentSubjectPlaceholderSource(OscalBaseModel):
     """
     Assessment subjects will be identified while conducting the referenced activity-instance.
     """
@@ -1293,7 +1493,7 @@ class Source(OscalBaseModel):
     ] = None
 
 
-class Status1(OscalBaseModel):
+class FindingTargetStatus(OscalBaseModel):
     """
     A determination of if the objective is satisfied or not within a given system.
     """
@@ -1301,14 +1501,13 @@ class Status1(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     state: Annotated[
-        str,
+        FindingTargetStatusState,
         Field(
             description='An indication as to whether the objective is satisfied or not.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Objective Status State'),
     ]
     reason: Annotated[
-        TokenDatatype | Reason | None,
+        TokenDatatype | FindingTargetStatusReason | None,
         Field(
             description="The reason the objective was given it's status.",
             title='Objective Status Reason'),
@@ -1375,7 +1574,7 @@ class ThreatId(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     system: Annotated[
-        URIDatatype | System1,
+        URIDatatype | ThreatIdSystem,
         Field(
             description='Specifies the source of the threat information.',
             title='Threat Type Identification System'),
@@ -1446,7 +1645,7 @@ class ImportAp(OscalBaseModel):
     ] = None
 
 
-class RelatedFinding(OscalBaseModel):
+class PoamItemRelatedFinding(OscalBaseModel):
     """
     Relates the poam-item to referenced finding(s).
     """
@@ -1469,7 +1668,7 @@ class RelatedFinding(OscalBaseModel):
     ] = None
 
 
-class Test(OscalBaseModel):
+class ParameterConstraintTest(OscalBaseModel):
     """
     A test expression which is expected to be evaluated by a tool.
     """
@@ -1489,22 +1688,6 @@ class Test(OscalBaseModel):
             description='Additional commentary about the containing object.',
             title='Remarks'),
     ] = None
-
-
-class ParameterConstraint(OscalBaseModel):
-    """
-    A formal or informal expression of a constraint or test.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    description: Annotated[
-        str | None,
-        Field(
-            description='A textual summary of the constraint to be applied.',
-            title='Constraint Description'),
-    ] = None
-    tests: Annotated[list[Test] | None, Field(min_length=1)] = None
 
 
 class Matching(OscalBaseModel):
@@ -1537,23 +1720,20 @@ class ControlCommonSelectControlById(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     with_child_controls: Annotated[
-        str | None,
+        ControlCommonSelectControlByIdChildControls | None,
         Field(
             alias='with-child-controls',
             description='When a control is included, whether its child (dependent) controls are also included.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Include Contained Controls with Control'),
     ] = None
     with_ids: Annotated[
         list[WithId] | None,
         Field(alias='with-ids', min_length=1),
     ] = None
-    matching: Annotated[
-        list[Matching] | None, Field(min_length=1)
-    ] = None
+    matching: Annotated[list[Matching] | None, Field(min_length=1)] = None
 
 
-class Rlink(OscalBaseModel):
+class BackMatterResourceRlink(OscalBaseModel):
     """
     A URL-based pointer to an external resource with an optional hash for verification and change detection.
     """
@@ -1574,9 +1754,7 @@ class Rlink(OscalBaseModel):
 
             title='Media Type'),
     ] = None
-    hashes: Annotated[
-        list[Hash] | None, Field(min_length=1)
-    ] = None
+    hashes: Annotated[list[Hash] | None, Field(min_length=1)] = None
 
 
 class Property(OscalBaseModel):
@@ -1655,12 +1833,8 @@ class ResponsibleParty(OscalBaseModel):
         list[PartyUuid],
         Field(alias='party-uuids', min_length=1),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -1703,15 +1877,10 @@ class Action(OscalBaseModel):
             description='Specifies the action type system used.',
             title='Action Type System'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -1736,12 +1905,8 @@ class ResponsibleRole(OscalBaseModel):
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Responsible Role ID'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     party_uuids: Annotated[
         list[PartyUuid] | None,
         Field(alias='party-uuids', min_length=1),
@@ -1762,7 +1927,7 @@ class Address(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     type: Annotated[
-        TokenDatatype | Type1 | None,
+        TokenDatatype | AddressType | None,
         Field(description='Indicates the type of address.', title='Address Type'),
     ] = None
     addr_lines: Annotated[
@@ -1808,11 +1973,8 @@ class MappingItem(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     type: Annotated[
-        str,
-        Field(
-            description='The semantic type of the subject.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Subject Type'),
+        MappingItemType,
+        Field(description='The semantic type of the subject.', title='Subject Type'),
     ]
     id_ref: Annotated[
         str,
@@ -1822,12 +1984,8 @@ class MappingItem(OscalBaseModel):
             pattern='^\\S(.*\\S)?$',
             title='Subject Identifier Reference'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -1850,7 +2008,7 @@ class MappingResourceReference(OscalBaseModel):
             title='Resource Type Namespace'),
     ] = None
     type: Annotated[
-        TokenDatatype | Type2,
+        TokenDatatype | MappingResourceReferenceType,
         Field(description='The semantic type of the resource.', title='Resource Type'),
     ]
     href: Annotated[
@@ -1859,12 +2017,8 @@ class MappingResourceReference(OscalBaseModel):
             description='A resolvable URL reference to the base catalog or profile that this profile is tailoring.',
             title='Catalog or Profile Reference'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -1893,7 +2047,7 @@ class GapSummary(OscalBaseModel):
     ]
 
 
-class ConfidenceScore2(OscalBaseModel):
+class ConfidenceScoreWithPercentage(OscalBaseModel):
     """
     This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.
     """
@@ -1909,7 +2063,10 @@ class ConfidenceScore2(OscalBaseModel):
     ] = None
 
 
-class Import1(OscalBaseModel):
+ConfidenceScore: TypeAlias = ConfidenceScoreWithCategory | ConfidenceScoreWithPercentage
+
+
+class ImportWithIncludeAll(OscalBaseModel):
     """
     Designates a referenced source catalog or profile that provides a source of control information for use in creating a new overlay or baseline.
     """
@@ -1922,16 +2079,14 @@ class Import1(OscalBaseModel):
             description='A resolvable URL reference to the base catalog or profile that this profile is tailoring.',
             title='Catalog or Profile Reference'),
     ] = None
-    include_all: Annotated[
-        IncludeAll, Field(alias='include-all')
-    ]
+    include_all: Annotated[IncludeAll, Field(alias='include-all')]
     exclude_controls: Annotated[
         list[ControlCommonSelectControlById] | None,
         Field(alias='exclude-controls', min_length=1),
     ] = None
 
 
-class Import2(OscalBaseModel):
+class ImportWithIncludeControls(OscalBaseModel):
     """
     Designates a referenced source catalog or profile that provides a source of control information for use in creating a new overlay or baseline.
     """
@@ -1954,131 +2109,10 @@ class Import2(OscalBaseModel):
     ] = None
 
 
-class SetParameters(OscalBaseModel):
-    """
-    A parameter setting, to be propagated to points of insertion.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    param_id: Annotated[
-        str | None,
-        Field(
-            alias='param-id',
-            description='An identifier for the parameter.',
-
-            title='Parameter ID'),
-    ] = None
-    class_: Annotated[
-        str | None,
-        Field(
-            alias='class',
-            description='A textual label that provides a characterization of the parameter.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Parameter Class'),
-    ] = None
-    depends_on: Annotated[
-        str | None,
-        Field(
-            alias='depends-on',
-            description='**(deprecated)** Another parameter invoking this one. This construct has been deprecated and should not be used.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Depends On'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    label: Annotated[
-        str | None,
-        Field(
-            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
-            pattern='^[^\n]+$',
-            title='Parameter Label'),
-    ] = None
-    usage: Annotated[
-        str | None,
-        Field(
-            description='Describes the purpose and use of a parameter.',
-            title='Parameter Usage Description'),
-    ] = None
-    constraints: Annotated[
-        list[ParameterConstraint] | None,
-        Field(min_length=1),
-    ] = None
-    guidelines: Annotated[
-        list[ParameterGuideline] | None,
-        Field(min_length=1),
-    ] = None
-    values: Annotated[
-        list[ParameterValue] | None, Field(min_length=1)
-    ] = None
+Import: TypeAlias = ImportWithIncludeAll | ImportWithIncludeControls
 
 
-class SetParameters1(OscalBaseModel):
-    """
-    A parameter setting, to be propagated to points of insertion.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    param_id: Annotated[
-        str | None,
-        Field(
-            alias='param-id',
-            description='An identifier for the parameter.',
-
-            title='Parameter ID'),
-    ] = None
-    class_: Annotated[
-        str | None,
-        Field(
-            alias='class',
-            description='A textual label that provides a characterization of the parameter.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Parameter Class'),
-    ] = None
-    depends_on: Annotated[
-        str | None,
-        Field(
-            alias='depends-on',
-            description='**(deprecated)** Another parameter invoking this one. This construct has been deprecated and should not be used.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Depends On'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    label: Annotated[
-        str | None,
-        Field(
-            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
-            pattern='^[^\n]+$',
-            title='Parameter Label'),
-    ] = None
-    usage: Annotated[
-        str | None,
-        Field(
-            description='Describes the purpose and use of a parameter.',
-            title='Parameter Usage Description'),
-    ] = None
-    constraints: Annotated[
-        list[ParameterConstraint] | None,
-        Field(min_length=1),
-    ] = None
-    guidelines: Annotated[
-        list[ParameterGuideline] | None,
-        Field(min_length=1),
-    ] = None
-    select: ParameterSelection | None = None
-
-
-class InsertControls1(OscalBaseModel):
+class InsertControlsWithIncludeAll(OscalBaseModel):
     """
     Specifies which controls to use in the containing context.
     """
@@ -2086,22 +2120,19 @@ class InsertControls1(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     order: Annotated[
-        str | None,
+        InsertControlsOrder | None,
         Field(
             description='A designation of how a selection of controls in a profile is to be ordered.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Order'),
     ] = None
-    include_all: Annotated[
-        IncludeAll, Field(alias='include-all')
-    ]
+    include_all: Annotated[IncludeAll, Field(alias='include-all')]
     exclude_controls: Annotated[
         list[ControlCommonSelectControlById] | None,
         Field(alias='exclude-controls', min_length=1),
     ] = None
 
 
-class InsertControls2(OscalBaseModel):
+class InsertControlsWithIncludeControls(OscalBaseModel):
     """
     Specifies which controls to use in the containing context.
     """
@@ -2109,10 +2140,9 @@ class InsertControls2(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     order: Annotated[
-        str | None,
+        InsertControlsOrder | None,
         Field(
             description='A designation of how a selection of controls in a profile is to be ordered.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Order'),
     ] = None
     include_controls: Annotated[
@@ -2123,6 +2153,12 @@ class InsertControls2(OscalBaseModel):
         list[ControlCommonSelectControlById] | None,
         Field(alias='exclude-controls', min_length=1),
     ] = None
+
+
+InsertControls: TypeAlias = (
+    InsertControlsWithIncludeAll
+    | InsertControlsWithIncludeControls
+)
 
 
 class ComponentDefinitionStatement(OscalBaseModel):
@@ -2153,15 +2189,10 @@ class ComponentDefinitionStatement(OscalBaseModel):
             description='A summary of how the containing control statement is implemented by the component or capability.',
             title='Statement Implementation Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -2200,8 +2231,7 @@ class Protocol(OscalBaseModel):
             title='Protocol Title'),
     ] = None
     port_ranges: Annotated[
-        list[PortRange] | None,
-        Field(alias='port-ranges', min_length=1),
+        list[PortRange] | None, Field(alias='port-ranges', min_length=1)
     ] = None
 
 
@@ -2231,7 +2261,7 @@ class AuthorizedPrivilege(OscalBaseModel):
     ]
 
 
-class ImplementedComponent(OscalBaseModel):
+class InventoryItemImplementedComponent(OscalBaseModel):
     """
     The set of components that are implemented in a given system inventory item.
     """
@@ -2246,57 +2276,10 @@ class ImplementedComponent(OscalBaseModel):
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Universally Unique Identifier Reference'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class InventoryItem(OscalBaseModel):
-    """
-    A single managed inventory item within the system.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this inventory item elsewhere in this or other OSCAL instances. The locally defined UUID of the inventory item can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Inventory Item Universally Unique Identifier'),
-    ]
-    description: Annotated[
-        str,
-        Field(
-            description='A summary of the inventory item stating its purpose within the system.',
-            title='Inventory Item Description'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
-    ] = None
-    implemented_components: Annotated[
-        list[ImplementedComponent] | None,
-        Field(alias='implemented-components', min_length=1),
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -2313,12 +2296,8 @@ class Impact(OscalBaseModel):
 
     model_config = ConfigDict(
         extra='forbid')
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     base: Annotated[
         str,
         Field(
@@ -2360,12 +2339,8 @@ class Diagram(OscalBaseModel):
         str | None,
         Field(description='A summary of the diagram.', title='Diagram Description'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     caption: Annotated[
         str | None,
         Field(
@@ -2394,15 +2369,9 @@ class NetworkArchitecture(OscalBaseModel):
             description="A summary of the system's network architecture.",
             title='Network Architecture Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    diagrams: Annotated[
-        list[Diagram] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    diagrams: Annotated[list[Diagram] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -2424,15 +2393,9 @@ class DataFlow(OscalBaseModel):
             description="A summary of the system's data flow.",
             title='Data Flow Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    diagrams: Annotated[
-        list[Diagram] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    diagrams: Annotated[list[Diagram] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -2441,7 +2404,7 @@ class DataFlow(OscalBaseModel):
     ] = None
 
 
-class LeveragedAuthorization(OscalBaseModel):
+class SystemImplementationLeveragedAuthorization(OscalBaseModel):
     """
     A description of another authorized system from which this system inherits capabilities that satisfy security requirements. Another term for this concept is a common control provider.
     """
@@ -2462,12 +2425,8 @@ class LeveragedAuthorization(OscalBaseModel):
             pattern='^[^\n]+$',
             title='title field'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     party_uuid: Annotated[
         str,
         Field(
@@ -2492,7 +2451,7 @@ class LeveragedAuthorization(OscalBaseModel):
     ] = None
 
 
-class ProvidedItem(OscalBaseModel):
+class ByComponentExportProvided(OscalBaseModel):
     """
     Describes a capability which may be inherited by a leveraging system.
     """
@@ -2512,15 +2471,10 @@ class ProvidedItem(OscalBaseModel):
             description='An implementation statement that describes the aspects of the control or control statement implementation that can be provided to another system leveraging this system.',
             title='Provided Control Implementation Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -2530,7 +2484,7 @@ class ProvidedItem(OscalBaseModel):
     ] = None
 
 
-class Responsibility(OscalBaseModel):
+class ByComponentExportResponsibility(OscalBaseModel):
     """
     Describes a control implementation responsibility imposed on a leveraging system.
     """
@@ -2558,15 +2512,10 @@ class Responsibility(OscalBaseModel):
             description='An implementation statement that describes the aspects of the control or control statement implementation that a leveraging system must implement to satisfy the control provided by a leveraged system.',
             title='Control Implementation Responsibility Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -2576,36 +2525,7 @@ class Responsibility(OscalBaseModel):
     ] = None
 
 
-class Export(OscalBaseModel):
-    """
-    Identifies content intended for external consumption, such as with leveraged organizations.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    description: Annotated[
-        str | None,
-        Field(
-            description='An implementation statement that describes the aspects of the control or control statement implementation that can be available to another system leveraging this system.',
-            title='Control Implementation Export Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    provided: Annotated[list[ProvidedItem] | None, Field(min_length=1)] = None
-    responsibilities: Annotated[list[Responsibility] | None, Field(min_length=1)] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class InheritedItem(OscalBaseModel):
+class ByComponentInherited(OscalBaseModel):
     """
     Describes a control implementation inherited by a leveraging system.
     """
@@ -2633,19 +2553,14 @@ class InheritedItem(OscalBaseModel):
             description='An implementation statement that describes the aspects of a control or control statement implementation that a leveraging system is inheriting from a leveraged system.',
             title='Inherited Control Implementation Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
 
 
-class SatisfiedItem(OscalBaseModel):
+class ByComponentSatisfied(OscalBaseModel):
     """
     Describes how this system satisfies a responsibility imposed by a leveraged system.
     """
@@ -2673,15 +2588,10 @@ class SatisfiedItem(OscalBaseModel):
             description='An implementation statement that describes the aspects of a control or control statement implementation that a leveraging system is implementing based on a requirement from a leveraged system.',
             title='Satisfied Control Implementation Responsibility Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -2691,59 +2601,25 @@ class SatisfiedItem(OscalBaseModel):
     ] = None
 
 
-class ByComponent(OscalBaseModel):
+class ControlObjectiveSelectionWithIncludeAll(OscalBaseModel):
     """
-    Defines how the referenced component implements a set of controls.
+    Identifies the control objectives of the assessment. In the assessment plan, these are the planned objectives. In the assessment results, these are the assessed objectives, and reflects any changes from the plan.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    component_uuid: Annotated[
-        str,
-        Field(
-            alias='component-uuid',
-            description='A machine-oriented identifier reference to the component that is implementing a given control.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Component Universally Unique Identifier Reference'),
-    ]
-    uuid: Annotated[
-        str,
-        Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this by-component entry elsewhere in this or other OSCAL instances. The locally defined UUID of the by-component entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='By-Component Universally Unique Identifier'),
-    ]
     description: Annotated[
-        str,
+        str | None,
         Field(
-            description='An implementation statement that describes how a control or a control statement is implemented within the referenced system component.',
-            title='Control Implementation Description'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+            description='A human-readable description of this collection of control objectives.',
+            title='Control Objectives Description'),
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    set_parameters: Annotated[
-        list[SetParameter] | None,
-        Field(alias='set-parameters', min_length=1),
-    ] = None
-    implementation_status: Annotated[
-        ImplementationStatus | None,
-        Field(alias='implementation-status'),
-    ] = None
-    export: Annotated[
-        Export | None,
-        Field(
-            description='Identifies content intended for external consumption, such as with leveraged organizations.',
-            title='Export'),
-    ] = None
-    inherited: Annotated[list[InheritedItem] | None, Field(min_length=1)] = None
-    satisfied: Annotated[list[SatisfiedItem] | None, Field(min_length=1)] = None
-    responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    include_all: Annotated[IncludeAll, Field(alias='include-all')]
+    exclude_objectives: Annotated[
+        list[SelectObjectiveById] | None,
+        Field(alias='exclude-objectives', min_length=1),
     ] = None
     remarks: Annotated[
         str | None,
@@ -2753,7 +2629,43 @@ class ByComponent(OscalBaseModel):
     ] = None
 
 
-class ControlSelections(OscalBaseModel):
+class ControlObjectiveSelectionWithIncludeObjectives(OscalBaseModel):
+    """
+    Identifies the control objectives of the assessment. In the assessment plan, these are the planned objectives. In the assessment results, these are the assessed objectives, and reflects any changes from the plan.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    description: Annotated[
+        str | None,
+        Field(
+            description='A human-readable description of this collection of control objectives.',
+            title='Control Objectives Description'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    include_objectives: Annotated[
+        list[SelectObjectiveById], Field(alias='include-objectives', min_length=1)
+    ]
+    exclude_objectives: Annotated[
+        list[SelectObjectiveById] | None,
+        Field(alias='exclude-objectives', min_length=1),
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+ControlObjectiveSelection: TypeAlias = (
+    ControlObjectiveSelectionWithIncludeAll
+    | ControlObjectiveSelectionWithIncludeObjectives
+)
+
+
+class ControlSelectionWithIncludeAll(OscalBaseModel):
     """
     Identifies the controls being assessed. In the assessment plan, these are the planned controls. In the assessment results, these are the actual controls, and reflects any changes from the plan.
     """
@@ -2766,15 +2678,9 @@ class ControlSelections(OscalBaseModel):
             description='A human-readable description of in-scope controls specified for assessment.',
             title='Assessed Controls Description'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    include_all: Annotated[
-        IncludeAll, Field(alias='include-all')
-    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    include_all: Annotated[IncludeAll, Field(alias='include-all')]
     exclude_controls: Annotated[
         list[AssessmentCommonSelectControlById] | None,
         Field(alias='exclude-controls', min_length=1),
@@ -2787,7 +2693,7 @@ class ControlSelections(OscalBaseModel):
     ] = None
 
 
-class ControlSelections1(OscalBaseModel):
+class ControlSelectionWithIncludeControls(OscalBaseModel):
     """
     Identifies the controls being assessed. In the assessment plan, these are the planned controls. In the assessment results, these are the actual controls, and reflects any changes from the plan.
     """
@@ -2800,12 +2706,8 @@ class ControlSelections1(OscalBaseModel):
             description='A human-readable description of in-scope controls specified for assessment.',
             title='Assessed Controls Description'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     include_controls: Annotated[
         list[AssessmentCommonSelectControlById],
         Field(alias='include-controls', min_length=1),
@@ -2822,108 +2724,10 @@ class ControlSelections1(OscalBaseModel):
     ] = None
 
 
-class ControlObjectiveSelections(OscalBaseModel):
-    """
-    Identifies the control objectives of the assessment. In the assessment plan, these are the planned objectives. In the assessment results, these are the assessed objectives, and reflects any changes from the plan.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of this collection of control objectives.',
-            title='Control Objectives Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    include_all: Annotated[
-        IncludeAll, Field(alias='include-all')
-    ]
-    exclude_objectives: Annotated[
-        list[SelectObjectiveById] | None,
-        Field(alias='exclude-objectives', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class ControlObjectiveSelections1(OscalBaseModel):
-    """
-    Identifies the control objectives of the assessment. In the assessment plan, these are the planned objectives. In the assessment results, these are the assessed objectives, and reflects any changes from the plan.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of this collection of control objectives.',
-            title='Control Objectives Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    include_objectives: Annotated[
-        list[SelectObjectiveById],
-        Field(alias='include-objectives', min_length=1),
-    ]
-    exclude_objectives: Annotated[
-        list[SelectObjectiveById] | None,
-        Field(alias='exclude-objectives', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class ReviewedControls(OscalBaseModel):
-    """
-    Identifies the controls being assessed and their control objectives.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of control objectives.',
-            title='Control Objective Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    control_selections: Annotated[
-        list[ControlSelections | ControlSelections1],
-        Field(alias='control-selections', min_length=1),
-    ]
-    control_objective_selections: Annotated[
-        list[ControlObjectiveSelections | ControlObjectiveSelections1] | None,
-        Field(alias='control-objective-selections', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
+ControlSelection: TypeAlias = (
+    ControlSelectionWithIncludeAll
+    | ControlSelectionWithIncludeControls
+)
 
 
 class AssessmentSubjectPlaceholder(OscalBaseModel):
@@ -2946,13 +2750,9 @@ class AssessmentSubjectPlaceholder(OscalBaseModel):
             description='A human-readable description of intent of this assessment subject placeholder.',
             title='Assessment Subject Placeholder Description'),
     ] = None
-    sources: Annotated[list[Source], Field(min_length=1)]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    sources: Annotated[list[AssessmentSubjectPlaceholderSource], Field(min_length=1)]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -2977,17 +2777,13 @@ class SelectSubjectById(OscalBaseModel):
             title='Subject Universally Unique Identifier Reference'),
     ]
     type: Annotated[
-        TokenDatatype | Type8,
+        TokenDatatype | SubjectType,
         Field(
             description='Used to indicate the type of object pointed to by the uuid-ref within a subject.',
             title='Subject Universally Unique Identifier Reference Type'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3012,7 +2808,7 @@ class SubjectReference(OscalBaseModel):
             title='Subject Universally Unique Identifier Reference'),
     ]
     type: Annotated[
-        TokenDatatype | Type8,
+        TokenDatatype | SubjectType,
         Field(
             description='Used to indicate the type of object pointed to by the uuid-ref within a subject.',
             title='Subject Universally Unique Identifier Reference Type'),
@@ -3024,12 +2820,8 @@ class SubjectReference(OscalBaseModel):
 
             title='Subject Reference Title'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3038,7 +2830,7 @@ class SubjectReference(OscalBaseModel):
     ] = None
 
 
-class UsesComponent(OscalBaseModel):
+class AssessmentPlatformUsesComponent(OscalBaseModel):
     """
     The set of components that are used by the assessment platform.
     """
@@ -3053,53 +2845,10 @@ class UsesComponent(OscalBaseModel):
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Universally Unique Identifier Reference'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class AssessmentPlatform(OscalBaseModel):
-    """
-    Used to represent the toolset used to perform aspects of the assessment.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment platform elsewhere in this or other OSCAL instances. The locally defined UUID of the assessment platform can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Assessment Platform Universally Unique Identifier'),
-    ]
-    title: Annotated[
-        str | None,
-        Field(
-            description='The title or name for the assessment platform.',
-            pattern='^[^\n]+$',
-            title='Assessment Platform Title'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    uses_components: Annotated[
-        list[UsesComponent] | None, Field(alias='uses-components', min_length=1)
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -3117,10 +2866,9 @@ class FindingTarget(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     type: Annotated[
-        str,
+        FindingTargetType,
         Field(
             description='Identifies the type of the target.',
-            pattern='^\\S(.*\\S)?$',
             title='Finding Target Type'),
     ]
     target_id: Annotated[
@@ -3144,21 +2892,16 @@ class FindingTarget(OscalBaseModel):
             description="A human-readable description of the assessor's conclusions regarding the degree to which an objective is satisfied.",
             title='Objective Status Description'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     status: Annotated[
-        Status1,
+        FindingTargetStatus,
         Field(
             description='A determination of if the objective is satisfied or not within a given system.',
             title='Objective Status'),
     ]
     implementation_status: Annotated[
-        ImplementationStatus | None,
-        Field(alias='implementation-status'),
+        ImplementationStatus | None, Field(alias='implementation-status')
     ] = None
     remarks: Annotated[
         str | None,
@@ -3168,7 +2911,7 @@ class FindingTarget(OscalBaseModel):
     ] = None
 
 
-class RelevantEvidenceItem(OscalBaseModel):
+class ObservationRelevantEvidence(OscalBaseModel):
     """
     Links this observation to relevant evidence.
     """
@@ -3187,12 +2930,8 @@ class RelevantEvidenceItem(OscalBaseModel):
             description='A human-readable description of this evidence.',
             title='Relevant Evidence Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3209,11 +2948,7 @@ class OriginActor(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     type: Annotated[
-        str,
-        Field(
-            description='The kind of actor.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Actor Type'),
+        OriginActorType, Field(description='The kind of actor.', title='Actor Type')
     ]
     actor_uuid: Annotated[
         str,
@@ -3231,15 +2966,11 @@ class OriginActor(OscalBaseModel):
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Actor Role'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
 
 
-class MitigatingFactor(OscalBaseModel):
+class RiskMitigatingFactor(OscalBaseModel):
     """
     Describes an existing mitigating factor that may affect the overall determination of the risk, with an optional link to an implementation statement in the SSP.
     """
@@ -3267,19 +2998,12 @@ class MitigatingFactor(OscalBaseModel):
             description='A human-readable description of this mitigating factor.',
             title='Mitigating Factor Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    subjects: Annotated[
-        list[SubjectReference] | None,
-        Field(min_length=1),
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    subjects: Annotated[list[SubjectReference] | None, Field(min_length=1)] = None
 
 
-class Facet(OscalBaseModel):
+class CharacterizationFacet(OscalBaseModel):
     """
     An individual characteristic that is part of a larger set produced by the same actor.
     """
@@ -3294,7 +3018,7 @@ class Facet(OscalBaseModel):
             title='Facet Name'),
     ]
     system: Annotated[
-        URIDatatype | System2,
+        URIDatatype | CharacterizationFacetSystem,
         Field(
             description='Specifies the naming system under which this risk metric is organized, which allows for the same names to be used in different systems controlled by different parties. This avoids the potential of a name clash.',
             title='Naming System'),
@@ -3306,12 +3030,8 @@ class Facet(OscalBaseModel):
             pattern='^\\S(.*\\S)?$',
             title='Facet Value'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3320,7 +3040,7 @@ class Facet(OscalBaseModel):
     ] = None
 
 
-class RequiredAsset(OscalBaseModel):
+class ResponseRequiredAsset(OscalBaseModel):
     """
     Identifies an asset required to achieve remediation.
     """
@@ -3334,10 +3054,7 @@ class RequiredAsset(OscalBaseModel):
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Required Universally Unique Identifier'),
     ]
-    subjects: Annotated[
-        list[SubjectReference] | None,
-        Field(min_length=1),
-    ] = None
+    subjects: Annotated[list[SubjectReference] | None, Field(min_length=1)] = None
     title: Annotated[
         str | None,
         Field(
@@ -3351,12 +3068,8 @@ class RequiredAsset(OscalBaseModel):
             description='A human-readable description of this required asset.',
             title='Description of Required Asset'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3380,7 +3093,7 @@ class AssessmentPart(OscalBaseModel):
             title='Part Identifier'),
     ] = None
     name: Annotated[
-        TokenDatatype | Name,
+        TokenDatatype | AssessmentPartName,
         Field(
             description="A textual label that uniquely identifies the part's semantic type.",
             title='Part Name'),
@@ -3406,25 +3119,18 @@ class AssessmentPart(OscalBaseModel):
             pattern='^[^\n]+$',
             title='Part Title'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
     prose: Annotated[
         str | None,
         Field(
             description='Permits multiple paragraphs, lists, tables etc.',
             title='Part Text'),
     ] = None
-    parts: Annotated[
-        list[AssessmentPart] | None,
-        Field(min_length=1),
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    parts: Annotated[list[AssessmentPart] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
 
 
-class Attestation(OscalBaseModel):
+class ResultAttestation(OscalBaseModel):
     """
     A set of textual statements, typically written by the assessor.
     """
@@ -3432,77 +3138,19 @@ class Attestation(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
-    parts: Annotated[
-        list[AssessmentPart], Field(min_length=1)
-    ]
+    parts: Annotated[list[AssessmentPart], Field(min_length=1)]
 
 
-class Origin(OscalBaseModel):
+class PoamItemOrigin(OscalBaseModel):
     """
     Identifies the source of the finding, such as a tool or person.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    actors: Annotated[
-        list[OriginActor], Field(min_length=1)
-    ]
-
-
-class PoamItem(OscalBaseModel):
-    """
-    Describes an individual POA&M item.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str | None,
-        Field(
-            description='A machine-oriented, globally unique identifier with instance scope that can be used to reference this POA&M item entry in this OSCAL instance. This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='POA&M Item Universally Unique Identifier'),
-    ] = None
-    title: Annotated[
-        str,
-        Field(
-            description='The title or name for this POA&M item .',
-            pattern='^[^\n]+$',
-            title='POA&M Item Title'),
-    ]
-    description: Annotated[
-        str,
-        Field(
-            description='A human-readable description of POA&M item.',
-            title='POA&M Item Description'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    origins: Annotated[list[Origin] | None, Field(min_length=1)] = None
-    related_findings: Annotated[
-        list[RelatedFinding] | None, Field(alias='related-findings', min_length=1)
-    ] = None
-    related_observations: Annotated[
-        list[RelatedObservation] | None,
-        Field(alias='related-observations', min_length=1),
-    ] = None
-    related_risks: Annotated[
-        list[AssociatedRisk] | None,
-        Field(alias='related-risks', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
+    actors: Annotated[list[OriginActor], Field(min_length=1)]
 
 
 class Part(OscalBaseModel):
@@ -3547,82 +3195,123 @@ class Part(OscalBaseModel):
             pattern='^[^\n]+$',
             title='Part Title'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
     prose: Annotated[
         str | None,
         Field(
             description='Permits multiple paragraphs, lists, tables etc.',
             title='Part Text'),
     ] = None
-    parts: Annotated[
-        list[Part] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    parts: Annotated[list[Part] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
 
 
-class Parameter1(OscalBaseModel):
+class ParameterConstraint(OscalBaseModel):
     """
-    Parameters provide a mechanism for the dynamic assignment of value(s) in a control.
+    A formal or informal expression of a constraint or test.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    id: Annotated[
+    description: Annotated[
         str | None,
         Field(
-            description='A unique identifier for the parameter.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Parameter Identifier'),
+            description='A textual summary of the constraint to be applied.',
+            title='Constraint Description'),
     ] = None
-    class_: Annotated[
+    tests: Annotated[list[ParameterConstraintTest] | None, Field(min_length=1)] = None
+
+
+class MetadataLocation(OscalBaseModel):
+    """
+    A physical point of presence, which may be associated with people, organizations, or other concepts within the current or linked OSCAL document.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A unique ID for the location, for reference.',
+
+            title='Location Universally Unique Identifier'),
+    ]
+    title: Annotated[
         str | None,
         Field(
-            alias='class',
-            description='A textual label that provides a characterization of the type, purpose, use or scope of the parameter.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Parameter Class'),
-    ] = None
-    depends_on: Annotated[
-        str | None,
-        Field(
-            alias='depends-on',
-            description='(deprecated) Another parameter invoking this one. This construct has been deprecated and should not be used.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Depends on'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    label: Annotated[
-        str | None,
-        Field(
-            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
+            description='A name given to the location, which may be used by a tool for display and navigation.',
             pattern='^[^\n]+$',
-            title='Parameter Label'),
+            title='Location Title'),
     ] = None
-    usage: Annotated[
+    address: Address | None = None
+    email_addresses: Annotated[
+        list[EmailAddress] | None,
+        Field(alias='email-addresses', min_length=1),
+    ] = None
+    telephone_numbers: Annotated[
+        list[TelephoneNumber] | None, Field(alias='telephone-numbers', min_length=1)
+    ] = None
+    urls: Annotated[list[URIDatatype] | None, Field(min_length=1)] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    remarks: Annotated[
         str | None,
         Field(
-            description='Describes the purpose and use of a parameter.',
-            title='Parameter Usage Description'),
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
     ] = None
-    constraints: Annotated[
-        list[ParameterConstraint] | None,
-        Field(min_length=1),
+
+
+class MetadataPartyWithAddresses(OscalBaseModel):
+    """
+    An organization or person, which may be associated with roles or other concepts within the current or linked OSCAL document.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str | None,
+        Field(
+            description='A unique identifier for the party.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Party Universally Unique Identifier'),
     ] = None
-    guidelines: Annotated[
-        list[ParameterGuideline] | None,
-        Field(min_length=1),
+    type: Annotated[
+        MetadataPartyType | None,
+        Field(
+            description='A category describing the kind of party the object describes.',
+            title='Party Type'),
     ] = None
-    values: Annotated[
-        list[ParameterValue] | None, Field(min_length=1)
+    name: Annotated[
+        str | None,
+        Field(
+            description='The full name of the party. This is typically the legal name associated with the party.',
+            pattern='^\\S(.*\\S)?$',
+            title='Party Name'),
+    ] = None
+    short_name: Annotated[
+        str | None,
+        Field(
+            alias='short-name',
+            description='A short common name, abbreviation, or acronym for the party.',
+            pattern='^\\S(.*\\S)?$',
+            title='Party Short Name'),
+    ] = None
+    external_ids: Annotated[
+        list[MetadataPartyExternalId] | None, Field(alias='external-ids', min_length=1)
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    email_addresses: Annotated[
+        list[EmailAddress] | None,
+        Field(alias='email-addresses', min_length=1),
+    ] = None
+    telephone_numbers: Annotated[
+        list[TelephoneNumber] | None, Field(alias='telephone-numbers', min_length=1)
+    ] = None
+    addresses: Annotated[list[Address] | None, Field(min_length=1)] = None
+    member_of_organizations: Annotated[
+        list[UUIDDatatype] | None, Field(alias='member-of-organizations', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -3632,64 +3321,60 @@ class Parameter1(OscalBaseModel):
     ] = None
 
 
-class Parameter2(OscalBaseModel):
+class MetadataPartyWithLocationUuids(OscalBaseModel):
     """
-    Parameters provide a mechanism for the dynamic assignment of value(s) in a control.
+    An organization or person, which may be associated with roles or other concepts within the current or linked OSCAL document.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    id: Annotated[
+    uuid: Annotated[
         str | None,
         Field(
-            description='A unique identifier for the parameter.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Parameter Identifier'),
+            description='A unique identifier for the party.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Party Universally Unique Identifier'),
     ] = None
-    class_: Annotated[
+    type: Annotated[
+        MetadataPartyType | None,
+        Field(
+            description='A category describing the kind of party the object describes.',
+            title='Party Type'),
+    ] = None
+    name: Annotated[
         str | None,
         Field(
-            alias='class',
-            description='A textual label that provides a characterization of the type, purpose, use or scope of the parameter.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Parameter Class'),
+            description='The full name of the party. This is typically the legal name associated with the party.',
+            pattern='^\\S(.*\\S)?$',
+            title='Party Name'),
     ] = None
-    depends_on: Annotated[
+    short_name: Annotated[
         str | None,
         Field(
-            alias='depends-on',
-            description='(deprecated) Another parameter invoking this one. This construct has been deprecated and should not be used.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Depends on'),
+            alias='short-name',
+            description='A short common name, abbreviation, or acronym for the party.',
+            pattern='^\\S(.*\\S)?$',
+            title='Party Short Name'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    external_ids: Annotated[
+        list[MetadataPartyExternalId] | None, Field(alias='external-ids', min_length=1)
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    email_addresses: Annotated[
+        list[EmailAddress] | None,
+        Field(alias='email-addresses', min_length=1),
     ] = None
-    label: Annotated[
-        str | None,
-        Field(
-            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
-            pattern='^[^\n]+$',
-            title='Parameter Label'),
+    telephone_numbers: Annotated[
+        list[TelephoneNumber] | None, Field(alias='telephone-numbers', min_length=1)
     ] = None
-    usage: Annotated[
-        str | None,
-        Field(
-            description='Describes the purpose and use of a parameter.',
-            title='Parameter Usage Description'),
+    location_uuids: Annotated[
+        list[LocationUuid] | None,
+        Field(alias='location-uuids', min_length=1),
     ] = None
-    constraints: Annotated[
-        list[ParameterConstraint] | None,
-        Field(min_length=1),
+    member_of_organizations: Annotated[
+        list[UUIDDatatype] | None, Field(alias='member-of-organizations', min_length=1)
     ] = None
-    guidelines: Annotated[
-        list[ParameterGuideline] | None,
-        Field(min_length=1),
-    ] = None
-    select: ParameterSelection | None = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3698,7 +3383,10 @@ class Parameter2(OscalBaseModel):
     ] = None
 
 
-class Revision(OscalBaseModel):
+MetadataParty: TypeAlias = MetadataPartyWithAddresses | MetadataPartyWithLocationUuids
+
+
+class MetadataRevision(OscalBaseModel):
     """
     An entry in a sequential list of revisions to the containing document, expected to be in reverse chronological order (i.e. latest first).
     """
@@ -3742,12 +3430,8 @@ class Revision(OscalBaseModel):
             pattern='^\\S(.*\\S)?$',
             title='OSCAL Version'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3756,7 +3440,7 @@ class Revision(OscalBaseModel):
     ] = None
 
 
-class Role(OscalBaseModel):
+class MetadataRole(OscalBaseModel):
     """
     Defines a function, which might be assigned to a party in a specific situation.
     """
@@ -3791,12 +3475,8 @@ class Role(OscalBaseModel):
             description="A summary of the role's purpose and associated responsibilities.",
             title='Role Description'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -3805,9 +3485,137 @@ class Role(OscalBaseModel):
     ] = None
 
 
-class Location(OscalBaseModel):
+class BackMatterResourceCitation(OscalBaseModel):
     """
-    A physical point of presence, which may be associated with people, organizations, or other concepts within the current or linked OSCAL document.
+    An optional citation consisting of end note text using structured markup.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    text: Annotated[
+        str,
+        Field(
+            description='A line of citation text.',
+            pattern='^[^\n]+$',
+            title='Citation Text'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+
+
+class ModifySetParameterWithSelect(OscalBaseModel):
+    """
+    A parameter setting, to be propagated to points of insertion.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    param_id: Annotated[
+        str | None,
+        Field(
+            alias='param-id',
+            description='An identifier for the parameter.',
+
+            title='Parameter ID'),
+    ] = None
+    class_: Annotated[
+        str | None,
+        Field(
+            alias='class',
+            description='A textual label that provides a characterization of the parameter.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Parameter Class'),
+    ] = None
+    depends_on: Annotated[
+        str | None,
+        Field(
+            alias='depends-on',
+            description='**(deprecated)** Another parameter invoking this one. This construct has been deprecated and should not be used.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Depends On'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    label: Annotated[
+        str | None,
+        Field(
+            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
+            pattern='^[^\n]+$',
+            title='Parameter Label'),
+    ] = None
+    usage: Annotated[
+        str | None,
+        Field(
+            description='Describes the purpose and use of a parameter.',
+            title='Parameter Usage Description'),
+    ] = None
+    constraints: Annotated[list[ParameterConstraint] | None, Field(min_length=1)] = None
+    guidelines: Annotated[list[ParameterGuideline] | None, Field(min_length=1)] = None
+    select: ParameterSelection | None = None
+
+
+class ModifySetParameterWithValues(OscalBaseModel):
+    """
+    A parameter setting, to be propagated to points of insertion.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    param_id: Annotated[
+        str | None,
+        Field(
+            alias='param-id',
+            description='An identifier for the parameter.',
+
+            title='Parameter ID'),
+    ] = None
+    class_: Annotated[
+        str | None,
+        Field(
+            alias='class',
+            description='A textual label that provides a characterization of the parameter.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Parameter Class'),
+    ] = None
+    depends_on: Annotated[
+        str | None,
+        Field(
+            alias='depends-on',
+            description='**(deprecated)** Another parameter invoking this one. This construct has been deprecated and should not be used.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Depends On'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    label: Annotated[
+        str | None,
+        Field(
+            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
+            pattern='^[^\n]+$',
+            title='Parameter Label'),
+    ] = None
+    usage: Annotated[
+        str | None,
+        Field(
+            description='Describes the purpose and use of a parameter.',
+            title='Parameter Usage Description'),
+    ] = None
+    constraints: Annotated[list[ParameterConstraint] | None, Field(min_length=1)] = None
+    guidelines: Annotated[list[ParameterGuideline] | None, Field(min_length=1)] = None
+    values: Annotated[
+        list[ParameterValue] | None, Field(min_length=1)
+    ] = None
+
+
+ModifySetParameter: TypeAlias = (
+    ModifySetParameterWithSelect
+    | ModifySetParameterWithValues
+)
+
+
+class ComponentDefinitionImplementedRequirement(OscalBaseModel):
+    """
+    Describes how the containing component or capability implements an individual control.
     """
 
     model_config = ConfigDict(
@@ -3815,32 +3623,147 @@ class Location(OscalBaseModel):
     uuid: Annotated[
         str,
         Field(
-            description='A unique ID for the location, for reference.',
+            description='Provides a globally unique means to identify a given control implementation by a component.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Control Implementation Identifier'),
+    ]
+    control_id: Annotated[
+        str,
+        Field(
+            alias='control-id',
+            description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Control Identifier Reference'),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            description='A suggestion from the supplier (e.g., component vendor or author) for how the specified control may be implemented if the containing component or capability is instantiated in a system security plan.',
+            title='Control Implementation Description'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    set_parameters: Annotated[
+        list[SetParameter] | None, Field(alias='set-parameters', min_length=1)
+    ] = None
+    responsible_roles: Annotated[
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
+    ] = None
+    statements: Annotated[
+        list[ComponentDefinitionStatement] | None, Field(min_length=1)
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
 
-            title='Location Universally Unique Identifier'),
+
+class SystemComponent(OscalBaseModel):
+    """
+    A defined component that can be part of an implemented system.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this component elsewhere in this or other OSCAL instances. The locally defined UUID of the component can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Component Identifier'),
+    ]
+    type: Annotated[
+        StringDatatype | SystemComponentType,
+        Field(
+            description='A category describing the purpose of the component.',
+            title='Component Type'),
+    ]
+    title: Annotated[
+        str,
+        Field(
+            description='A human readable name for the system component.',
+            pattern='^[^\n]+$',
+            title='Component Title'),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            description='A description of the component, including information about its function.',
+            title='Component Description'),
+    ]
+    purpose: Annotated[
+        str | None,
+        Field(
+            description='A summary of the technological or business purpose of the component.',
+            pattern='^[^\n]+$',
+            title='Purpose'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    status: Annotated[
+        SystemComponentStatus,
+        Field(
+            description='Describes the operational status of the system component.',
+            title='Status'),
+    ]
+    responsible_roles: Annotated[
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
+    ] = None
+    protocols: Annotated[list[Protocol] | None, Field(min_length=1)] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class SystemUser(OscalBaseModel):
+    """
+    A type of user that interacts with the system based on an associated role.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this user class elsewhere in this or other OSCAL instances. The locally defined UUID of the system user can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+
+            title='User Universally Unique Identifier'),
     ]
     title: Annotated[
         str | None,
         Field(
-            description='A name given to the location, which may be used by a tool for display and navigation.',
+            description='A name given to the user, which may be used by a tool for display and navigation.',
             pattern='^[^\n]+$',
-            title='Location Title'),
+            title='User Title'),
     ] = None
-    address: Address | None = None
-    email_addresses: Annotated[
-        list[EmailAddress] | None,
-        Field(alias='email-addresses', min_length=1),
+    short_name: Annotated[
+        str | None,
+        Field(
+            alias='short-name',
+            description='A short common name, abbreviation, or acronym for the user.',
+            pattern='^\\S(.*\\S)?$',
+            title='User Short Name'),
     ] = None
-    telephone_numbers: Annotated[
-        list[TelephoneNumber] | None,
-        Field(alias='telephone-numbers', min_length=1),
+    description: Annotated[
+        str | None,
+        Field(
+            description="A summary of the user's purpose within the system.",
+            title='User Description'),
     ] = None
-    urls: Annotated[list[URIDatatype] | None, Field(min_length=1)] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    role_ids: Annotated[
+        list[RoleId] | None,
+        Field(alias='role-ids', min_length=1),
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
+    authorized_privileges: Annotated[
+        list[AuthorizedPrivilege] | None,
+        Field(alias='authorized-privileges', min_length=1),
     ] = None
     remarks: Annotated[
         str | None,
@@ -3850,64 +3773,34 @@ class Location(OscalBaseModel):
     ] = None
 
 
-class Parties(OscalBaseModel):
+class InventoryItem(OscalBaseModel):
     """
-    An organization or person, which may be associated with roles or other concepts within the current or linked OSCAL document.
+    A single managed inventory item within the system.
     """
 
     model_config = ConfigDict(
         extra='forbid')
     uuid: Annotated[
-        str | None,
+        str,
         Field(
-            description='A unique identifier for the party.',
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this inventory item elsewhere in this or other OSCAL instances. The locally defined UUID of the inventory item can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Party Universally Unique Identifier'),
-    ] = None
-    type: Annotated[
-        str | None,
+            title='Inventory Item Universally Unique Identifier'),
+    ]
+    description: Annotated[
+        str,
         Field(
-            description='A category describing the kind of party the object describes.',
-            pattern='^\\S(.*\\S)?$',
-            title='Party Type'),
+            description='A summary of the inventory item stating its purpose within the system.',
+            title='Inventory Item Description'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    responsible_parties: Annotated[
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
-    name: Annotated[
-        str | None,
-        Field(
-            description='The full name of the party. This is typically the legal name associated with the party.',
-            pattern='^\\S(.*\\S)?$',
-            title='Party Name'),
-    ] = None
-    short_name: Annotated[
-        str | None,
-        Field(
-            alias='short-name',
-            description='A short common name, abbreviation, or acronym for the party.',
-            pattern='^\\S(.*\\S)?$',
-            title='Party Short Name'),
-    ] = None
-    external_ids: Annotated[
-        list[ExternalId] | None, Field(alias='external-ids', min_length=1)
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    email_addresses: Annotated[
-        list[EmailAddress] | None,
-        Field(alias='email-addresses', min_length=1),
-    ] = None
-    telephone_numbers: Annotated[
-        list[TelephoneNumber] | None,
-        Field(alias='telephone-numbers', min_length=1),
-    ] = None
-    addresses: Annotated[
-        list[Address] | None, Field(min_length=1)
-    ] = None
-    member_of_organizations: Annotated[
-        list[UUIDDatatype] | None, Field(alias='member-of-organizations', min_length=1)
+    implemented_components: Annotated[
+        list[InventoryItemImplementedComponent] | None,
+        Field(alias='implemented-components', min_length=1),
     ] = None
     remarks: Annotated[
         str | None,
@@ -3917,9 +3810,9 @@ class Parties(OscalBaseModel):
     ] = None
 
 
-class Parties1(OscalBaseModel):
+class InformationType(OscalBaseModel):
     """
-    An organization or person, which may be associated with roles or other concepts within the current or linked OSCAL document.
+    Contains details about one information type that is stored, processed, or transmitted by the system, such as privacy information, and those defined in NIST SP 800-60.
     """
 
     model_config = ConfigDict(
@@ -3927,55 +3820,812 @@ class Parties1(OscalBaseModel):
     uuid: Annotated[
         str | None,
         Field(
-            description='A unique identifier for the party.',
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this information type elsewhere in this or other OSCAL instances. The locally defined UUID of the information type can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Party Universally Unique Identifier'),
+            title='Information Type Universally Unique Identifier'),
     ] = None
+    title: Annotated[
+        str,
+        Field(
+            description='A human readable name for the information type. This title should be meaningful within the context of the system.',
+            pattern='^[^\n]+$',
+            title='title field'),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            description='A summary of how this information type is used within the system.',
+            title='Information Type Description'),
+    ]
+    categorizations: Annotated[
+        list[InformationTypeCategorization] | None, Field(min_length=1)
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    confidentiality_impact: Annotated[
+        Impact | None, Field(alias='confidentiality-impact')
+    ] = None
+    integrity_impact: Annotated[Impact | None, Field(alias='integrity-impact')] = None
+    availability_impact: Annotated[
+        Impact | None, Field(alias='availability-impact')
+    ] = None
+
+
+class AuthorizationBoundary(OscalBaseModel):
+    """
+    A description of this system's authorization boundary, optionally supplemented by diagrams that illustrate the authorization boundary.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    description: Annotated[
+        str,
+        Field(
+            description="A summary of the system's authorization boundary.",
+            title='Authorization Boundary Description'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    diagrams: Annotated[list[Diagram] | None, Field(min_length=1)] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class SystemImplementation(OscalBaseModel):
+    """
+    Provides information as to how the system is implemented.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    leveraged_authorizations: Annotated[
+        list[SystemImplementationLeveragedAuthorization] | None,
+        Field(alias='leveraged-authorizations', min_length=1),
+    ] = None
+    users: Annotated[list[SystemUser] | None, Field(min_length=1)] = None
+    components: Annotated[list[SystemComponent], Field(min_length=1)]
+    inventory_items: Annotated[
+        list[InventoryItem] | None, Field(alias='inventory-items', min_length=1)
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class ByComponentExport(OscalBaseModel):
+    """
+    Identifies content intended for external consumption, such as with leveraged organizations.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    description: Annotated[
+        str | None,
+        Field(
+            description='An implementation statement that describes the aspects of the control or control statement implementation that can be available to another system leveraging this system.',
+            title='Control Implementation Export Description'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    provided: Annotated[list[ByComponentExportProvided] | None, Field(min_length=1)] = (
+        None
+    )
+    responsibilities: Annotated[
+        list[ByComponentExportResponsibility] | None, Field(min_length=1)
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class AssessmentPlanTermsAndConditions(OscalBaseModel):
+    """
+    Used to define various terms and conditions under which an assessment, described by the plan, can be performed. Each child part defines a different type of term or condition.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    parts: Annotated[list[AssessmentPart] | None, Field(min_length=1)] = None
+
+
+class LocalObjective(OscalBaseModel):
+    """
+    A local definition of a control objective for this assessment. Uses catalog syntax for control objective and assessment actions.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    control_id: Annotated[
+        str,
+        Field(
+            alias='control-id',
+            description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Control Identifier Reference'),
+    ]
+    description: Annotated[
+        str | None,
+        Field(
+            description='A human-readable description of this control objective.',
+            title='Objective Description'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    parts: Annotated[list[Part], Field(min_length=1)]
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class AssessmentMethod(OscalBaseModel):
+    """
+    A local definition of a control objective. Uses catalog syntax for control objective and assessment activities.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment method elsewhere in this or other OSCAL instances. The locally defined UUID of the assessment method can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Assessment Method Universally Unique Identifier'),
+    ]
+    description: Annotated[
+        str | None,
+        Field(
+            description='A human-readable description of this assessment method.',
+            title='Assessment Method Description'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    part: AssessmentPart
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class AssessmentSubjectWithIncludeAll(OscalBaseModel):
+    """
+    Identifies system elements being assessed, such as components, inventory items, and locations. In the assessment plan, this identifies a planned assessment subject. In the assessment results this is an actual assessment subject, and reflects any changes from the plan. exactly what will be the focus of this assessment. Any subjects not identified in this way are out-of-scope.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
     type: Annotated[
+        TokenDatatype | AssessmentSubjectType | None,
+        Field(
+            description='Indicates the type of assessment subject, such as a component, inventory, item, location, or party represented by this selection statement.',
+            title='Subject Type'),
+    ] = None
+    description: Annotated[
         str | None,
         Field(
-            description='A category describing the kind of party the object describes.',
-            pattern='^\\S(.*\\S)?$',
-            title='Party Type'),
+            description='A human-readable description of the collection of subjects being included in this assessment.',
+            title='Include Subjects Description'),
     ] = None
-    name: Annotated[
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    include_all: Annotated[IncludeAll, Field(alias='include-all')]
+    exclude_subjects: Annotated[
+        list[SelectSubjectById] | None, Field(alias='exclude-subjects', min_length=1)
+    ] = None
+    remarks: Annotated[
         str | None,
         Field(
-            description='The full name of the party. This is typically the legal name associated with the party.',
-            pattern='^\\S(.*\\S)?$',
-            title='Party Name'),
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
     ] = None
-    short_name: Annotated[
+
+
+class AssessmentSubjectWithIncludeSubjects(OscalBaseModel):
+    """
+    Identifies system elements being assessed, such as components, inventory items, and locations. In the assessment plan, this identifies a planned assessment subject. In the assessment results this is an actual assessment subject, and reflects any changes from the plan. exactly what will be the focus of this assessment. Any subjects not identified in this way are out-of-scope.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    type: Annotated[
+        TokenDatatype | AssessmentSubjectType | None,
+        Field(
+            description='Indicates the type of assessment subject, such as a component, inventory, item, location, or party represented by this selection statement.',
+            title='Subject Type'),
+    ] = None
+    description: Annotated[
         str | None,
         Field(
-            alias='short-name',
-            description='A short common name, abbreviation, or acronym for the party.',
-            pattern='^\\S(.*\\S)?$',
-            title='Party Short Name'),
+            description='A human-readable description of the collection of subjects being included in this assessment.',
+            title='Include Subjects Description'),
     ] = None
-    external_ids: Annotated[
-        list[ExternalId1] | None, Field(alias='external-ids', min_length=1)
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    include_subjects: Annotated[
+        list[SelectSubjectById], Field(alias='include-subjects', min_length=1)
+    ]
+    exclude_subjects: Annotated[
+        list[SelectSubjectById] | None, Field(alias='exclude-subjects', min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
+
+
+AssessmentSubject: TypeAlias = (
+    AssessmentSubjectWithIncludeAll
+    | AssessmentSubjectWithIncludeSubjects
+)
+
+
+class AssessmentPlatform(OscalBaseModel):
+    """
+    Used to represent the toolset used to perform aspects of the assessment.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment platform elsewhere in this or other OSCAL instances. The locally defined UUID of the assessment platform can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Assessment Platform Universally Unique Identifier'),
+    ]
+    title: Annotated[
+        str | None,
+        Field(
+            description='The title or name for the assessment platform.',
+            pattern='^[^\n]+$',
+            title='Assessment Platform Title'),
     ] = None
-    email_addresses: Annotated[
-        list[EmailAddress] | None,
-        Field(alias='email-addresses', min_length=1),
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    uses_components: Annotated[
+        list[AssessmentPlatformUsesComponent] | None,
+        Field(alias='uses-components', min_length=1),
     ] = None
-    telephone_numbers: Annotated[
-        list[TelephoneNumber] | None,
-        Field(alias='telephone-numbers', min_length=1),
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
     ] = None
-    location_uuids: Annotated[
-        list[LocationUuid] | None,
-        Field(alias='location-uuids', min_length=1),
+
+
+class PoamItem(OscalBaseModel):
+    """
+    Describes an individual POA&M item.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str | None,
+        Field(
+            description='A machine-oriented, globally unique identifier with instance scope that can be used to reference this POA&M item entry in this OSCAL instance. This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='POA&M Item Universally Unique Identifier'),
     ] = None
-    member_of_organizations: Annotated[
-        list[UUIDDatatype] | None, Field(alias='member-of-organizations', min_length=1)
+    title: Annotated[
+        str,
+        Field(
+            description='The title or name for this POA&M item .',
+            pattern='^[^\n]+$',
+            title='POA&M Item Title'),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            description='A human-readable description of POA&M item.',
+            title='POA&M Item Description'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    origins: Annotated[list[PoamItemOrigin] | None, Field(min_length=1)] = None
+    related_findings: Annotated[
+        list[PoamItemRelatedFinding] | None,
+        Field(alias='related-findings', min_length=1),
+    ] = None
+    related_observations: Annotated[
+        list[RelatedObservation] | None,
+        Field(alias='related-observations', min_length=1),
+    ] = None
+    related_risks: Annotated[
+        list[AssociatedRisk] | None, Field(alias='related-risks', min_length=1)
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class ParameterWithSelect(OscalBaseModel):
+    """
+    Parameters provide a mechanism for the dynamic assignment of value(s) in a control.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    id: Annotated[
+        str | None,
+        Field(
+            description='A unique identifier for the parameter.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Parameter Identifier'),
+    ] = None
+    class_: Annotated[
+        str | None,
+        Field(
+            alias='class',
+            description='A textual label that provides a characterization of the type, purpose, use or scope of the parameter.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Parameter Class'),
+    ] = None
+    depends_on: Annotated[
+        str | None,
+        Field(
+            alias='depends-on',
+            description='(deprecated) Another parameter invoking this one. This construct has been deprecated and should not be used.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Depends on'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    label: Annotated[
+        str | None,
+        Field(
+            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
+            pattern='^[^\n]+$',
+            title='Parameter Label'),
+    ] = None
+    usage: Annotated[
+        str | None,
+        Field(
+            description='Describes the purpose and use of a parameter.',
+            title='Parameter Usage Description'),
+    ] = None
+    constraints: Annotated[list[ParameterConstraint] | None, Field(min_length=1)] = None
+    guidelines: Annotated[list[ParameterGuideline] | None, Field(min_length=1)] = None
+    select: ParameterSelection | None = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class ParameterWithValues(OscalBaseModel):
+    """
+    Parameters provide a mechanism for the dynamic assignment of value(s) in a control.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    id: Annotated[
+        str | None,
+        Field(
+            description='A unique identifier for the parameter.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Parameter Identifier'),
+    ] = None
+    class_: Annotated[
+        str | None,
+        Field(
+            alias='class',
+            description='A textual label that provides a characterization of the type, purpose, use or scope of the parameter.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Parameter Class'),
+    ] = None
+    depends_on: Annotated[
+        str | None,
+        Field(
+            alias='depends-on',
+            description='(deprecated) Another parameter invoking this one. This construct has been deprecated and should not be used.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Depends on'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    label: Annotated[
+        str | None,
+        Field(
+            description='A short, placeholder name for the parameter, which can be used as a substitute for a value if no value is assigned.',
+            pattern='^[^\n]+$',
+            title='Parameter Label'),
+    ] = None
+    usage: Annotated[
+        str | None,
+        Field(
+            description='Describes the purpose and use of a parameter.',
+            title='Parameter Usage Description'),
+    ] = None
+    constraints: Annotated[list[ParameterConstraint] | None, Field(min_length=1)] = None
+    guidelines: Annotated[list[ParameterGuideline] | None, Field(min_length=1)] = None
+    values: Annotated[
+        list[ParameterValue] | None, Field(min_length=1)
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+Parameter: TypeAlias = ParameterWithSelect | ParameterWithValues
+
+
+class BackMatterResource(OscalBaseModel):
+    """
+    A resource associated with content in the containing document instance. A resource may be directly included in the document using base64 encoding or may point to one or more equivalent internet resources.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A unique identifier for a resource.',
+
+            title='Resource Universally Unique Identifier'),
+    ]
+    title: Annotated[
+        str | None,
+        Field(
+            description='An optional name given to the resource, which may be used by a tool for display and navigation.',
+            pattern='^[^\n]+$',
+            title='Resource Title'),
+    ] = None
+    description: Annotated[
+        str | None,
+        Field(
+            description='An optional short summary of the resource used to indicate the purpose of the resource.',
+            title='Resource Description'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    document_ids: Annotated[
+        list[DocumentId] | None, Field(alias='document-ids', min_length=1)
+    ] = None
+    citation: Annotated[
+        BackMatterResourceCitation | None,
+        Field(
+            description='An optional citation consisting of end note text using structured markup.',
+            title='Citation'),
+    ] = None
+    rlinks: Annotated[list[BackMatterResourceRlink] | None, Field(min_length=1)] = None
+    base64: Annotated[
+        BackMatterResourceBase64 | None,
+        Field(
+            description='A resource encoded using the Base64 alphabet defined by RFC 2045.',
+            title='Base64'),
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class Map(OscalBaseModel):
+    """
+    A relationship-based mapping between a source and target set consisting of members (i.e., controls, control statements) from the respective source and target.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='The unique identifier for the mapping entry.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Mapping Entry Identifier'),
+    ]
+    ns: Annotated[
+        AnyUrl | None,
+        Field(
+            description="A namespace qualifying the relationship's value. This allows different organizations to associate distinct semantics for relationships with the same name.",
+            title='Relationship Value Namespace'),
+    ] = None
+    matching_rationale: Annotated[
+        MappingMatchingRationale | None,
+        Field(
+            alias='matching-rationale',
+            description='The method used for relating controls within the mapping. The supported methods are aligned with the NIST Interagency Report (IR) 8477, Section 4.3 Set Theory Relationship Mapping.',
+            title='Matching'),
+    ] = None
+    relationship: Annotated[
+        str,
+        Field(
+            description='The relationship type for the mapping entry, which describes the relationship between the effective requirements of the specified source and target sets in the context of the matching-rationale method globaly defined in the provenance unless overwritten locally in the map. The relationship type and the matching-rationale must be used together. However, more than one matching-rationale method may apply to a source and target pair.',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Mapping Entry Relationship'),
+    ]
+    sources: Annotated[list[MappingItem], Field(min_length=1)]
+    targets: Annotated[list[MappingItem], Field(min_length=1)]
+    qualifiers: Annotated[list[QualifierItem] | None, Field(min_length=1)] = None
+    confidence_score: Annotated[
+        ConfidenceScore | None,
+        Field(
+            alias='confidence-score',
+            description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
+            title='Confidence Score'),
+    ] = None
+    coverage: Coverage | None = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class MappingProvenance(OscalBaseModel):
+    """
+    Describes requirements, incompatibilities and gaps that are identified between a target and source in a mapping item.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    method: Annotated[
+        MappingMethod,
+        Field(
+            description='The method used to complete the overall mapping.',
+            title='Method'),
+    ]
+    matching_rationale: Annotated[
+        MappingMatchingRationale,
+        Field(
+            alias='matching-rationale',
+            description='The method used for relating controls within the mapping. The supported methods are aligned with the NIST Interagency Report (IR) 8477, Section 4.3 Set Theory Relationship Mapping.',
+            title='Matching'),
+    ]
+    status: Annotated[
+        MappingStatus,
+        Field(
+            description='The current status of this mapping document.', title='Status'
+        ),
+    ]
+    confidence_score: Annotated[
+        ConfidenceScore | None,
+        Field(
+            alias='confidence-score',
+            description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
+            title='Confidence Score'),
+    ] = None
+    coverage: Coverage | None = None
+    mapping_description: Annotated[
+        str,
+        Field(
+            alias='mapping-description',
+            description='Description of the context and intended use of the mapping set.',
+            title='Mapping Description'),
+    ]
+    responsible_parties: Annotated[
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class ComponentDefinitionControlImplementation(OscalBaseModel):
+    """
+    Defines how the component or capability supports a set of controls.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='Provides a means to identify a set of control implementations that are supported by a given component or capability.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Control Implementation Set Identifier'),
+    ]
+    source: Annotated[
+        str,
+        Field(
+            description='A reference to an OSCAL catalog or profile providing the referenced control or subcontrol definition.',
+            title='Source Resource Reference'),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            description='A description of how the specified set of controls are implemented for the containing component or capability.',
+            title='Control Implementation Description'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    set_parameters: Annotated[
+        list[SetParameter] | None, Field(alias='set-parameters', min_length=1)
+    ] = None
+    implemented_requirements: Annotated[
+        list[ComponentDefinitionImplementedRequirement],
+        Field(alias='implemented-requirements', min_length=1),
+    ]
+
+
+class SystemInformation(OscalBaseModel):
+    """
+    Contains details about all information types that are stored, processed, or transmitted by the system, such as privacy information, and those defined in NIST SP 800-60.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    information_types: Annotated[
+        list[InformationType], Field(alias='information-types', min_length=1)
+    ]
+
+
+class ByComponent(OscalBaseModel):
+    """
+    Defines how the referenced component implements a set of controls.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    component_uuid: Annotated[
+        str,
+        Field(
+            alias='component-uuid',
+            description='A machine-oriented identifier reference to the component that is implementing a given control.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Component Universally Unique Identifier Reference'),
+    ]
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this by-component entry elsewhere in this or other OSCAL instances. The locally defined UUID of the by-component entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='By-Component Universally Unique Identifier'),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            description='An implementation statement that describes how a control or a control statement is implemented within the referenced system component.',
+            title='Control Implementation Description'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    set_parameters: Annotated[
+        list[SetParameter] | None, Field(alias='set-parameters', min_length=1)
+    ] = None
+    implementation_status: Annotated[
+        ImplementationStatus | None, Field(alias='implementation-status')
+    ] = None
+    export: Annotated[
+        ByComponentExport | None,
+        Field(
+            description='Identifies content intended for external consumption, such as with leveraged organizations.',
+            title='Export'),
+    ] = None
+    inherited: Annotated[list[ByComponentInherited] | None, Field(min_length=1)] = None
+    satisfied: Annotated[list[ByComponentSatisfied] | None, Field(min_length=1)] = None
+    responsible_roles: Annotated[
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class ReviewedControls(OscalBaseModel):
+    """
+    Identifies the controls being assessed and their control objectives.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    description: Annotated[
+        str | None,
+        Field(
+            description='A human-readable description of control objectives.',
+            title='Control Objective Description'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    control_selections: Annotated[
+        list[ControlSelection],
+        Field(alias='control-selections', min_length=1),
+    ]
+    control_objective_selections: Annotated[
+        list[
+            ControlObjectiveSelection
+        ]
+        | None,
+        Field(alias='control-objective-selections', min_length=1),
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class AssessmentAssets(OscalBaseModel):
+    """
+    Identifies the assets used to perform this assessment, such as the assessment team, scanning tools, and assumptions.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    components: Annotated[list[SystemComponent] | None, Field(min_length=1)] = None
+    assessment_platforms: Annotated[
+        list[AssessmentPlatform], Field(alias='assessment-platforms', min_length=1)
+    ]
+
+
+class RelatedTaskIdentifiedSubject(OscalBaseModel):
+    """
+    Used to detail assessment subjects that were identified by this task.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    subject_placeholder_uuid: Annotated[
+        str,
+        Field(
+            alias='subject-placeholder-uuid',
+            description='A machine-oriented identifier reference to a unique assessment subject placeholder defined by this task.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Assessment Subject Placeholder Universally Unique Identifier Reference'),
+    ]
+    subjects: Annotated[
+        list[AssessmentSubject],
+        Field(min_length=1),
+    ]
+
+
+class LocalDefinitions(OscalBaseModel):
+    """
+    Allows components, and inventory-items to be defined within the POA&M for circumstances where no OSCAL-based SSP exists, or is not delivered with the POA&M.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    components: Annotated[list[SystemComponent] | None, Field(min_length=1)] = None
+    inventory_items: Annotated[
+        list[InventoryItem] | None, Field(alias='inventory-items', min_length=1)
+    ] = None
+    assessment_assets: Annotated[
+        AssessmentAssets | None, Field(alias='assessment-assets')
     ] = None
     remarks: Annotated[
         str | None,
@@ -4029,104 +4679,22 @@ class Metadata(OscalBaseModel):
             pattern='^\\S(.*\\S)?$',
             title='OSCAL Version'),
     ]
-    revisions: Annotated[list[Revision] | None, Field(min_length=1)] = None
+    revisions: Annotated[list[MetadataRevision] | None, Field(min_length=1)] = None
     document_ids: Annotated[
-        list[DocumentId] | None,
-        Field(alias='document-ids', min_length=1),
+        list[DocumentId] | None, Field(alias='document-ids', min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    roles: Annotated[list[MetadataRole] | None, Field(min_length=1)] = None
+    locations: Annotated[list[MetadataLocation] | None, Field(min_length=1)] = None
+    parties: Annotated[
+        list[MetadataParty] | None,
+        Field(min_length=1),
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    roles: Annotated[list[Role] | None, Field(min_length=1)] = None
-    locations: Annotated[list[Location] | None, Field(min_length=1)] = None
-    parties: Annotated[list[Parties | Parties1] | None, Field(min_length=1)] = None
     responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
-    actions: Annotated[
-        list[Action] | None, Field(min_length=1)
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class Citation(OscalBaseModel):
-    """
-    An optional citation consisting of end note text using structured markup.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    text: Annotated[
-        str,
-        Field(
-            description='A line of citation text.',
-            pattern='^[^\n]+$',
-            title='Citation Text'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-
-
-class Resource(OscalBaseModel):
-    """
-    A resource associated with content in the containing document instance. A resource may be directly included in the document using base64 encoding or may point to one or more equivalent internet resources.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='A unique identifier for a resource.',
-
-            title='Resource Universally Unique Identifier'),
-    ]
-    title: Annotated[
-        str | None,
-        Field(
-            description='An optional name given to the resource, which may be used by a tool for display and navigation.',
-            pattern='^[^\n]+$',
-            title='Resource Title'),
-    ] = None
-    description: Annotated[
-        str | None,
-        Field(
-            description='An optional short summary of the resource used to indicate the purpose of the resource.',
-            title='Resource Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    document_ids: Annotated[
-        list[DocumentId] | None,
-        Field(alias='document-ids', min_length=1),
-    ] = None
-    citation: Annotated[
-        Citation | None,
-        Field(
-            description='An optional citation consisting of end note text using structured markup.',
-            title='Citation'),
-    ] = None
-    rlinks: Annotated[list[Rlink] | None, Field(min_length=1)] = None
-    base64: Annotated[
-        Base64 | None,
-        Field(
-            description='A resource encoded using the Base64 alphabet defined by RFC 2045.',
-            title='Base64'),
-    ] = None
+    actions: Annotated[list[Action] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -4142,12 +4710,12 @@ class BackMatter(OscalBaseModel):
 
     model_config = ConfigDict(
         extra='forbid')
-    resources: Annotated[list[Resource] | None, Field(min_length=1)] = None
+    resources: Annotated[list[BackMatterResource] | None, Field(min_length=1)] = None
 
 
-class Map(OscalBaseModel):
+class Mapping(OscalBaseModel):
     """
-    A relationship-based mapping between a source and target set consisting of members (i.e., controls, control statements) from the respective source and target.
+    A mapping between two target resources.
     """
 
     model_config = ConfigDict(
@@ -4155,129 +4723,64 @@ class Map(OscalBaseModel):
     uuid: Annotated[
         str,
         Field(
-            description='The unique identifier for the mapping entry.',
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this mapping definition elsewhere in this or other OSCAL instances. The locally defined UUID of the mapping can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same mapping across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Mapping Entry Identifier'),
+            title='Mapping Universally Unique Identifier'),
     ]
-    ns: Annotated[
-        AnyUrl | None,
+    method: Annotated[
+        MappingMethod | None,
         Field(
-            description="A namespace qualifying the relationship's value. This allows different organizations to associate distinct semantics for relationships with the same name.",
-            title='Relationship Value Namespace'),
+            description='The method used to complete the overall mapping.',
+            title='Method'),
     ] = None
     matching_rationale: Annotated[
-        str | None,
+        MappingMatchingRationale | None,
         Field(
             alias='matching-rationale',
             description='The method used for relating controls within the mapping. The supported methods are aligned with the NIST Interagency Report (IR) 8477, Section 4.3 Set Theory Relationship Mapping.',
-
             title='Matching'),
     ] = None
-    relationship: Annotated[
-        str,
+    status: Annotated[
+        MappingStatus | None,
         Field(
-            description='The relationship type for the mapping entry, which describes the relationship between the effective requirements of the specified source and target sets in the context of the matching-rationale method globaly defined in the provenance unless overwritten locally in the map. The relationship type and the matching-rationale must be used together. However, more than one matching-rationale method may apply to a source and target pair.',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Mapping Entry Relationship'),
-    ]
-    sources: Annotated[
-        list[MappingItem], Field(min_length=1)
-    ]
-    targets: Annotated[
-        list[MappingItem], Field(min_length=1)
-    ]
-    qualifiers: Annotated[
-        list[QualifierItem] | None, Field(min_length=1)
+            description='The current status of this mapping document.', title='Status'
+        ),
     ] = None
-    confidence_score: Annotated[
-        ConfidenceScore1
-        | ConfidenceScore2
-        | None,
-        Field(
-            alias='confidence-score',
-            description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
-            title='Confidence Score'),
-    ] = None
-    coverage: Coverage | None = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    source_resource: Annotated[MappingResourceReference, Field(alias='source-resource')]
+    target_resource: Annotated[MappingResourceReference, Field(alias='target-resource')]
+    maps: Annotated[list[Map], Field(min_length=1)]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
             description='Additional commentary about the containing object.',
             title='Remarks'),
     ] = None
-
-
-class MappingProvenance(OscalBaseModel):
-    """
-    Describes requirements, incompatibilities and gaps that are identified between a target and source in a mapping item.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    method: Annotated[
-        str,
-        Field(
-            description='The method used to complete the overall mapping.',
-            pattern='^\\S(.*\\S)?$',
-            title='Method'),
-    ]
-    matching_rationale: Annotated[
-        str,
-        Field(
-            alias='matching-rationale',
-            description='The method used for relating controls within the mapping. The supported methods are aligned with the NIST Interagency Report (IR) 8477, Section 4.3 Set Theory Relationship Mapping.',
-            pattern='^\\S(.*\\S)?$',
-            title='Matching'),
-    ]
-    status: Annotated[
-        str,
-        Field(
-            description='The current status of this mapping document.',
-            pattern='^\\S(.*\\S)?$',
-            title='Status'),
-    ]
-    confidence_score: Annotated[
-        ConfidenceScore1
-        | ConfidenceScore2
-        | None,
-        Field(
-            alias='confidence-score',
-            description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
-            title='Confidence Score'),
-    ] = None
-    coverage: Coverage | None = None
     mapping_description: Annotated[
-        str,
+        str | None,
         Field(
             alias='mapping-description',
             description='Description of the context and intended use of the mapping set.',
             title='Mapping Description'),
-    ]
-    responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    source_gap_summary: Annotated[
+        GapSummary | None, Field(alias='source-gap-summary')
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
+    target_gap_summary: Annotated[
+        GapSummary | None, Field(alias='target-gap-summary')
     ] = None
-    remarks: Annotated[
-        str | None,
+    confidence_score: Annotated[
+        ConfidenceScore | None,
         Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
+            alias='confidence-score',
+            description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
+            title='Confidence Score'),
     ] = None
+    coverage: Coverage | None = None
 
 
-class ProfileGroup2(OscalBaseModel):
+class ProfileGroupWithInsertControls(OscalBaseModel):
     """
     A group of (selected) controls or of groups of controls.
     """
@@ -4307,33 +4810,18 @@ class ProfileGroup2(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[
-            Parameter1
-            | Parameter2
-        ]
-        | None,
-        Field(min_length=1),
+        list[Parameter] | None, Field(min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    parts: Annotated[
-        list[Part] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    parts: Annotated[list[Part] | None, Field(min_length=1)] = None
     insert_controls: Annotated[
-        list[
-            InsertControls1
-            | InsertControls2
-        ]
-        | None,
+        list[InsertControls] | None,
         Field(alias='insert-controls', min_length=1),
     ] = None
 
 
-class Add(OscalBaseModel):
+class ModifyAlterAdd(OscalBaseModel):
     """
     Specifies contents to be added into controls, in resolution.
     """
@@ -4341,10 +4829,9 @@ class Add(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     position: Annotated[
-        str | None,
+        ModifyAlterAddPosition | None,
         Field(
             description='Where to add the new content with respect to the targeted element (beside it or inside it).',
-
             title='Position'),
     ] = None
     by_id: Annotated[
@@ -4363,111 +4850,14 @@ class Add(OscalBaseModel):
             title='Title Change'),
     ] = None
     params: Annotated[
-        list[
-            Parameter1
-            | Parameter2
-        ]
-        | None,
-        Field(min_length=1),
+        list[Parameter] | None, Field(min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    parts: Annotated[
-        list[Part] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    parts: Annotated[list[Part] | None, Field(min_length=1)] = None
 
 
-class Alter(OscalBaseModel):
-    """
-    Specifies changes to be made to an included control when a profile is resolved.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    control_id: Annotated[
-        str,
-        Field(
-            alias='control-id',
-            description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Control Identifier Reference'),
-    ]
-    removes: Annotated[list[Remove] | None, Field(min_length=1)] = None
-    adds: Annotated[list[Add] | None, Field(min_length=1)] = None
-
-
-class Modify(OscalBaseModel):
-    """
-    Set parameters or amend controls in resolution.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    set_parameters: Annotated[
-        list[SetParameters | SetParameters1] | None,
-        Field(alias='set-parameters', min_length=1),
-    ] = None
-    alters: Annotated[list[Alter] | None, Field(min_length=1)] = None
-
-
-class ComponentDefinitionImplementedRequirement(OscalBaseModel):
-    """
-    Describes how the containing component or capability implements an individual control.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='Provides a globally unique means to identify a given control implementation by a component.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Control Implementation Identifier'),
-    ]
-    control_id: Annotated[
-        str,
-        Field(
-            alias='control-id',
-            description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Control Identifier Reference'),
-    ]
-    description: Annotated[
-        str,
-        Field(
-            description='A suggestion from the supplier (e.g., component vendor or author) for how the specified control may be implemented if the containing component or capability is instantiated in a system security plan.',
-            title='Control Implementation Description'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    set_parameters: Annotated[
-        list[SetParameter] | None,
-        Field(alias='set-parameters', min_length=1),
-    ] = None
-    responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
-    ] = None
-    statements: Annotated[
-        list[ComponentDefinitionStatement] | None, Field(min_length=1)
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class SystemComponent(OscalBaseModel):
+class DefinedComponent(OscalBaseModel):
     """
     A defined component that can be part of an implemented system.
     """
@@ -4477,12 +4867,12 @@ class SystemComponent(OscalBaseModel):
     uuid: Annotated[
         str,
         Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this component elsewhere in this or other OSCAL instances. The locally defined UUID of the component can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            description='Provides a globally unique means to identify a given component.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Identifier'),
     ]
     type: Annotated[
-        StringDatatype | Type4,
+        StringDatatype | DefinedComponentType,
         Field(
             description='A category describing the purpose of the component.',
             title='Component Type'),
@@ -4490,7 +4880,7 @@ class SystemComponent(OscalBaseModel):
     title: Annotated[
         str,
         Field(
-            description='A human readable name for the system component.',
+            description='A human readable name for the component.',
             pattern='^[^\n]+$',
             title='Component Title'),
     ]
@@ -4507,24 +4897,15 @@ class SystemComponent(OscalBaseModel):
             pattern='^[^\n]+$',
             title='Purpose'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    status: Annotated[
-        Status,
-        Field(
-            description='Describes the operational status of the system component.',
-            title='Status'),
-    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
-    protocols: Annotated[
-        list[Protocol] | None, Field(min_length=1)
+    protocols: Annotated[list[Protocol] | None, Field(min_length=1)] = None
+    control_implementations: Annotated[
+        list[ComponentDefinitionControlImplementation] | None,
+        Field(alias='control-implementations', min_length=1),
     ] = None
     remarks: Annotated[
         str | None,
@@ -4534,9 +4915,9 @@ class SystemComponent(OscalBaseModel):
     ] = None
 
 
-class SystemUser(OscalBaseModel):
+class Capability(OscalBaseModel):
     """
-    A type of user that interacts with the system based on an associated role.
+    A grouping of other components and/or capabilities.
     """
 
     model_config = ConfigDict(
@@ -4544,137 +4925,32 @@ class SystemUser(OscalBaseModel):
     uuid: Annotated[
         str,
         Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this user class elsewhere in this or other OSCAL instances. The locally defined UUID of the system user can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-
-            title='User Universally Unique Identifier'),
-    ]
-    title: Annotated[
-        str | None,
-        Field(
-            description='A name given to the user, which may be used by a tool for display and navigation.',
-            pattern='^[^\n]+$',
-            title='User Title'),
-    ] = None
-    short_name: Annotated[
-        str | None,
-        Field(
-            alias='short-name',
-            description='A short common name, abbreviation, or acronym for the user.',
-            pattern='^\\S(.*\\S)?$',
-            title='User Short Name'),
-    ] = None
-    description: Annotated[
-        str | None,
-        Field(
-            description="A summary of the user's purpose within the system.",
-            title='User Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    role_ids: Annotated[
-        list[RoleId] | None,
-        Field(alias='role-ids', min_length=1),
-    ] = None
-    authorized_privileges: Annotated[
-        list[AuthorizedPrivilege] | None,
-        Field(alias='authorized-privileges', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class InformationType(OscalBaseModel):
-    """
-    Contains details about one information type that is stored, processed, or transmitted by the system, such as privacy information, and those defined in NIST SP 800-60.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str | None,
-        Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this information type elsewhere in this or other OSCAL instances. The locally defined UUID of the information type can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            description='Provides a globally unique means to identify a given capability.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Information Type Universally Unique Identifier'),
-    ] = None
-    title: Annotated[
+            title='Capability Identifier'),
+    ]
+    name: Annotated[
         str,
         Field(
-            description='A human readable name for the information type. This title should be meaningful within the context of the system.',
-            pattern='^[^\n]+$',
-            title='title field'),
+            description="The capability's human-readable name.",
+            pattern='^\\S(.*\\S)?$',
+            title='Capability Name'),
     ]
     description: Annotated[
         str,
         Field(
-            description='A summary of how this information type is used within the system.',
-            title='Information Type Description'),
+            description='A summary of the capability.', title='Capability Description'
+        ),
     ]
-    categorizations: Annotated[list[Categorization] | None, Field(min_length=1)] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    incorporates_components: Annotated[
+        list[IncorporatesComponent] | None,
+        Field(alias='incorporates-components', min_length=1),
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    confidentiality_impact: Annotated[
-        Impact | None, Field(alias='confidentiality-impact')
-    ] = None
-    integrity_impact: Annotated[
-        Impact | None, Field(alias='integrity-impact')
-    ] = None
-    availability_impact: Annotated[
-        Impact | None, Field(alias='availability-impact')
-    ] = None
-
-
-class SystemInformation(OscalBaseModel):
-    """
-    Contains details about all information types that are stored, processed, or transmitted by the system, such as privacy information, and those defined in NIST SP 800-60.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    information_types: Annotated[
-        list[InformationType], Field(alias='information-types', min_length=1)
-    ]
-
-
-class AuthorizationBoundary(OscalBaseModel):
-    """
-    A description of this system's authorization boundary, optionally supplemented by diagrams that illustrate the authorization boundary.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    description: Annotated[
-        str,
-        Field(
-            description="A summary of the system's authorization boundary.",
-            title='Authorization Boundary Description'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    diagrams: Annotated[
-        list[Diagram] | None, Field(min_length=1)
+    control_implementations: Annotated[
+        list[ComponentDefinitionControlImplementation] | None,
+        Field(alias='control-implementations', min_length=1),
     ] = None
     remarks: Annotated[
         str | None,
@@ -4684,33 +4960,65 @@ class AuthorizationBoundary(OscalBaseModel):
     ] = None
 
 
-class SystemImplementation(OscalBaseModel):
+class SystemCharacteristics(OscalBaseModel):
     """
-    Provides information as to how the system is implemented.
+    Contains the characteristics of the system, such as its name, purpose, and security impact level.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    leveraged_authorizations: Annotated[
-        list[LeveragedAuthorization] | None,
-        Field(alias='leveraged-authorizations', min_length=1),
-    ] = None
-    users: Annotated[
-        list[SystemUser] | None,
-        Field(min_length=1),
-    ] = None
-    components: Annotated[
-        list[SystemComponent], Field(min_length=1)
+    system_ids: Annotated[list[SystemId], Field(alias='system-ids', min_length=1)]
+    system_name: Annotated[
+        str,
+        Field(
+            alias='system-name',
+            description='The full name of the system.',
+            pattern='^\\S(.*\\S)?$',
+            title='System Name - Full'),
     ]
-    inventory_items: Annotated[
-        list[InventoryItem] | None,
-        Field(alias='inventory-items', min_length=1),
+    system_name_short: Annotated[
+        str | None,
+        Field(
+            alias='system-name-short',
+            description='A short name for the system, such as an acronym, that is suitable for display in a data table or summary list.',
+            pattern='^\\S(.*\\S)?$',
+            title='System Name - Short'),
+    ] = None
+    description: Annotated[
+        str, Field(description='A summary of the system.', title='System Description')
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    date_authorized: Annotated[
+        str | None,
+        Field(
+            alias='date-authorized',
+            description='The date the system received its authorization.',
+            pattern='^(((2000|2400|2800|(19|2[0-9](0[48]|[2468][048]|[13579][26])))-02-29)|(((19|2[0-9])[0-9]{2})-02-(0[1-9]|1[0-9]|2[0-8]))|(((19|2[0-9])[0-9]{2})-(0[13578]|10|12)-(0[1-9]|[12][0-9]|3[01]))|(((19|2[0-9])[0-9]{2})-(0[469]|11)-(0[1-9]|[12][0-9]|30)))(Z|(-((0[0-9]|1[0-2]):00|0[39]:30)|\\+((0[0-9]|1[0-4]):00|(0[34569]|10):30|(0[58]|12):45)))?$',
+            title='System Authorization Date'),
+    ] = None
+    security_sensitivity_level: Annotated[
+        str | None,
+        Field(
+            alias='security-sensitivity-level',
+            description='The overall information system sensitivity categorization, such as defined by FIPS-199.',
+            pattern='^\\S(.*\\S)?$',
+            title='Security Sensitivity Level'),
+    ] = None
+    system_information: Annotated[SystemInformation, Field(alias='system-information')]
+    security_impact_level: Annotated[
+        SecurityImpactLevel | None, Field(alias='security-impact-level')
+    ] = None
+    status: Status
+    authorization_boundary: Annotated[
+        AuthorizationBoundary, Field(alias='authorization-boundary')
+    ]
+    network_architecture: Annotated[
+        NetworkArchitecture | None, Field(alias='network-architecture')
+    ] = None
+    data_flow: Annotated[DataFlow | None, Field(alias='data-flow')] = None
+    responsible_parties: Annotated[
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -4742,19 +5050,13 @@ class SspStatement(OscalBaseModel):
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Control Statement Reference Universally Unique Identifier'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     by_components: Annotated[
-        list[ByComponent] | None,
-        Field(alias='by-components', min_length=1),
+        list[ByComponent] | None, Field(alias='by-components', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -4764,91 +5066,7 @@ class SspStatement(OscalBaseModel):
     ] = None
 
 
-class TermsAndConditions(OscalBaseModel):
-    """
-    Used to define various terms and conditions under which an assessment, described by the plan, can be performed. Each child part defines a different type of term or condition.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    parts: Annotated[
-        list[AssessmentPart] | None,
-        Field(min_length=1),
-    ] = None
-
-
-class LocalObjective(OscalBaseModel):
-    """
-    A local definition of a control objective for this assessment. Uses catalog syntax for control objective and assessment actions.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    control_id: Annotated[
-        str,
-        Field(
-            alias='control-id',
-            description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
-            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
-            title='Control Identifier Reference'),
-    ]
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of this control objective.',
-            title='Objective Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    parts: Annotated[list[Part], Field(min_length=1)]
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class AssessmentMethod(OscalBaseModel):
-    """
-    A local definition of a control objective. Uses catalog syntax for control objective and assessment activities.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment method elsewhere in this or other OSCAL instances. The locally defined UUID of the assessment method can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Assessment Method Universally Unique Identifier'),
-    ]
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of this assessment method.',
-            title='Assessment Method Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    part: AssessmentPart
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class Step(OscalBaseModel):
+class ActivityStep(OscalBaseModel):
     """
     Identifies an individual step in a series of steps related to an activity, such as an assessment test or examination procedure.
     """
@@ -4875,19 +5093,13 @@ class Step(OscalBaseModel):
             description='A human-readable description of this step.',
             title='Step Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     reviewed_controls: Annotated[
-        ReviewedControls | None,
-        Field(alias='reviewed-controls'),
+        ReviewedControls | None, Field(alias='reviewed-controls')
     ] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -4897,175 +5109,36 @@ class Step(OscalBaseModel):
     ] = None
 
 
-class Activity(OscalBaseModel):
+class TaskAssociatedActivity(OscalBaseModel):
     """
-    Identifies an assessment or related process that can be performed. In the assessment plan, this is an intended activity which may be associated with an assessment task. In the assessment results, this an activity that was actually performed as part of an assessment.
+    Identifies an individual activity to be performed as part of a task.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    uuid: Annotated[
+    activity_uuid: Annotated[
         str,
         Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment activity elsewhere in this or other OSCAL instances. The locally defined UUID of the activity can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-
-            title='Assessment Activity Universally Unique Identifier'),
-    ]
-    title: Annotated[
-        str | None,
-        Field(
-            description='The title for this included activity.',
-            pattern='^[^\n]+$',
-            title='Included Activity Title'),
-    ] = None
-    description: Annotated[
-        str,
-        Field(
-            description='A human-readable description of this included activity.',
-            title='Included Activity Description'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    steps: Annotated[list[Step] | None, Field(min_length=1)] = None
-    related_controls: Annotated[
-        ReviewedControls | None,
-        Field(alias='related-controls'),
-    ] = None
-    responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class AssessmentSubject1(OscalBaseModel):
-    """
-    Identifies system elements being assessed, such as components, inventory items, and locations. In the assessment plan, this identifies a planned assessment subject. In the assessment results this is an actual assessment subject, and reflects any changes from the plan. exactly what will be the focus of this assessment. Any subjects not identified in this way are out-of-scope.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    type: Annotated[
-        TokenDatatype | Type6 | None,
-        Field(
-            description='Indicates the type of assessment subject, such as a component, inventory, item, location, or party represented by this selection statement.',
-            title='Subject Type'),
-    ] = None
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of the collection of subjects being included in this assessment.',
-            title='Include Subjects Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    include_all: Annotated[
-        IncludeAll, Field(alias='include-all')
-    ]
-    exclude_subjects: Annotated[
-        list[SelectSubjectById] | None,
-        Field(alias='exclude-subjects', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class AssessmentSubject2(OscalBaseModel):
-    """
-    Identifies system elements being assessed, such as components, inventory items, and locations. In the assessment plan, this identifies a planned assessment subject. In the assessment results this is an actual assessment subject, and reflects any changes from the plan. exactly what will be the focus of this assessment. Any subjects not identified in this way are out-of-scope.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    type: Annotated[
-        TokenDatatype | Type6 | None,
-        Field(
-            description='Indicates the type of assessment subject, such as a component, inventory, item, location, or party represented by this selection statement.',
-            title='Subject Type'),
-    ] = None
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of the collection of subjects being included in this assessment.',
-            title='Include Subjects Description'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    include_subjects: Annotated[
-        list[SelectSubjectById],
-        Field(alias='include-subjects', min_length=1),
-    ]
-    exclude_subjects: Annotated[
-        list[SelectSubjectById] | None,
-        Field(alias='exclude-subjects', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class AssessmentAssets(OscalBaseModel):
-    """
-    Identifies the assets used to perform this assessment, such as the assessment team, scanning tools, and assumptions.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    components: Annotated[
-        list[SystemComponent] | None,
-        Field(min_length=1),
-    ] = None
-    assessment_platforms: Annotated[
-        list[AssessmentPlatform], Field(alias='assessment-platforms', min_length=1)
-    ]
-
-
-class IdentifiedSubject(OscalBaseModel):
-    """
-    Used to detail assessment subjects that were identified by this task.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    subject_placeholder_uuid: Annotated[
-        str,
-        Field(
-            alias='subject-placeholder-uuid',
-            description='A machine-oriented identifier reference to a unique assessment subject placeholder defined by this task.',
+            alias='activity-uuid',
+            description='A machine-oriented identifier reference to an activity defined in the list of activities.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Assessment Subject Placeholder Universally Unique Identifier Reference'),
+            title='Activity Universally Unique Identifier Reference'),
     ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    responsible_roles: Annotated[
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
+    ] = None
     subjects: Annotated[
-        list[
-            AssessmentSubject1
-            | AssessmentSubject2
-        ],
+        list[AssessmentSubject],
         Field(min_length=1),
     ]
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
 
 
 class RelatedTask(OscalBaseModel):
@@ -5083,26 +5156,18 @@ class RelatedTask(OscalBaseModel):
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Task Universally Unique Identifier Reference'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
+        list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
     subjects: Annotated[
-        list[
-            AssessmentSubject1
-            | AssessmentSubject2
-        ]
+        list[AssessmentSubject]
         | None,
         Field(min_length=1),
     ] = None
     identified_subject: Annotated[
-        IdentifiedSubject | None,
+        RelatedTaskIdentifiedSubject | None,
         Field(
             alias='identified-subject',
             description='Used to detail assessment subjects that were identified by this task.',
@@ -5116,7 +5181,7 @@ class RelatedTask(OscalBaseModel):
     ] = None
 
 
-class RelatedResponse(OscalBaseModel):
+class RiskLogEntryRelatedResponse(OscalBaseModel):
     """
     Identifies an individual risk response that this log entry is for.
     """
@@ -5131,15 +5196,10 @@ class RelatedResponse(OscalBaseModel):
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Response Universally Unique Identifier Reference'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     related_tasks: Annotated[
-        list[RelatedTask] | None,
-        Field(alias='related-tasks', min_length=1),
+        list[RelatedTask] | None, Field(alias='related-tasks', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -5149,108 +5209,7 @@ class RelatedResponse(OscalBaseModel):
     ] = None
 
 
-class Entry(OscalBaseModel):
-    """
-    Identifies an individual risk response that occurred as part of managing an identified risk.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this risk log entry elsewhere in this or other OSCAL instances. The locally defined UUID of the risk log entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Risk Log Entry Universally Unique Identifier'),
-    ]
-    title: Annotated[
-        str | None,
-        Field(
-            description='The title for this risk log entry.',
-            pattern='^[^\n]+$',
-            title='Title'),
-    ] = None
-    description: Annotated[
-        str | None,
-        Field(
-            description='A human-readable description of what was done regarding the risk.',
-            title='Risk Task Description'),
-    ] = None
-    start: Annotated[
-        AwareDatetime,
-        Field(
-            description='Identifies the start date and time of the event.',
-
-            title='Start'),
-    ]
-    end: Annotated[
-        AwareDatetime | None,
-        Field(
-            description='Identifies the end date and time of the event. If the event is a point in time, the start and end will be the same date and time.',
-
-            title='End'),
-    ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    logged_by: Annotated[
-        list[LoggedBy] | None,
-        Field(alias='logged-by', min_length=1),
-    ] = None
-    status_change: Annotated[
-        TokenDatatype | RiskStatus1 | None,
-        Field(
-            alias='status-change',
-            description='Describes the status of the associated risk.',
-            title='Risk Status'),
-    ] = None
-    related_responses: Annotated[
-        list[RelatedResponse] | None, Field(alias='related-responses', min_length=1)
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class RiskLog(OscalBaseModel):
-    """
-    A log of all risk-related tasks taken.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    entries: Annotated[list[Entry], Field(min_length=1)]
-
-
-class LocalDefinitions1(OscalBaseModel):
-    """
-    Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    objectives_and_methods: Annotated[
-        list[LocalObjective] | None,
-        Field(alias='objectives-and-methods', min_length=1),
-    ] = None
-    activities: Annotated[
-        list[Activity] | None, Field(min_length=1)
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class Entry1(OscalBaseModel):
+class ResultAssessmentLogEntry(OscalBaseModel):
     """
     Identifies the result of an action and/or task that occurred as part of executing an assessment plan or an assessment event that occurred in producing the assessment results.
     """
@@ -5291,56 +5250,13 @@ class Entry1(OscalBaseModel):
 
             title='End'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     logged_by: Annotated[
-        list[LoggedBy] | None,
-        Field(alias='logged-by', min_length=1),
+        list[LoggedBy] | None, Field(alias='logged-by', min_length=1)
     ] = None
     related_tasks: Annotated[
-        list[RelatedTask] | None,
-        Field(alias='related-tasks', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class AssessmentLog(OscalBaseModel):
-    """
-    A log of all assessment-related actions taken.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    entries: Annotated[list[Entry1], Field(min_length=1)]
-
-
-class PoamLocalDefinitions(OscalBaseModel):
-    """
-    Allows components, and inventory-items to be defined within the POA&M for circumstances where no OSCAL-based SSP exists, or is not delivered with the POA&M.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    components: Annotated[
-        list[SystemComponent] | None,
-        Field(min_length=1),
-    ] = None
-    inventory_items: Annotated[
-        list[InventoryItem] | None,
-        Field(alias='inventory-items', min_length=1),
-    ] = None
-    assessment_assets: Annotated[
-        AssessmentAssets | None,
-        Field(alias='assessment-assets'),
+        list[RelatedTask] | None, Field(alias='related-tasks', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -5380,30 +5296,40 @@ class Control(OscalBaseModel):
             title='Control Title'),
     ]
     params: Annotated[
-        list[
-            Parameter1
-            | Parameter2
-        ]
-        | None,
-        Field(min_length=1),
+        list[Parameter] | None, Field(min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    parts: Annotated[
-        list[Part] | None, Field(min_length=1)
-    ] = None
-    controls: Annotated[
-        list[Control] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    parts: Annotated[list[Part] | None, Field(min_length=1)] = None
+    controls: Annotated[list[Control] | None, Field(min_length=1)] = None
 
 
-class Mapping(OscalBaseModel):
+class MappingCollectionMappings(RootModel[Mapping | list[Mapping]]):
+    root: Mapping | Annotated[list[Mapping], Field(min_length=1)]
+
+
+class ModifyAlter(OscalBaseModel):
     """
-    A mapping between two target resources.
+    Specifies changes to be made to an included control when a profile is resolved.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    control_id: Annotated[
+        str,
+        Field(
+            alias='control-id',
+            description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
+            pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
+            title='Control Identifier Reference'),
+    ]
+    removes: Annotated[list[ModifyAlterRemove] | None, Field(min_length=1)] = None
+    adds: Annotated[list[ModifyAlterAdd] | None, Field(min_length=1)] = None
+
+
+class ComponentDefinition(OscalBaseModel):
+    """
+    A collection of component descriptions, which may optionally be grouped by capability.
     """
 
     model_config = ConfigDict(
@@ -5411,203 +5337,18 @@ class Mapping(OscalBaseModel):
     uuid: Annotated[
         str,
         Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this mapping definition elsewhere in this or other OSCAL instances. The locally defined UUID of the mapping can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same mapping across revisions of the document.',
+            description='Provides a globally unique means to identify a given component definition instance.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Mapping Universally Unique Identifier'),
+            title='Component Definition Universally Unique Identifier'),
     ]
-    method: Annotated[
-        str | None,
-        Field(
-            description='The method used to complete the overall mapping.',
-            pattern='^\\S(.*\\S)?$',
-            title='Method'),
+    metadata: Metadata
+    import_component_definitions: Annotated[
+        list[ImportComponentDefinition] | None,
+        Field(alias='import-component-definitions', min_length=1),
     ] = None
-    matching_rationale: Annotated[
-        str | None,
-        Field(
-            alias='matching-rationale',
-            description='The method used for relating controls within the mapping. The supported methods are aligned with the NIST Interagency Report (IR) 8477, Section 4.3 Set Theory Relationship Mapping.',
-            pattern='^\\S(.*\\S)?$',
-            title='Matching'),
-    ] = None
-    status: Annotated[
-        str | None,
-        Field(
-            description='The current status of this mapping document.',
-            pattern='^\\S(.*\\S)?$',
-            title='Status'),
-    ] = None
-    source_resource: Annotated[
-        MappingResourceReference,
-        Field(alias='source-resource'),
-    ]
-    target_resource: Annotated[
-        MappingResourceReference,
-        Field(alias='target-resource'),
-    ]
-    maps: Annotated[list[Map], Field(min_length=1)]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-    mapping_description: Annotated[
-        str | None,
-        Field(
-            alias='mapping-description',
-            description='Description of the context and intended use of the mapping set.',
-            title='Mapping Description'),
-    ] = None
-    source_gap_summary: Annotated[
-        GapSummary | None,
-        Field(alias='source-gap-summary'),
-    ] = None
-    target_gap_summary: Annotated[
-        GapSummary | None,
-        Field(alias='target-gap-summary'),
-    ] = None
-    confidence_score: Annotated[
-        ConfidenceScore1
-        | ConfidenceScore2
-        | None,
-        Field(
-            alias='confidence-score',
-            description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
-            title='Confidence Score'),
-    ] = None
-    coverage: Coverage | None = None
-
-
-class ComponentDefinitionControlImplementation(OscalBaseModel):
-    """
-    Defines how the component or capability supports a set of controls.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='Provides a means to identify a set of control implementations that are supported by a given component or capability.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Control Implementation Set Identifier'),
-    ]
-    source: Annotated[
-        str,
-        Field(
-            description='A reference to an OSCAL catalog or profile providing the referenced control or subcontrol definition.',
-            title='Source Resource Reference'),
-    ]
-    description: Annotated[
-        str,
-        Field(
-            description='A description of how the specified set of controls are implemented for the containing component or capability.',
-            title='Control Implementation Description'),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    set_parameters: Annotated[
-        list[SetParameter] | None,
-        Field(alias='set-parameters', min_length=1),
-    ] = None
-    implemented_requirements: Annotated[
-        list[ComponentDefinitionImplementedRequirement],
-        Field(alias='implemented-requirements', min_length=1),
-    ]
-
-
-class SystemCharacteristics(OscalBaseModel):
-    """
-    Contains the characteristics of the system, such as its name, purpose, and security impact level.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    system_ids: Annotated[
-        list[SystemId],
-        Field(alias='system-ids', min_length=1),
-    ]
-    system_name: Annotated[
-        str,
-        Field(
-            alias='system-name',
-            description='The full name of the system.',
-            pattern='^\\S(.*\\S)?$',
-            title='System Name - Full'),
-    ]
-    system_name_short: Annotated[
-        str | None,
-        Field(
-            alias='system-name-short',
-            description='A short name for the system, such as an acronym, that is suitable for display in a data table or summary list.',
-            pattern='^\\S(.*\\S)?$',
-            title='System Name - Short'),
-    ] = None
-    description: Annotated[
-        str, Field(description='A summary of the system.', title='System Description')
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    date_authorized: Annotated[
-        str | None,
-        Field(
-            alias='date-authorized',
-            description='The date the system received its authorization.',
-            pattern='^(((2000|2400|2800|(19|2[0-9](0[48]|[2468][048]|[13579][26])))-02-29)|(((19|2[0-9])[0-9]{2})-02-(0[1-9]|1[0-9]|2[0-8]))|(((19|2[0-9])[0-9]{2})-(0[13578]|10|12)-(0[1-9]|[12][0-9]|3[01]))|(((19|2[0-9])[0-9]{2})-(0[469]|11)-(0[1-9]|[12][0-9]|30)))(Z|(-((0[0-9]|1[0-2]):00|0[39]:30)|\\+((0[0-9]|1[0-4]):00|(0[34569]|10):30|(0[58]|12):45)))?$',
-            title='System Authorization Date'),
-    ] = None
-    security_sensitivity_level: Annotated[
-        str | None,
-        Field(
-            alias='security-sensitivity-level',
-            description='The overall information system sensitivity categorization, such as defined by FIPS-199.',
-            pattern='^\\S(.*\\S)?$',
-            title='Security Sensitivity Level'),
-    ] = None
-    system_information: Annotated[
-        SystemInformation, Field(alias='system-information')
-    ]
-    security_impact_level: Annotated[
-        SecurityImpactLevel | None,
-        Field(alias='security-impact-level'),
-    ] = None
-    status: SspStatus
-    authorization_boundary: Annotated[
-        AuthorizationBoundary,
-        Field(alias='authorization-boundary'),
-    ]
-    network_architecture: Annotated[
-        NetworkArchitecture | None,
-        Field(alias='network-architecture'),
-    ] = None
-    data_flow: Annotated[
-        DataFlow | None, Field(alias='data-flow')
-    ] = None
-    responsible_parties: Annotated[
-        list[ResponsibleParty] | None,
-        Field(alias='responsible-parties', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
+    components: Annotated[list[DefinedComponent] | None, Field(min_length=1)] = None
+    capabilities: Annotated[list[Capability] | None, Field(min_length=1)] = None
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
 
 
 class SspImplementedRequirement(OscalBaseModel):
@@ -5632,26 +5373,17 @@ class SspImplementedRequirement(OscalBaseModel):
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Identifier Reference'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     set_parameters: Annotated[
-        list[SetParameter] | None,
-        Field(alias='set-parameters', min_length=1),
+        list[SetParameter] | None, Field(alias='set-parameters', min_length=1)
     ] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
-    statements: Annotated[
-        list[SspStatement] | None, Field(min_length=1)
-    ] = None
+    statements: Annotated[list[SspStatement] | None, Field(min_length=1)] = None
     by_components: Annotated[
-        list[ByComponent] | None,
-        Field(alias='by-components', min_length=1),
+        list[ByComponent] | None, Field(alias='by-components', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -5661,72 +5393,42 @@ class SspImplementedRequirement(OscalBaseModel):
     ] = None
 
 
-class LocalDefinitions(OscalBaseModel):
+class Activity(OscalBaseModel):
     """
-    Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    components: Annotated[
-        list[SystemComponent] | None,
-        Field(min_length=1),
-    ] = None
-    inventory_items: Annotated[
-        list[InventoryItem] | None,
-        Field(alias='inventory-items', min_length=1),
-    ] = None
-    users: Annotated[
-        list[SystemUser] | None,
-        Field(min_length=1),
-    ] = None
-    objectives_and_methods: Annotated[
-        list[LocalObjective] | None,
-        Field(alias='objectives-and-methods', min_length=1),
-    ] = None
-    activities: Annotated[
-        list[Activity] | None, Field(min_length=1)
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class AssociatedActivity(OscalBaseModel):
-    """
-    Identifies an individual activity to be performed as part of a task.
+    Identifies an assessment or related process that can be performed. In the assessment plan, this is an intended activity which may be associated with an assessment task. In the assessment results, this an activity that was actually performed as part of an assessment.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    activity_uuid: Annotated[
+    uuid: Annotated[
         str,
         Field(
-            alias='activity-uuid',
-            description='A machine-oriented identifier reference to an activity defined in the list of activities.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Activity Universally Unique Identifier Reference'),
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment activity elsewhere in this or other OSCAL instances. The locally defined UUID of the activity can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+
+            title='Assessment Activity Universally Unique Identifier'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    title: Annotated[
+        str | None,
+        Field(
+            description='The title for this included activity.',
+            pattern='^[^\n]+$',
+            title='Included Activity Title'),
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
+    description: Annotated[
+        str,
+        Field(
+            description='A human-readable description of this included activity.',
+            title='Included Activity Description'),
+    ]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    steps: Annotated[list[ActivityStep] | None, Field(min_length=1)] = None
+    related_controls: Annotated[
+        ReviewedControls | None, Field(alias='related-controls')
     ] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
-    subjects: Annotated[
-        list[
-            AssessmentSubject1
-            | AssessmentSubject2
-        ],
-        Field(min_length=1),
-    ]
     remarks: Annotated[
         str | None,
         Field(
@@ -5750,7 +5452,8 @@ class Task(OscalBaseModel):
             title='Task Universally Unique Identifier'),
     ]
     type: Annotated[
-        TokenDatatype | Type5, Field(description='The type of task.', title='Task Type')
+        TokenDatatype | TaskType,
+        Field(description='The type of task.', title='Task Type'),
     ]
     title: Annotated[
         str,
@@ -5765,37 +5468,27 @@ class Task(OscalBaseModel):
             description='A human-readable description of this task.',
             title='Task Description'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     timing: Annotated[
-        Timing | Timing1 | Timing2 | None,
+        TaskTiming | None,
         Field(
             description='The timing under which the task is intended to occur.',
             title='Event Timing'),
     ] = None
-    dependencies: Annotated[list[Dependency] | None, Field(min_length=1)] = None
-    tasks: Annotated[
-        list[Task] | None, Field(min_length=1)
-    ] = None
+    dependencies: Annotated[list[TaskDependency] | None, Field(min_length=1)] = None
+    tasks: Annotated[list[Task] | None, Field(min_length=1)] = None
     associated_activities: Annotated[
-        list[AssociatedActivity] | None,
+        list[TaskAssociatedActivity] | None,
         Field(alias='associated-activities', min_length=1),
     ] = None
     subjects: Annotated[
-        list[
-            AssessmentSubject1
-            | AssessmentSubject2
-        ]
+        list[AssessmentSubject]
         | None,
         Field(min_length=1),
     ] = None
     responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
+        list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -5805,19 +5498,81 @@ class Task(OscalBaseModel):
     ] = None
 
 
-class AssessmentCommonOrigin(OscalBaseModel):
+class Origin(OscalBaseModel):
     """
     Identifies the source of the finding, such as a tool, interviewed person, or activity.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    actors: Annotated[
-        list[OriginActor], Field(min_length=1)
-    ]
+    actors: Annotated[list[OriginActor], Field(min_length=1)]
     related_tasks: Annotated[
-        list[RelatedTask] | None,
-        Field(alias='related-tasks', min_length=1),
+        list[RelatedTask] | None, Field(alias='related-tasks', min_length=1)
+    ] = None
+
+
+class RiskLogEntry(OscalBaseModel):
+    """
+    Identifies an individual risk response that occurred as part of managing an identified risk.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this risk log entry elsewhere in this or other OSCAL instances. The locally defined UUID of the risk log entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Risk Log Entry Universally Unique Identifier'),
+    ]
+    title: Annotated[
+        str | None,
+        Field(
+            description='The title for this risk log entry.',
+            pattern='^[^\n]+$',
+            title='Title'),
+    ] = None
+    description: Annotated[
+        str | None,
+        Field(
+            description='A human-readable description of what was done regarding the risk.',
+            title='Risk Task Description'),
+    ] = None
+    start: Annotated[
+        AwareDatetime,
+        Field(
+            description='Identifies the start date and time of the event.',
+
+            title='Start'),
+    ]
+    end: Annotated[
+        AwareDatetime | None,
+        Field(
+            description='Identifies the end date and time of the event. If the event is a point in time, the start and end will be the same date and time.',
+
+            title='End'),
+    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    logged_by: Annotated[
+        list[LoggedBy] | None, Field(alias='logged-by', min_length=1)
+    ] = None
+    status_change: Annotated[
+        TokenDatatype | RiskStatus | None,
+        Field(
+            alias='status-change',
+            description='Describes the status of the associated risk.',
+            title='Risk Status'),
+    ] = None
+    related_responses: Annotated[
+        list[RiskLogEntryRelatedResponse] | None,
+        Field(alias='related-responses', min_length=1),
+    ] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
     ] = None
 
 
@@ -5828,14 +5583,10 @@ class Characterization(OscalBaseModel):
 
     model_config = ConfigDict(
         extra='forbid')
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    origin: AssessmentCommonOrigin
-    facets: Annotated[list[Facet], Field(min_length=1)]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    origin: Origin
+    facets: Annotated[list[CharacterizationFacet], Field(min_length=1)]
 
 
 class Response(OscalBaseModel):
@@ -5853,7 +5604,7 @@ class Response(OscalBaseModel):
             title='Remediation Universally Unique Identifier'),
     ]
     lifecycle: Annotated[
-        TokenDatatype | Lifecycle,
+        TokenDatatype | ResponseLifecycle,
         Field(
             description='Identifies whether this is a recommendation, such as from an assessor or tool, or an actual plan accepted by the system owner.',
             title='Remediation Intent'),
@@ -5871,21 +5622,13 @@ class Response(OscalBaseModel):
             description='A human-readable description of this response plan.',
             title='Response Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    origins: Annotated[
-        list[AssessmentCommonOrigin] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    origins: Annotated[list[Origin] | None, Field(min_length=1)] = None
     required_assets: Annotated[
-        list[RequiredAsset] | None, Field(alias='required-assets', min_length=1)
+        list[ResponseRequiredAsset] | None, Field(alias='required-assets', min_length=1)
     ] = None
-    tasks: Annotated[
-        list[Task] | None, Field(min_length=1)
-    ] = None
+    tasks: Annotated[list[Task] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -5894,32 +5637,66 @@ class Response(OscalBaseModel):
     ] = None
 
 
-class LocalDefinitions2(OscalBaseModel):
+class AssessmentResultsLocalDefinitions(OscalBaseModel):
     """
     Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    components: Annotated[
-        list[SystemComponent] | None,
-        Field(min_length=1),
+    objectives_and_methods: Annotated[
+        list[LocalObjective] | None, Field(alias='objectives-and-methods', min_length=1)
     ] = None
+    activities: Annotated[list[Activity] | None, Field(min_length=1)] = None
+    remarks: Annotated[
+        str | None,
+        Field(
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
+    ] = None
+
+
+class ResultAssessmentLog(OscalBaseModel):
+    """
+    A log of all assessment-related actions taken.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    entries: Annotated[list[ResultAssessmentLogEntry], Field(min_length=1)]
+
+
+class ResultLocalDefinitions(OscalBaseModel):
+    """
+    Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    components: Annotated[list[SystemComponent] | None, Field(min_length=1)] = None
     inventory_items: Annotated[
-        list[InventoryItem] | None,
-        Field(alias='inventory-items', min_length=1),
+        list[InventoryItem] | None, Field(alias='inventory-items', min_length=1)
     ] = None
-    users: Annotated[
-        list[SystemUser] | None,
-        Field(min_length=1),
-    ] = None
+    users: Annotated[list[SystemUser] | None, Field(min_length=1)] = None
     assessment_assets: Annotated[
-        AssessmentAssets | None,
-        Field(alias='assessment-assets'),
+        AssessmentAssets | None, Field(alias='assessment-assets')
     ] = None
-    tasks: Annotated[
-        list[Task] | None, Field(min_length=1)
+    tasks: Annotated[list[Task] | None, Field(min_length=1)] = None
+
+
+class ComponentDefinitionDocument(OscalBaseModel):
+    model_config = ConfigDict(
+        extra='forbid')
+    field_schema: Annotated[
+        str | None,
+        Field(
+            alias='$schema',
+            description='A JSON Schema directive to bind a specific schema to its document instance.',
+            title='Schema Directive'),
     ] = None
+    component_definition: Annotated[
+        ComponentDefinition, Field(alias='component-definition')
+    ]
 
 
 class CatalogGroupWithControls(OscalBaseModel):
@@ -5952,29 +5729,12 @@ class CatalogGroupWithControls(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[
-            Parameter1
-            | Parameter2
-        ]
-        | None,
-        Field(min_length=1),
+        list[Parameter] | None, Field(min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    parts: Annotated[
-        list[Part] | None, Field(min_length=1)
-    ] = None
-    controls: Annotated[
-        list[Control] | None, Field(min_length=1)
-    ] = None
-
-
-class Mappings(RootModel[list[Mapping]]):
-    root: Annotated[list[Mapping], Field(min_length=1)]
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    parts: Annotated[list[Part] | None, Field(min_length=1)] = None
+    controls: Annotated[list[Control] | None, Field(min_length=1)] = None
 
 
 class MappingCollection(OscalBaseModel):
@@ -5993,124 +5753,22 @@ class MappingCollection(OscalBaseModel):
     ]
     metadata: Metadata
     provenance: MappingProvenance
-    mappings: Mapping | Mappings
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
-    ] = None
+    mappings: MappingCollectionMappings
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
 
 
-class DefinedComponent(OscalBaseModel):
+class Modify(OscalBaseModel):
     """
-    A defined component that can be part of an implemented system.
+    Set parameters or amend controls in resolution.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='Provides a globally unique means to identify a given component.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Component Identifier'),
-    ]
-    type: Annotated[
-        StringDatatype | Type3,
-        Field(
-            description='A category describing the purpose of the component.',
-            title='Component Type'),
-    ]
-    title: Annotated[
-        str,
-        Field(
-            description='A human readable name for the component.',
-            pattern='^[^\n]+$',
-            title='Component Title'),
-    ]
-    description: Annotated[
-        str,
-        Field(
-            description='A description of the component, including information about its function.',
-            title='Component Description'),
-    ]
-    purpose: Annotated[
-        str | None,
-        Field(
-            description='A summary of the technological or business purpose of the component.',
-            pattern='^[^\n]+$',
-            title='Purpose'),
+    set_parameters: Annotated[
+        list[ModifySetParameter] | None,
+        Field(alias='set-parameters', min_length=1),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    responsible_roles: Annotated[
-        list[ResponsibleRole] | None,
-        Field(alias='responsible-roles', min_length=1),
-    ] = None
-    protocols: Annotated[
-        list[Protocol] | None, Field(min_length=1)
-    ] = None
-    control_implementations: Annotated[
-        list[ComponentDefinitionControlImplementation] | None,
-        Field(alias='control-implementations', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
-
-
-class Capability(OscalBaseModel):
-    """
-    A grouping of other components and/or capabilities.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='Provides a globally unique means to identify a given capability.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Capability Identifier'),
-    ]
-    name: Annotated[
-        str,
-        Field(
-            description="The capability's human-readable name.",
-            pattern='^\\S(.*\\S)?$',
-            title='Capability Name'),
-    ]
-    description: Annotated[
-        str,
-        Field(
-            description='A summary of the capability.', title='Capability Description'
-        ),
-    ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    incorporates_components: Annotated[
-        list[IncorporatesComponent] | None,
-        Field(alias='incorporates-components', min_length=1),
-    ] = None
-    control_implementations: Annotated[
-        list[ComponentDefinitionControlImplementation] | None,
-        Field(alias='control-implementations', min_length=1),
-    ] = None
-    remarks: Annotated[
-        str | None,
-        Field(
-            description='Additional commentary about the containing object.',
-            title='Remarks'),
-    ] = None
+    alters: Annotated[list[ModifyAlter] | None, Field(min_length=1)] = None
 
 
 class SspControlImplementation(OscalBaseModel):
@@ -6127,8 +5785,7 @@ class SspControlImplementation(OscalBaseModel):
             title='Control Implementation Description'),
     ]
     set_parameters: Annotated[
-        list[SetParameter] | None,
-        Field(alias='set-parameters', min_length=1),
+        list[SetParameter] | None, Field(alias='set-parameters', min_length=1)
     ] = None
     implemented_requirements: Annotated[
         list[SspImplementedRequirement],
@@ -6136,59 +5793,27 @@ class SspControlImplementation(OscalBaseModel):
     ]
 
 
-class AssessmentPlan(OscalBaseModel):
+class AssessmentPlanLocalDefinitions(OscalBaseModel):
     """
-    An assessment plan, such as those provided by a FedRAMP assessor.
+    Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.
     """
 
     model_config = ConfigDict(
         extra='forbid')
-    uuid: Annotated[
-        str,
+    components: Annotated[list[SystemComponent] | None, Field(min_length=1)] = None
+    inventory_items: Annotated[
+        list[InventoryItem] | None, Field(alias='inventory-items', min_length=1)
+    ] = None
+    users: Annotated[list[SystemUser] | None, Field(min_length=1)] = None
+    objectives_and_methods: Annotated[
+        list[LocalObjective] | None, Field(alias='objectives-and-methods', min_length=1)
+    ] = None
+    activities: Annotated[list[Activity] | None, Field(min_length=1)] = None
+    remarks: Annotated[
+        str | None,
         Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment plan in this or other OSCAL instances. The locally defined UUID of the assessment plan can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Assessment Plan Universally Unique Identifier'),
-    ]
-    metadata: Metadata
-    import_ssp: Annotated[
-        ImportSsp, Field(alias='import-ssp')
-    ]
-    local_definitions: Annotated[
-        LocalDefinitions | None,
-        Field(
-            alias='local-definitions',
-            description='Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.',
-            title='Local Definitions'),
-    ] = None
-    terms_and_conditions: Annotated[
-        TermsAndConditions | None,
-        Field(
-            alias='terms-and-conditions',
-            description='Used to define various terms and conditions under which an assessment, described by the plan, can be performed. Each child part defines a different type of term or condition.',
-            title='Assessment Plan Terms and Conditions'),
-    ] = None
-    reviewed_controls: Annotated[
-        ReviewedControls,
-        Field(alias='reviewed-controls'),
-    ]
-    assessment_subjects: Annotated[
-        list[
-            AssessmentSubject1
-            | AssessmentSubject2
-        ]
-        | None,
-        Field(alias='assessment-subjects', min_length=1),
-    ] = None
-    assessment_assets: Annotated[
-        AssessmentAssets | None,
-        Field(alias='assessment-assets'),
-    ] = None
-    tasks: Annotated[
-        list[Task] | None, Field(min_length=1)
-    ] = None
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
+            description='Additional commentary about the containing object.',
+            title='Remarks'),
     ] = None
 
 
@@ -6219,15 +5844,9 @@ class Finding(OscalBaseModel):
             description='A human-readable description of this finding.',
             title='Finding Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    origins: Annotated[
-        list[AssessmentCommonOrigin] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    origins: Annotated[list[Origin] | None, Field(min_length=1)] = None
     target: FindingTarget
     implementation_statement_uuid: Annotated[
         str | None,
@@ -6242,8 +5861,7 @@ class Finding(OscalBaseModel):
         Field(alias='related-observations', min_length=1),
     ] = None
     related_risks: Annotated[
-        list[AssociatedRisk] | None,
-        Field(alias='related-risks', min_length=1),
+        list[AssociatedRisk] | None, Field(alias='related-risks', min_length=1)
     ] = None
     remarks: Annotated[
         str | None,
@@ -6280,23 +5898,16 @@ class Observation(OscalBaseModel):
             description='A human-readable description of this assessment observation.',
             title='Observation Description'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    methods: Annotated[list[StringDatatype | ObservationMethod], Field(min_length=1)]
+    types: Annotated[
+        list[TokenDatatype | ObservationType] | None, Field(min_length=1)
     ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    methods: Annotated[list[StringDatatype | Methods], Field(min_length=1)]
-    types: Annotated[list[TokenDatatype | Types] | None, Field(min_length=1)] = None
-    origins: Annotated[
-        list[AssessmentCommonOrigin] | None, Field(min_length=1)
-    ] = None
-    subjects: Annotated[
-        list[SubjectReference] | None,
-        Field(min_length=1),
-    ] = None
+    origins: Annotated[list[Origin] | None, Field(min_length=1)] = None
+    subjects: Annotated[list[SubjectReference] | None, Field(min_length=1)] = None
     relevant_evidence: Annotated[
-        list[RelevantEvidenceItem] | None,
+        list[ObservationRelevantEvidence] | None,
         Field(alias='relevant-evidence', min_length=1),
     ] = None
     collected: Annotated[
@@ -6319,6 +5930,100 @@ class Observation(OscalBaseModel):
             description='Additional commentary about the containing object.',
             title='Remarks'),
     ] = None
+
+
+class RiskLog(OscalBaseModel):
+    """
+    A log of all risk-related tasks taken.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    entries: Annotated[list[RiskLogEntry], Field(min_length=1)]
+
+
+class MappingCollectionDocument(OscalBaseModel):
+    model_config = ConfigDict(
+        extra='forbid')
+    field_schema: Annotated[
+        str | None,
+        Field(
+            alias='$schema',
+            description='A JSON Schema directive to bind a specific schema to its document instance.',
+            title='Schema Directive'),
+    ] = None
+    mapping_collection: Annotated[MappingCollection, Field(alias='mapping-collection')]
+
+
+class SystemSecurityPlan(OscalBaseModel):
+    """
+    A system security plan, such as those described in NIST SP 800-18.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this system security plan (SSP) elsewhere in this or other OSCAL instances. The locally defined UUID of the SSP can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance).This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='System Security Plan Universally Unique Identifier'),
+    ]
+    metadata: Metadata
+    import_profile: Annotated[ImportProfile, Field(alias='import-profile')]
+    system_characteristics: Annotated[
+        SystemCharacteristics, Field(alias='system-characteristics')
+    ]
+    system_implementation: Annotated[
+        SystemImplementation, Field(alias='system-implementation')
+    ]
+    control_implementation: Annotated[
+        SspControlImplementation, Field(alias='control-implementation')
+    ]
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
+
+
+class AssessmentPlan(OscalBaseModel):
+    """
+    An assessment plan, such as those provided by a FedRAMP assessor.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid')
+    uuid: Annotated[
+        str,
+        Field(
+            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment plan in this or other OSCAL instances. The locally defined UUID of the assessment plan can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
+            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
+            title='Assessment Plan Universally Unique Identifier'),
+    ]
+    metadata: Metadata
+    import_ssp: Annotated[ImportSsp, Field(alias='import-ssp')]
+    local_definitions: Annotated[
+        AssessmentPlanLocalDefinitions | None,
+        Field(
+            alias='local-definitions',
+            description='Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.',
+            title='Local Definitions'),
+    ] = None
+    terms_and_conditions: Annotated[
+        AssessmentPlanTermsAndConditions | None,
+        Field(
+            alias='terms-and-conditions',
+            description='Used to define various terms and conditions under which an assessment, described by the plan, can be performed. Each child part defines a different type of term or condition.',
+            title='Assessment Plan Terms and Conditions'),
+    ] = None
+    reviewed_controls: Annotated[ReviewedControls, Field(alias='reviewed-controls')]
+    assessment_subjects: Annotated[
+        list[AssessmentSubject]
+        | None,
+        Field(alias='assessment-subjects', min_length=1),
+    ] = None
+    assessment_assets: Annotated[
+        AssessmentAssets | None, Field(alias='assessment-assets')
+    ] = None
+    tasks: Annotated[list[Task] | None, Field(min_length=1)] = None
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
 
 
 class Risk(OscalBaseModel):
@@ -6354,31 +6059,24 @@ class Risk(OscalBaseModel):
             description='An summary of impact for how the risk affects the system.',
             title='Risk Statement'),
     ]
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     status: Annotated[
-        TokenDatatype | RiskStatus1,
+        TokenDatatype | RiskStatus,
         Field(
             description='Describes the status of the associated risk.',
             title='Risk Status'),
     ]
-    origins: Annotated[
-        list[AssessmentCommonOrigin] | None, Field(min_length=1)
-    ] = None
+    origins: Annotated[list[Origin] | None, Field(min_length=1)] = None
     threat_ids: Annotated[
-        list[ThreatId] | None,
-        Field(alias='threat-ids', min_length=1),
+        list[ThreatId] | None, Field(alias='threat-ids', min_length=1)
     ] = None
-    characterizations: Annotated[
-        list[Characterization] | None,
-        Field(min_length=1),
-    ] = None
+    characterizations: Annotated[list[Characterization] | None, Field(min_length=1)] = (
+        None
+    )
     mitigating_factors: Annotated[
-        list[MitigatingFactor] | None, Field(alias='mitigating-factors', min_length=1)
+        list[RiskMitigatingFactor] | None,
+        Field(alias='mitigating-factors', min_length=1),
     ] = None
     deadline: Annotated[
         AwareDatetime | None,
@@ -6387,9 +6085,7 @@ class Risk(OscalBaseModel):
 
             title='Risk Resolution Deadline'),
     ] = None
-    remediations: Annotated[
-        list[Response] | None, Field(min_length=1)
-    ] = None
+    remediations: Annotated[list[Response] | None, Field(min_length=1)] = None
     risk_log: Annotated[
         RiskLog | None,
         Field(
@@ -6444,40 +6140,27 @@ class Result(OscalBaseModel):
 
             title='end field'),
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
     local_definitions: Annotated[
-        LocalDefinitions2 | None,
+        ResultLocalDefinitions | None,
         Field(
             alias='local-definitions',
             description='Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.',
             title='Local Definitions'),
     ] = None
-    reviewed_controls: Annotated[
-        ReviewedControls,
-        Field(alias='reviewed-controls'),
-    ]
-    attestations: Annotated[list[Attestation] | None, Field(min_length=1)] = None
+    reviewed_controls: Annotated[ReviewedControls, Field(alias='reviewed-controls')]
+    attestations: Annotated[list[ResultAttestation] | None, Field(min_length=1)] = None
     assessment_log: Annotated[
-        AssessmentLog | None,
+        ResultAssessmentLog | None,
         Field(
             alias='assessment-log',
             description='A log of all assessment-related actions taken.',
             title='Assessment Log'),
     ] = None
-    observations: Annotated[
-        list[Observation] | None, Field(min_length=1)
-    ] = None
-    risks: Annotated[
-        list[Risk] | None, Field(min_length=1)
-    ] = None
-    findings: Annotated[
-        list[Finding] | None, Field(min_length=1)
-    ] = None
+    observations: Annotated[list[Observation] | None, Field(min_length=1)] = None
+    risks: Annotated[list[Risk] | None, Field(min_length=1)] = None
+    findings: Annotated[list[Finding] | None, Field(min_length=1)] = None
     remarks: Annotated[
         str | None,
         Field(
@@ -6501,45 +6184,16 @@ class PlanOfActionAndMilestones(OscalBaseModel):
             title='POA&M Universally Unique Identifier'),
     ]
     metadata: Metadata
-    import_ssp: Annotated[
-        ImportSsp | None, Field(alias='import-ssp')
-    ] = None
-    system_id: Annotated[
-        SystemId | None, Field(alias='system-id')
-    ] = None
+    import_ssp: Annotated[ImportSsp | None, Field(alias='import-ssp')] = None
+    system_id: Annotated[SystemId | None, Field(alias='system-id')] = None
     local_definitions: Annotated[
-        PoamLocalDefinitions | None, Field(alias='local-definitions')
+        LocalDefinitions | None, Field(alias='local-definitions')
     ] = None
-    observations: Annotated[
-        list[Observation] | None, Field(min_length=1)
-    ] = None
-    risks: Annotated[
-        list[Risk] | None, Field(min_length=1)
-    ] = None
-    findings: Annotated[
-        list[Finding] | None, Field(min_length=1)
-    ] = None
-    poam_items: Annotated[
-        list[PoamItem], Field(alias='poam-items', min_length=1)
-    ]
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
-    ] = None
-
-
-class MappingCollectionDocument(OscalBaseModel):
-    model_config = ConfigDict(
-        extra='forbid')
-    field_schema: Annotated[
-        str | None,
-        Field(
-            alias='$schema',
-            description='A JSON Schema directive to bind a specific schema to its document instance.',
-            title='Schema Directive'),
-    ] = None
-    mapping_collection: Annotated[
-        MappingCollection, Field(alias='mapping-collection')
-    ]
+    observations: Annotated[list[Observation] | None, Field(min_length=1)] = None
+    risks: Annotated[list[Risk] | None, Field(min_length=1)] = None
+    findings: Annotated[list[Finding] | None, Field(min_length=1)] = None
+    poam_items: Annotated[list[PoamItem], Field(alias='poam-items', min_length=1)]
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
 
 
 class AssessmentPlanDocument(OscalBaseModel):
@@ -6552,9 +6206,7 @@ class AssessmentPlanDocument(OscalBaseModel):
             description='A JSON Schema directive to bind a specific schema to its document instance.',
             title='Schema Directive'),
     ] = None
-    assessment_plan: Annotated[
-        AssessmentPlan, Field(alias='assessment-plan')
-    ]
+    assessment_plan: Annotated[AssessmentPlan, Field(alias='assessment-plan')]
 
 
 class PlanOfActionAndMilestonesDocument(OscalBaseModel):
@@ -6568,75 +6220,23 @@ class PlanOfActionAndMilestonesDocument(OscalBaseModel):
             title='Schema Directive'),
     ] = None
     plan_of_action_and_milestones: Annotated[
-        PlanOfActionAndMilestones,
-        Field(alias='plan-of-action-and-milestones'),
+        PlanOfActionAndMilestones, Field(alias='plan-of-action-and-milestones')
     ]
 
 
-class ComponentDefinition(OscalBaseModel):
-    """
-    A collection of component descriptions, which may optionally be grouped by capability.
-    """
-
+class SystemSecurityPlanDocument(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
-    uuid: Annotated[
-        str,
+    field_schema: Annotated[
+        str | None,
         Field(
-            description='Provides a globally unique means to identify a given component definition instance.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='Component Definition Universally Unique Identifier'),
-    ]
-    metadata: Metadata
-    import_component_definitions: Annotated[
-        list[ImportComponentDefinition] | None,
-        Field(alias='import-component-definitions', min_length=1),
+            alias='$schema',
+            description='A JSON Schema directive to bind a specific schema to its document instance.',
+            title='Schema Directive'),
     ] = None
-    components: Annotated[
-        list[DefinedComponent] | None,
-        Field(min_length=1),
-    ] = None
-    capabilities: Annotated[
-        list[Capability] | None,
-        Field(min_length=1),
-    ] = None
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
-    ] = None
-
-
-class SystemSecurityPlan(OscalBaseModel):
-    """
-    A system security plan, such as those described in NIST SP 800-18.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid')
-    uuid: Annotated[
-        str,
-        Field(
-            description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this system security plan (SSP) elsewhere in this or other OSCAL instances. The locally defined UUID of the SSP can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance).This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
-            pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
-            title='System Security Plan Universally Unique Identifier'),
+    system_security_plan: Annotated[
+        SystemSecurityPlan, Field(alias='system-security-plan')
     ]
-    metadata: Metadata
-    import_profile: Annotated[
-        ImportProfile, Field(alias='import-profile')
-    ]
-    system_characteristics: Annotated[
-        SystemCharacteristics,
-        Field(alias='system-characteristics'),
-    ]
-    system_implementation: Annotated[
-        SystemImplementation, Field(alias='system-implementation')
-    ]
-    control_implementation: Annotated[
-        SspControlImplementation,
-        Field(alias='control-implementation'),
-    ]
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
-    ] = None
 
 
 class AssessmentResults(OscalBaseModel):
@@ -6656,47 +6256,14 @@ class AssessmentResults(OscalBaseModel):
     metadata: Metadata
     import_ap: Annotated[ImportAp, Field(alias='import-ap')]
     local_definitions: Annotated[
-        LocalDefinitions1 | None,
+        AssessmentResultsLocalDefinitions | None,
         Field(
             alias='local-definitions',
             description='Used to define data objects that are used in the assessment plan, that do not appear in the referenced SSP.',
             title='Local Definitions'),
     ] = None
     results: Annotated[list[Result], Field(min_length=1)]
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
-    ] = None
-
-
-class ComponentDefinitionDocument(OscalBaseModel):
-    model_config = ConfigDict(
-        extra='forbid')
-    field_schema: Annotated[
-        str | None,
-        Field(
-            alias='$schema',
-            description='A JSON Schema directive to bind a specific schema to its document instance.',
-            title='Schema Directive'),
-    ] = None
-    component_definition: Annotated[
-        ComponentDefinition,
-        Field(alias='component-definition'),
-    ]
-
-
-class SystemSecurityPlanDocument(OscalBaseModel):
-    model_config = ConfigDict(
-        extra='forbid')
-    field_schema: Annotated[
-        str | None,
-        Field(
-            alias='$schema',
-            description='A JSON Schema directive to bind a specific schema to its document instance.',
-            title='Schema Directive'),
-    ] = None
-    system_security_plan: Annotated[
-        SystemSecurityPlan, Field(alias='system-security-plan')
-    ]
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
 
 
 class AssessmentResultsDocument(OscalBaseModel):
@@ -6709,35 +6276,7 @@ class AssessmentResultsDocument(OscalBaseModel):
             description='A JSON Schema directive to bind a specific schema to its document instance.',
             title='Schema Directive'),
     ] = None
-    assessment_results: Annotated[
-        AssessmentResults, Field(alias='assessment-results')
-    ]
-
-
-class CatalogDocument(OscalBaseModel):
-    model_config = ConfigDict(
-        extra='forbid')
-    field_schema: Annotated[
-        str | None,
-        Field(
-            alias='$schema',
-            description='A JSON Schema directive to bind a specific schema to its document instance.',
-            title='Schema Directive'),
-    ] = None
-    catalog: Catalog
-
-
-class ProfileDocument(OscalBaseModel):
-    model_config = ConfigDict(
-        extra='forbid')
-    field_schema: Annotated[
-        str | None,
-        Field(
-            alias='$schema',
-            description='A JSON Schema directive to bind a specific schema to its document instance.',
-            title='Schema Directive'),
-    ] = None
-    profile: Profile
+    assessment_results: Annotated[AssessmentResults, Field(alias='assessment-results')]
 
 
 class Catalog(OscalBaseModel):
@@ -6756,23 +6295,14 @@ class Catalog(OscalBaseModel):
     ]
     metadata: Metadata
     params: Annotated[
-        list[
-            Parameter1
-            | Parameter2
-        ]
-        | None,
-        Field(min_length=1),
+        list[Parameter] | None, Field(min_length=1)
     ] = None
-    controls: Annotated[
-        list[Control] | None, Field(min_length=1)
-    ] = None
+    controls: Annotated[list[Control] | None, Field(min_length=1)] = None
     groups: Annotated[
-        list[CatalogGroupWithGroups | CatalogGroupWithControls] | None,
+        list[CatalogGroup] | None,
         Field(min_length=1),
     ] = None
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
-    ] = None
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
 
 
 class CatalogGroupWithGroups(OscalBaseModel):
@@ -6805,26 +6335,18 @@ class CatalogGroupWithGroups(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[
-            Parameter1
-            | Parameter2
-        ]
-        | None,
-        Field(min_length=1),
+        list[Parameter] | None, Field(min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    parts: Annotated[
-        list[Part] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    parts: Annotated[list[Part] | None, Field(min_length=1)] = None
     groups: Annotated[
-        list[CatalogGroupWithGroups | CatalogGroupWithControls] | None,
+        list[CatalogGroup] | None,
         Field(min_length=1),
     ] = None
+
+
+CatalogGroup: TypeAlias = CatalogGroupWithControls | CatalogGroupWithGroups
 
 
 class Profile(OscalBaseModel):
@@ -6843,25 +6365,19 @@ class Profile(OscalBaseModel):
     ]
     metadata: Metadata
     imports: Annotated[
-        list[Import1 | Import2],
-        Field(min_length=1),
+        list[Import], Field(min_length=1)
     ]
     merge: Annotated[
-        MergeFlat
-        | MergeAsIs
-        | MergeCustom
-        | None,
+        Merge | None,
         Field(
             description='Provides structuring directives that instruct how controls are organized after profile resolution.',
             title='Merge Controls'),
     ] = None
     modify: Modify | None = None
-    back_matter: Annotated[
-        BackMatter | None, Field(alias='back-matter')
-    ] = None
+    back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
 
 
-class Custom(OscalBaseModel):
+class MergeCustom(OscalBaseModel):
     """
     Provides an alternate grouping structure that selected controls will be placed in.
     """
@@ -6869,20 +6385,16 @@ class Custom(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     groups: Annotated[
-        list[ProfileGroup1 | ProfileGroup2] | None,
+        list[ProfileGroup] | None,
         Field(min_length=1),
     ] = None
     insert_controls: Annotated[
-        list[
-            InsertControls1
-            | InsertControls2
-        ]
-        | None,
+        list[InsertControls] | None,
         Field(alias='insert-controls', min_length=1),
     ] = None
 
 
-class MergeCustom(OscalBaseModel):
+class MergeWithCustom(OscalBaseModel):
     """
     Provides structuring directives that instruct how controls are organized after profile resolution.
     """
@@ -6890,21 +6402,23 @@ class MergeCustom(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     combine: Annotated[
-        dict[str, Any] | None,
+        MergeCombine | None,
         Field(
             description='A Combine element defines how to resolve duplicate instances of the same control (e.g., controls with the same ID).',
-            max_length=0,
             title='Combination Rule'),
     ] = None
     custom: Annotated[
-        Custom,
+        MergeCustom,
         Field(
             description='Provides an alternate grouping structure that selected controls will be placed in.',
             title='Custom Grouping'),
     ]
 
 
-class ProfileGroup1(OscalBaseModel):
+Merge: TypeAlias = MergeWithAsIs | MergeWithCustom | MergeWithFlat
+
+
+class ProfileGroupWithGroups(OscalBaseModel):
     """
     A group of (selected) controls or of groups of controls.
     """
@@ -6934,42 +6448,76 @@ class ProfileGroup1(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[
-            Parameter1
-            | Parameter2
-        ]
-        | None,
-        Field(min_length=1),
+        list[Parameter] | None, Field(min_length=1)
     ] = None
-    props: Annotated[
-        list[Property] | None, Field(min_length=1)
-    ] = None
-    links: Annotated[
-        list[Link] | None, Field(min_length=1)
-    ] = None
-    parts: Annotated[
-        list[Part] | None, Field(min_length=1)
-    ] = None
+    props: Annotated[list[Property] | None, Field(min_length=1)] = None
+    links: Annotated[list[Link] | None, Field(min_length=1)] = None
+    parts: Annotated[list[Part] | None, Field(min_length=1)] = None
     groups: Annotated[
-        list[ProfileGroup1 | ProfileGroup2] | None,
+        list[ProfileGroup] | None,
         Field(min_length=1),
     ] = None
+
+
+ProfileGroup: TypeAlias = ProfileGroupWithGroups | ProfileGroupWithInsertControls
+
+
+class CatalogDocument(OscalBaseModel):
+    model_config = ConfigDict(
+        extra='forbid')
+    field_schema: Annotated[
+        str | None,
+        Field(
+            alias='$schema',
+            description='A JSON Schema directive to bind a specific schema to its document instance.',
+            title='Schema Directive'),
+    ] = None
+    catalog: Catalog
+
+
+class ProfileDocument(OscalBaseModel):
+    model_config = ConfigDict(
+        extra='forbid')
+    field_schema: Annotated[
+        str | None,
+        Field(
+            alias='$schema',
+            description='A JSON Schema directive to bind a specific schema to its document instance.',
+            title='Schema Directive'),
+    ] = None
+    profile: Profile
 
 
 class OscalDocument(
-    RootModel[CatalogDocument | MappingCollectionDocument | ProfileDocument | ComponentDefinitionDocument | SystemSecurityPlanDocument | AssessmentPlanDocument | AssessmentResultsDocument | PlanOfActionAndMilestonesDocument]
+    RootModel[
+        CatalogDocument
+        | MappingCollectionDocument
+        | ProfileDocument
+        | ComponentDefinitionDocument
+        | SystemSecurityPlanDocument
+        | AssessmentPlanDocument
+        | AssessmentResultsDocument
+        | PlanOfActionAndMilestonesDocument
+    ]
 ):
-    root: CatalogDocument | MappingCollectionDocument | ProfileDocument | ComponentDefinitionDocument | SystemSecurityPlanDocument | AssessmentPlanDocument | AssessmentResultsDocument | PlanOfActionAndMilestonesDocument
+    root: (
+        CatalogDocument
+        | MappingCollectionDocument
+        | ProfileDocument
+        | ComponentDefinitionDocument
+        | SystemSecurityPlanDocument
+        | AssessmentPlanDocument
+        | AssessmentResultsDocument
+        | PlanOfActionAndMilestonesDocument
+    )
 
 
 AssessmentPart.model_rebuild()
 Part.model_rebuild()
 Control.model_rebuild()
 Task.model_rebuild()
-CatalogDocument.model_rebuild()
-ProfileDocument.model_rebuild()
 Catalog.model_rebuild()
 CatalogGroupWithGroups.model_rebuild()
 Profile.model_rebuild()
-Custom.model_rebuild()
-ProfileGroup1.model_rebuild()
+MergeCustom.model_rebuild()
+ProfileGroupWithGroups.model_rebuild()

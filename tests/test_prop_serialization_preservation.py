@@ -38,6 +38,7 @@ Example counts come from the active Hypothesis profile (``ci``:
 from __future__ import annotations
 
 import functools
+import importlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,6 +56,8 @@ from strategies import (
     rlink_strategy,
     uuids,
 )
+from support.scripts import load_script
+from support.spec_artifact import ensure_spec_artifact
 
 from oscal_bindings import (
     OscalAccessError,
@@ -78,14 +81,22 @@ from oscal_bindings import (
     validate_oscal,
 )
 from oscal_bindings.models import (
-    Algorithm,
+    BackMatterResource,
+    BackMatterResourceRlink,
     Hash,
+    HashAlgorithm,
     Link,
     OscalDocument,
     Property,
-    Resource,
-    Rlink,
 )
+from oscal_bindings.v1 import models
+
+# ``oscal_bindings.v1.extensions`` re-exports the function ``validate_element``
+# under the module's own name, so attribute access on the package yields the
+# function. Import the module by its dotted path to reach its converter.
+_ve = importlib.import_module("oscal_bindings.v1.extensions.validate_element")
+_pascal_to_kebab = _ve._pascal_to_kebab  # noqa: SLF001
+_ELEMENT_MAP = _ve._ELEMENT_MAP  # noqa: SLF001
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -448,7 +459,7 @@ def test_model_validate_rejects_name_keyed_input_at_depth(
 
 # Allow-listed leaf types that carry at least one alias-differing field.
 _LEAF_MODELS_WITH_ALIASES: dict[str, type[BaseModel]] = {
-    "rlink": Rlink,
+    "back-matter-resource-rlink": BackMatterResourceRlink,
     "link": Link,
     "property": Property,
 }
@@ -501,22 +512,22 @@ _rlink_lists = st.lists(rlink_models, min_size=1, max_size=4).filter(
 
 @given(data=st.data(), rlinks=_rlink_lists, uuid=uuids)
 def test_validate_element_rejects_name_keyed_nested_rlink(
-    data: st.DataObject, rlinks: list[Rlink], uuid: str
+    data: st.DataObject, rlinks: list[BackMatterResourceRlink], uuid: str
 ) -> None:
     """Feature: oscal-default-serialization-fix, Property 2: ``validate_element``
     rejects a Python field-name key nested at ``resource.rlinks[i]``.
 
     **Validates: Requirements 3.4**
     """
-    element = Resource.model_validate({"uuid": uuid, "rlinks": rlinks}).model_dump(
-        by_alias=True, exclude_none=True
-    )
+    element = BackMatterResource.model_validate(
+        {"uuid": uuid, "rlinks": rlinks}
+    ).model_dump(by_alias=True, exclude_none=True)
     with_media = [i for i, r in enumerate(rlinks) if r.media_type is not None]
     i = data.draw(st.sampled_from(with_media), label="i")
     nested = element["rlinks"][i]
     nested["media_type"] = nested.pop("media-type")
 
-    result = validate_element(element, "resource")
+    result = validate_element(element, "back-matter-resource")
     path = f"rlinks.{i}.media_type"
     assert result.valid is False, f"resource: accepted {path}. {ROOT_CAUSE_5}"
     assert _element_has_extra_forbidden(result, path), (
@@ -571,13 +582,46 @@ def test_supported_element_types_match_pre_fix_snapshot() -> None:
     assert "root-model" in current  # pre-existing quirk, preserved on purpose
 
 
+# Manifest kinds that generate a model class. An ``enum`` entry generates an
+# Enum class, and a ``union`` entry generates a type alias; neither is an
+# element type.
+_ELEMENT_KINDS = frozenset({"object", "document", "document-union", "single-or-many"})
+
+
+def test_element_types_are_manifest_class_names() -> None:
+    """Each element-type string is the kebab-case form of a manifest name.
+
+    The kebab-case form comes from ``validate_element``'s own converter. The one
+    exception is ``root-model``: models.py imports pydantic's ``RootModel``, and
+    the element map keeps it (see the snapshot test above). It is not an OSCAL
+    type, so the manifest has no entry for it.
+    """
+    pin = load_script("spec_artifact")
+    manifest = load_script("manifest").load_validated_manifest(
+        pin.artifact_paths(ensure_spec_artifact())
+    )
+    kinds = {entry["name"]: entry["kind"] for entry in manifest["types"]}
+    class_names = sorted(n for n, k in kinds.items() if k in _ELEMENT_KINDS)
+    kebab = {_pascal_to_kebab(n): n for n in class_names}
+    assert len(kebab) == len(class_names), "two manifest names share a kebab form"
+
+    assert _ELEMENT_MAP["root-model"] is RootModel
+    current = set(get_supported_element_types()) - {"root-model"}
+    assert current == set(kebab), (
+        f"not from a manifest name: {sorted(current - set(kebab))}; "
+        f"manifest names without an element type: {sorted(set(kebab) - current)}"
+    )
+    for element_type, name in kebab.items():
+        assert _ELEMENT_MAP[element_type] is getattr(models, name), element_type
+
+
 # --- Builders with valid arguments (3.8) -------------------------------------
 
 
 @given(hash_strategy())
 def test_make_hash_equals_pre_fix_construction(kwargs: dict[str, Any]) -> None:
     """**Validates: Requirements 3.8**"""
-    algorithm = Algorithm(kwargs.get("algorithm", Algorithm.SHA_256))
+    algorithm = HashAlgorithm(kwargs.get("algorithm", HashAlgorithm.SHA_256))
     expected = Hash.model_validate({"algorithm": algorithm, "value": kwargs["value"]})
     assert make_hash(**kwargs) == expected
 
@@ -585,7 +629,7 @@ def test_make_hash_equals_pre_fix_construction(kwargs: dict[str, Any]) -> None:
 @given(rlink_strategy())
 def test_make_rlink_equals_pre_fix_construction(kwargs: dict[str, Any]) -> None:
     """**Validates: Requirements 3.8**"""
-    expected = Rlink.model_validate(
+    expected = BackMatterResourceRlink.model_validate(
         {
             "href": kwargs["href"],
             "media-type": kwargs.get("media_type"),
@@ -603,7 +647,7 @@ def test_make_resource_equals_pre_fix_construction(kwargs: dict[str, Any]) -> No
     **Validates: Requirements 3.8**
     """
     actual = make_resource(**kwargs)
-    expected = Resource.model_validate(
+    expected = BackMatterResource.model_validate(
         {
             "uuid": kwargs.get("uuid", actual.uuid),
             "title": kwargs.get("title"),

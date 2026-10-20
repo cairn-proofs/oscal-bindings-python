@@ -2,60 +2,85 @@
 
 ## 1. Code Generation (build-time)
 
-Triggered by `hatch run generate`. This is the only supported way to change `v1/models.py`.
+Triggered by `hatch run generate`. This is the only supported way to change `v1/models.py`. Every type name comes from
+the naming manifest (`names.json`) of the pinned spec artifact. The binding holds no naming rule for a manifest type.
 
 ```mermaid
 flowchart TD
-    A["hatch run generate"] --> B["datamodel-codegen<br/>--input schemas/1.2.3/oscal_complete_schema.json<br/>--output src/oscal_bindings/v1/models.py<br/>--collapse-root-models --use-annotated<br/>--field-constraints --reuse-model<br/>--target-python-version 3.11 --use-schema-description"]
-    B --> C["raw v1/models.py<br/>(Model, Model1-8, OscalComplete* names,<br/>RootModel scalars, invalid patterns)"]
-    C --> D["python scripts/postprocess_models.py<br/>--schema schemas/1.2.3/oscal_complete_schema.json<br/>--models src/oscal_bindings/v1/models.py"]
-    D --> E["clean v1/models.py"]
-    D -->|"guard trips"| F["non-zero exit,<br/>file NOT written"]
+    A["hatch run generate"] --> P["scripts/spec_artifact.py pin<br/>0.2.0+oscal.1.2.3 (sha256)<br/>cache: tests/.corpus_cache/"]
+    P --> M["scripts/manifest.py<br/>validate names.json"]
+    M -->|"invalid"| X["non-zero exit,<br/>nothing written"]
+    M --> H["python scripts/hoist_names.py<br/>vendored schemas/1.2.3/oscal_complete_schema.json<br/>→ build/codegen/oscal_complete_schema.json"]
+    H -->|"merge or enum check fails"| X
+    H --> B["datamodel-codegen<br/>--input build/codegen/oscal_complete_schema.json<br/>--output build/codegen/models.py<br/>--collapse-root-models --use-annotated<br/>--field-constraints --base-class ...OscalBaseModel<br/>--formatters black isort"]
+    B --> C["raw build/codegen/models.py<br/>(manifest-named classes,<br/>RootModel scalars, invalid patterns)"]
+    C --> D["python scripts/postprocess_models.py<br/>--schema schemas/1.2.3/oscal_complete_schema.json<br/>--models build/codegen/models.py<br/>--output src/oscal_bindings/v1/models.py"]
+    D --> E["final v1/models.py<br/>(temp file + os.replace)"]
+    D -->|"guard trips"| F["non-zero exit,<br/>v1/models.py NOT written"]
 ```
 
-Both paths are passed explicitly. Each argument also carries its own independent default (`DEFAULT_MODELS_PATH`, `DEFAULT_SCHEMA_PATH` built from `ACTIVE_SCHEMA_RELEASE`), so a bare or one-argument invocation resolves correctly. A missing path exits non-zero naming it.
+### 1a. Hoist (`scripts/hoist_names.py`)
 
-`postprocess_models.py` runs these phases in order (`main()`):
+1. `load_validated_manifest` (`scripts/manifest.py`) checks `names.json` in order: the manifest JSON Schema of the same
+   artifact (`jsonschema-rs`), the format version and OSCAL release, `schema.sha256` against the vendored schema bytes,
+   then unique names, pointers that occur once and resolve, and type references that name an entry. It raises
+   `ManifestError` with every failure.
+2. `hoist` copies the subschema at the first site of each entry to `definitions/<Name>` and replaces each site with a
+   `$ref`, deepest sites first.
+3. For an entry with more than one site, the bodies must be equal (annotations ignored). A mismatch raises `HoistError`
+   and names both sites.
+4. Each `$ref` to an old definition key that was a site is rewritten, and the old key is removed. Scalar definitions
+   keep their keys.
+5. A closed-enum site (`enum` branch of an `allOf` with a base datatype) replaces the whole `allOf`. Each enum value
+   must be valid for the base datatype. An open-enum site replaces only the `enum` branch of its `anyOf`.
+6. Property `title`/`description` stay beside the `$ref`, and a union branch without a `description` takes that of its
+   union, so fields and variant classes keep their docs.
 
-1. **`collapse_scalar_root_models`** — scalar `RootModel[...]` classes → `TypeAlias`; unions and `PRESERVE_AS_ROOTMODEL = {Model, Mappings}` kept as `RootModel`.
-2. **`ensure_annotated_import`** — guarantees `Annotated` is imported.
-3. **`fix_email_str_patterns`** / **`fix_non_string_patterns`** — strip `pattern=` constraints from `EmailStr`, `AwareDatetime`, `AnyUrl`, and numeric fields (regex patterns are invalid there).
-4. **`derive_document_renames` + guards + `rename_classes`** — derive the wrapper rename map from the generated source's own content (see below), check it against the schema's document-type count, then apply it longest-key-first.
-5. **`rename_root_model`** — standalone `Model` → `OscalDocument` (carefully avoiding `BaseModel`/`RootModel`/`ConfigDict`).
-6. **`rename_classes(VARIANT_RENAMES)`** — merge/group numbered variants → descriptive names.
-7. **`build_namespace_renames(schema_path)` + `rename_classes`** — strip `OscalComplete...` prefixes using schema definitions; apply `COLLISION_OVERRIDES`; handle numbered variants; sort by length desc to avoid partial replacements.
-8. **Cleanup** — drop unused `RootModel` import; collapse 4+ blank lines.
-9. **`find_duplicate_class_definitions` → `report_collisions`** — final gate: any name defined twice in the fully renamed source is an uncovered collision; report *all* of them and exit non-zero without writing.
+The output is deterministic: two runs give byte-identical copies.
 
-Idempotent: re-running produces the same output for the same schema.
+### 1b. Post-process (`scripts/postprocess_models.py`)
 
-### 1a. Wrapper-name derivation and guards
+`postprocess()` runs these steps in order:
 
-```mermaid
-flowchart TD
-    A["iter_class_blocks(content)"] --> B{"class has the<br/>$schema field?"}
-    B -->|no| A
-    B -->|yes| C{"body fields<br/>besides $schema"}
-    C -->|">1"| D["raise AmbiguousWrapperError<br/>→ report FIRST offender, exit 1<br/>(remaining candidates unscanned)"]
-    C -->|"0"| E["union root (Model) — skip, not an error"]
-    C -->|"1"| F["renames[class] = PascalCase(body_field) + 'Document'"]
-    F --> G{"len(renames) ==<br/>len(schema['oneOf'])?"}
-    G -->|no| H["report_wrapper_count_mismatch(both counts), exit 1"]
-    G -->|"yes / no oneOf"| I["apply renames"]
-```
+1. **`add_single_or_many`** — `MappingCollectionMappings` as `RootModel[Mapping | list[Mapping]]`, replacing the inline
+   union of the field.
+2. **Phase 1** — `collapse_scalar_root_models` (scalar `RootModel[...]` → `Annotated` alias, manifest root models
+   kept), `ensure_annotated_import`, `fix_email_str_patterns` / `fix_non_string_patterns` (strip `pattern=` from
+   `EmailStr`, `AwareDatetime`, `AnyUrl`, and numeric fields).
+3. **`scalar_renames`** — each scalar alias is named from its definition key without the `oscal-complete-oscal-<module>:`
+   prefix (`LocationUuid`). A target name that is not PascalCase (`[A-Z][A-Za-z0-9]*`), or that a module-level import
+   binds, is a failure.
+4. **`rename_document_union`** — the root `RootModel` gets its manifest name, `OscalDocument`.
+5. **`add_union_aliases`** — one `TypeAlias` per `union` entry, in manifest order, after the last variant class
+   (`CatalogGroup: TypeAlias = CatalogGroupWithControls | CatalogGroupWithGroups`). `replace_inline_unions` replaces
+   each inline union of exactly the variant set with the alias.
+6. **Cleanup** — drop an unused `RootModel` import, collapse 4+ blank lines.
+7. **`guard_failures`** — three guards, each reporting every offender: each manifest name is defined once at module
+   level in the form of its kind; each other module-level name is a scalar alias named for a scalar definition of the
+   vendored schema (`scalar_names`); no name is defined twice, no scalar alias has a manifest name, and no manifest
+   name or scalar alias is bound by a module-level import (`import_bindings`). Any failure raises `PostprocessError`.
 
-Names track content, not position: reordering the schema's document types reorders the generated ordinals but not the derived names. Ambiguity fails **fast** (the scan's own premise is void); collisions **accumulate** (each is an independent finding a maintainer wants in one report).
+`main` reads the codegen output at `--models` (`build/codegen/models.py` in `generate`) and writes the completed module
+to `--output` (`src/oscal_bindings/v1/models.py`) through a temp file in the same directory and `os.replace`. On any
+failure nothing is written to `--output`, so the committed module stays as it was. `--schema` and `--models` each carry
+their own default (`DEFAULT_SCHEMA_PATH` from `ACTIVE_SCHEMA_RELEASE`, `DEFAULT_MODELS_PATH`); `--output` defaults to
+`--models`. `load_manifest(schema_path)` requires the manifest to record the sha256 of `--schema`. A missing path exits
+non-zero naming it. Re-running `hatch run generate` gives the same output for the same schema and manifest.
 
-## 1b. Refreshing to a new OSCAL release
+## 1c. Refreshing to a new OSCAL release
 
 Bundles are vendored one directory per release under `schemas/<release>/`, retaining the NIST filenames. `schemas/1.2.2/` and `schemas/1.2.3/` are both present; the *active* one is whichever path is passed — there is no glob and no "newest wins", so adding a bundle directory changes nothing on its own.
 
 1. Add the new release's schema set under `schemas/<release>/`.
-2. Point the Active_Schema_Bundle at it: the `--input`/`--schema` paths in the `generate` script, and `ACTIVE_SCHEMA_RELEASE` in `scripts/postprocess_models.py`.
-3. Update `__oscal_schema_version__` in `src/oscal_bindings/v1/__init__.py` to the new release (a test asserts it against the bundle's schema `$id`).
-4. Run `hatch run generate` and review the `v1/models.py` diff as schema-driven change only.
-5. Add any newly surfaced collisions to `COLLISION_OVERRIDES` deliberately, guided by the collision report.
-6. Run the suite. Within OSCAL 1.x the package name does **not** change — the refresh regenerates `v1` in place.
+2. Move the pin in `scripts/spec_artifact.py` (version and sha256 together) to a spec artifact of the new release. Its
+   manifest must record the sha256 of the new vendored schema. The hoist reads the release from the pin.
+3. Point the `--schema` path in the `generate` script and `ACTIVE_SCHEMA_RELEASE` in `scripts/postprocess_models.py`
+   at the new release.
+4. Update `__oscal_schema_version__` in `src/oscal_bindings/v1/__init__.py` to the new release (a test asserts it against the bundle's schema `$id`).
+5. Run `hatch run generate` and review the `v1/models.py` diff as schema-driven change only. If a guard fails, fix the
+   manifest in the store. Never add a rename to the post-processor.
+6. Run the suite.
+   Within OSCAL 1.x the package name does **not** change — the refresh regenerates `v1` in place.
 
 ## 2. Parsing a Document (runtime)
 
@@ -110,15 +135,15 @@ sequenceDiagram
     participant R as make_resource
     participant L as make_rlink
     participant H as make_hash
-    C->>H: make_hash(digest)          %% default Algorithm.SHA_256
+    C->>H: make_hash(digest)          %% default HashAlgorithm.SHA_256
     H-->>C: Hash
     C->>L: make_rlink(href, media_type=, hashes=[Hash])
-    L->>L: Rlink.model_validate({"href":..,"media-type":..,"hashes":..})
-    L-->>C: Rlink
-    C->>R: make_resource(title=, description=, rlinks=[Rlink])
+    L->>L: BackMatterResourceRlink(href=.., media_type=.., hashes=..)
+    L-->>C: BackMatterResourceRlink
+    C->>R: make_resource(title=, description=, rlinks=[BackMatterResourceRlink])
     R->>R: uuid = uuid4() if not provided
-    R->>R: if document_ids: set post-construction
-    R-->>C: Resource (validated)
+    R->>R: BackMatterResource(uuid=.., ..., document_ids=..)
+    R-->>C: BackMatterResource (validated)
 ```
 
 ## 5. Element-level Validation

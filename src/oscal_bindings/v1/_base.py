@@ -1,9 +1,9 @@
 """Hand-written base class for every generated OSCAL object model.
 
 `datamodel-codegen --base-class` makes each generated object model in
-`oscal_bindings.v1.models` inherit from `OscalBaseModel`. The two preserved
-`RootModel`s (`OscalDocument`, `Mappings`) don't; their serialization delegates
-to children that do. The base gives every model valid OSCAL output by default:
+`oscal_bindings.v1.models` inherit from `OscalBaseModel`. The two `RootModel`s
+(`OscalDocument`, `MappingCollectionMappings`) don't; their serialization
+delegates to children that do. The base gives every model valid OSCAL output by default:
 
 - Serialization uses OSCAL (alias) keys on every path: `model_dump*()`,
   `pydantic_core.to_json`, and `TypeAdapter.dump_*`. Pass `by_alias=False`
@@ -11,8 +11,8 @@ to children that do. The base gives every model valid OSCAL output by default:
 - None-valued fields are always omitted, because OSCAL forbids `null`.
   `exclude_none=False` has no effect.
 - Keyword construction accepts Python field names as well as aliases, e.g.
-  `Rlink(href=..., media_type=...)`. Validation (`model_validate*`, the parse
-  functions) stays alias-only.
+  `BackMatterResourceRlink(href=..., media_type=...)`. Validation
+  (`model_validate*`, the parse functions) stays alias-only.
 
 This module imports only `pydantic` and the standard library so that
 `models.py -> _base` can't form an import cycle.

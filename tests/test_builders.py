@@ -8,7 +8,13 @@ import pytest
 from pydantic import ValidationError
 
 from oscal_bindings import make_hash, make_resource, make_rlink
-from oscal_bindings.models import Algorithm, DocumentId, Hash, Resource, Rlink
+from oscal_bindings.models import (
+    BackMatterResource,
+    BackMatterResourceRlink,
+    DocumentId,
+    Hash,
+    HashAlgorithm,
+)
 
 UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
@@ -20,26 +26,26 @@ class TestMakeHash:
     def test_default_algorithm_is_sha256(self):
         h = make_hash(DIGEST)
         assert isinstance(h, Hash)
-        assert h.algorithm == Algorithm.SHA_256
+        assert h.algorithm == HashAlgorithm.SHA_256
         assert h.value == DIGEST
 
     def test_algorithm_by_enum(self):
-        h = make_hash(DIGEST, algorithm=Algorithm.SHA_512)
-        assert h.algorithm == Algorithm.SHA_512
+        h = make_hash(DIGEST, algorithm=HashAlgorithm.SHA_512)
+        assert h.algorithm == HashAlgorithm.SHA_512
 
     def test_algorithm_by_string(self):
         h = make_hash(DIGEST, algorithm="SHA-384")
-        assert h.algorithm == Algorithm.SHA_384
+        assert h.algorithm == HashAlgorithm.SHA_384
 
     def test_invalid_algorithm_string_raises(self):
-        with pytest.raises(ValueError, match="'MD5' is not a valid Algorithm"):
+        with pytest.raises(ValueError, match="'MD5' is not a valid HashAlgorithm"):
             make_hash(DIGEST, algorithm="MD5")
 
 
 class TestMakeRlink:
     def test_minimal(self):
         link = make_rlink("https://example.com/a.pdf")
-        assert isinstance(link, Rlink)
+        assert isinstance(link, BackMatterResourceRlink)
         assert link.href == "https://example.com/a.pdf"
         assert link.media_type is None
         assert link.hashes is None
@@ -57,7 +63,7 @@ class TestMakeRlink:
 class TestMakeResource:
     def test_minimal_generates_uuid4(self):
         r = make_resource()
-        assert isinstance(r, Resource)
+        assert isinstance(r, BackMatterResource)
         assert UUID_RE.match(r.uuid)
 
     def test_distinct_uuids_per_call(self):
@@ -114,7 +120,7 @@ class TestMakeResource:
         ]
         r = make_resource(uuid=u, title="T", document_ids=ids)
         # The pre-fix way: alias-keyed dict through model_validate.
-        expected = Resource.model_validate(
+        expected = BackMatterResource.model_validate(
             {
                 "uuid": u,
                 "title": "T",
@@ -145,4 +151,4 @@ class TestComposability:
         assert len(resource.rlinks) == 2
         assert resource.rlinks[0].media_type == "application/pdf"
         assert resource.rlinks[0].hashes[0].value == DIGEST
-        assert resource.rlinks[1].hashes[0].algorithm == Algorithm.SHA_256
+        assert resource.rlinks[1].hashes[0].algorithm == HashAlgorithm.SHA_256
