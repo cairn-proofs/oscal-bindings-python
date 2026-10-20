@@ -102,28 +102,34 @@ rule for a manifest type. `hatch run generate` runs three steps:
    3. It copies the vendored schema `schemas/<release>/oscal_complete_schema.json` and moves each manifest site into
       `definitions/<Name>`, with a `$ref` at each site. A merge of sites with different bodies fails and names both
       sites. A closed-enum value that its base datatype rejects fails and names the site.
-2. `datamodel-codegen` reads the hoisted copy and writes `src/oscal_bindings/v1/models.py`.
+2. `datamodel-codegen` reads the hoisted copy and writes the raw module `build/codegen/models.py` (git-ignored).
    1. Key flags: `--collapse-root-models`, `--use-annotated`, `--field-constraints`, `--formatters black isort`.
    2. `--base-class oscal_bindings.v1._base.OscalBaseModel` makes every generated object model inherit the
       hand-written base (see "Valid OSCAL by default"). The two `RootModel`s (`OscalDocument`,
       `MappingCollectionMappings`) keep `RootModel[...]`.
    3. Codegen names each `object`, `document`, and `enum` class from its definition key, so each class has its
       manifest name.
-3. `scripts/postprocess_models.py` completes and checks the module.
+3. `scripts/postprocess_models.py` reads `build/codegen/models.py`, completes and checks the module, and writes it to
+   `src/oscal_bindings/v1/models.py`.
    1. Phase 1 changes structure. It collapses each scalar `RootModel` to an `Annotated` alias, and it removes
       `pattern=` from fields of a type that has no regex constraint (`AwareDatetime`, `AnyUrl`, `EmailStr`, numbers).
    2. It adds the manifest types that codegen does not emit: one `TypeAlias` per union (`CatalogGroup`), the
       `MappingCollectionMappings` root model, and the `OscalDocument` root model.
    3. It names each scalar alias from its definition key without the `oscal-complete-oscal-<module>:` prefix
       (`LocationUuid`). A scalar has no manifest entry, so its name is a binding name and not a contract name.
-   4. Three guards compare the result with the manifest. Each guard reports every offender, and the script writes
-      nothing on a failure. The guards check that each manifest name is defined once in the form of its kind, that
-      each other module-level name is a scalar alias, and that no name is defined twice.
+   4. Three guards compare the result with the manifest and the vendored schema. Each guard reports every offender.
+      The guards check these rules:
+      1. Each manifest name is defined once in the form of its kind.
+      2. Each other module-level name is a scalar alias, with the name of a scalar definition of the vendored schema.
+      3. No name is defined twice, no scalar alias has a manifest name, and no manifest name or scalar alias is a
+         name that a module-level import binds.
 
-The post-processor takes the schema and models paths explicitly: the `generate` script passes `--schema` and
-`--models`. An omitted argument falls back to its own default
-(`schemas/<ACTIVE_SCHEMA_RELEASE>/oscal_complete_schema.json` and `src/oscal_bindings/v1/models.py`). A missing path
-is a non-zero exit.
+The post-processor takes its paths explicitly: the `generate` script passes `--schema`, `--models` (the raw codegen
+output), and `--output`. An omitted `--schema` or `--models` falls back to its own default
+(`schemas/<ACTIVE_SCHEMA_RELEASE>/oscal_complete_schema.json` and `src/oscal_bindings/v1/models.py`), and an omitted
+`--output` is the `--models` path. The manifest must record the sha256 of the `--schema` file. A missing path is a
+non-zero exit. The script writes `--output` through a temporary file in the same directory and `os.replace`, and on a
+failure it writes nothing to `--output`. Thus a failed `hatch run generate` leaves the committed `models.py` as it was.
 
 Generation and `hatch test` share the pin in `scripts/spec_artifact.py` and the cache `tests/.corpus_cache/`. On a cold
 cache, `hatch run generate` needs network access. `scripts/` is not a package: a script imports its siblings by plain

@@ -258,7 +258,7 @@ def test_nam_001_03_unresolvable_pointer_is_invalid(
     entry["sites"] = ["#/definitions/missing"]
     _assert_fails(
         _validate(released, manifest),
-        f"{entry['name']}: the pointer #/definitions/missing does not resolve",
+        f"{entry['name']}: the pointer '#/definitions/missing' does not resolve",
     )
 
 
@@ -270,7 +270,7 @@ def test_nam_001_03_inherited_member_pointer_does_not_resolve(
     entry["sites"] = [f"#/definitions/{token}"]
     _assert_fails(
         _validate(released, manifest),
-        f"the pointer #/definitions/{token} does not resolve",
+        f"the pointer '#/definitions/{token}' does not resolve",
     )
 
 
@@ -281,7 +281,7 @@ def test_pointer_in_two_entries_is_invalid(
     manifest["types"][1]["sites"] = [site]
     _assert_fails(
         _validate(released, manifest),
-        f"the pointer {site} occurs in more than one entry",
+        f"the pointer {site!r} occurs in more than one entry",
     )
 
 
@@ -317,8 +317,8 @@ def test_nam_004_03_variant_property_not_a_key_fails_and_names_entry(
     variant["property"] = "no-such-property"
     _assert_fails(
         _validate(released, manifest),
-        f"{union['name']}: no-such-property is not a property of the branch "
-        f"{variant['type']}",
+        f"{union['name']}: 'no-such-property' is not a property of the branch "
+        f"{variant['type']!r}",
     )
 
 
@@ -335,7 +335,7 @@ def test_variant_property_of_other_branch_fails(
     first["property"] = second["property"]
     _assert_fails(
         _validate(released, manifest),
-        f"{second['property']} is not a property of the branch {first['type']}",
+        f"{second['property']!r} is not a property of the branch {first['type']!r}",
     )
 
 
@@ -346,8 +346,39 @@ def test_document_body_field_not_a_key_fails(
     document["body-field"] = "no-such-field"
     _assert_fails(
         _validate(released, manifest),
-        f"{document['name']}: no-such-field is not a property of the wrapper",
+        f"{document['name']}: 'no-such-field' is not a property of the wrapper",
     )
+
+
+@pytest.mark.parametrize(
+    "reserved",
+    ["None", "True", "Exception", "ValueError", "Ellipsis", "NotImplemented"],
+)
+def test_a_python_keyword_or_builtin_name_is_invalid(
+    released: dict[str, Any], manifest: dict[str, Any], reserved: str
+) -> None:
+    manifest["types"][0]["name"] = reserved
+    _assert_fails(
+        _validate(released, manifest),
+        f"the name {reserved!r} is a Python keyword or builtin",
+    )
+
+
+@pytest.mark.parametrize("reserved", ["type", "match", "_", "print"])
+def test_a_lowercase_keyword_or_builtin_name_is_invalid_without_json_schema(
+    released: dict[str, Any], manifest: dict[str, Any], reserved: str
+) -> None:
+    """The PascalCase check rejects a soft keyword or a lowercase builtin first."""
+    manifest["types"][0]["name"] = reserved
+    _assert_fails(
+        _validate(released, manifest, names_schema={}),
+        f"the name {reserved!r} is not a PascalCase identifier",
+    )
+
+
+def test_reserved_names_hold_keywords_soft_keywords_and_builtins() -> None:
+    reserved = manifest_mod._RESERVED  # noqa: SLF001
+    assert {"None", "True", "False", "match", "type", "_", "Exception"} <= reserved
 
 
 def test_json_schema_failure_stops_validation(

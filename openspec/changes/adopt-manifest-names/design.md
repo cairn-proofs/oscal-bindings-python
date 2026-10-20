@@ -89,6 +89,10 @@ Then it applies these guards. Each guard reports every failure at once, and the 
 2. Each other module-level name is a scalar alias (D3). No class has a name outside the manifest.
 3. No two module-level names are equal.
 
+datamodel-codegen writes `build/codegen/models.py`. The post-processor reads that file and replaces
+`src/oscal_bindings/v1/models.py` atomically only when every guard passes, so a failed run leaves the committed module
+as it was.
+
 The post-processor reads the vendored schema, not the hoisted copy. It needs only the definition keys of the scalar
 definitions (D3).
 

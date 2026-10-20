@@ -12,11 +12,11 @@ flowchart TD
     M -->|"invalid"| X["non-zero exit,<br/>nothing written"]
     M --> H["python scripts/hoist_names.py<br/>vendored schemas/1.2.3/oscal_complete_schema.json<br/>→ build/codegen/oscal_complete_schema.json"]
     H -->|"merge or enum check fails"| X
-    H --> B["datamodel-codegen<br/>--input build/codegen/oscal_complete_schema.json<br/>--output src/oscal_bindings/v1/models.py<br/>--collapse-root-models --use-annotated<br/>--field-constraints --base-class ...OscalBaseModel<br/>--formatters black isort"]
-    B --> C["raw v1/models.py<br/>(manifest-named classes,<br/>RootModel scalars, invalid patterns)"]
-    C --> D["python scripts/postprocess_models.py<br/>--schema schemas/1.2.3/oscal_complete_schema.json<br/>--models src/oscal_bindings/v1/models.py"]
-    D --> E["final v1/models.py"]
-    D -->|"guard trips"| F["non-zero exit,<br/>file NOT written"]
+    H --> B["datamodel-codegen<br/>--input build/codegen/oscal_complete_schema.json<br/>--output build/codegen/models.py<br/>--collapse-root-models --use-annotated<br/>--field-constraints --base-class ...OscalBaseModel<br/>--formatters black isort"]
+    B --> C["raw build/codegen/models.py<br/>(manifest-named classes,<br/>RootModel scalars, invalid patterns)"]
+    C --> D["python scripts/postprocess_models.py<br/>--schema schemas/1.2.3/oscal_complete_schema.json<br/>--models build/codegen/models.py<br/>--output src/oscal_bindings/v1/models.py"]
+    D --> E["final v1/models.py<br/>(temp file + os.replace)"]
+    D -->|"guard trips"| F["non-zero exit,<br/>v1/models.py NOT written"]
 ```
 
 ### 1a. Hoist (`scripts/hoist_names.py`)
@@ -48,19 +48,24 @@ The output is deterministic: two runs give byte-identical copies.
    kept), `ensure_annotated_import`, `fix_email_str_patterns` / `fix_non_string_patterns` (strip `pattern=` from
    `EmailStr`, `AwareDatetime`, `AnyUrl`, and numeric fields).
 3. **`scalar_renames`** — each scalar alias is named from its definition key without the `oscal-complete-oscal-<module>:`
-   prefix (`LocationUuid`).
+   prefix (`LocationUuid`). A target name that is not PascalCase (`[A-Z][A-Za-z0-9]*`), or that a module-level import
+   binds, is a failure.
 4. **`rename_document_union`** — the root `RootModel` gets its manifest name, `OscalDocument`.
 5. **`add_union_aliases`** — one `TypeAlias` per `union` entry, in manifest order, after the last variant class
    (`CatalogGroup: TypeAlias = CatalogGroupWithControls | CatalogGroupWithGroups`). `replace_inline_unions` replaces
    each inline union of exactly the variant set with the alias.
 6. **Cleanup** — drop an unused `RootModel` import, collapse 4+ blank lines.
 7. **`guard_failures`** — three guards, each reporting every offender: each manifest name is defined once at module
-   level in the form of its kind; each other module-level name is a scalar alias; no name is defined twice and no
-   scalar alias has a manifest name. Any failure raises `PostprocessError` and the file is not written.
+   level in the form of its kind; each other module-level name is a scalar alias named for a scalar definition of the
+   vendored schema (`scalar_names`); no name is defined twice, no scalar alias has a manifest name, and no manifest
+   name or scalar alias is bound by a module-level import (`import_bindings`). Any failure raises `PostprocessError`.
 
-`--schema` and `--models` each carry their own default (`DEFAULT_SCHEMA_PATH` from `ACTIVE_SCHEMA_RELEASE`,
-`DEFAULT_MODELS_PATH`). A missing path exits non-zero naming it. Idempotent: re-running gives the same output for the
-same schema and manifest.
+`main` reads the codegen output at `--models` (`build/codegen/models.py` in `generate`) and writes the completed module
+to `--output` (`src/oscal_bindings/v1/models.py`) through a temp file in the same directory and `os.replace`. On any
+failure nothing is written to `--output`, so the committed module stays as it was. `--schema` and `--models` each carry
+their own default (`DEFAULT_SCHEMA_PATH` from `ACTIVE_SCHEMA_RELEASE`, `DEFAULT_MODELS_PATH`); `--output` defaults to
+`--models`. `load_manifest(schema_path)` requires the manifest to record the sha256 of `--schema`. A missing path exits
+non-zero naming it. Re-running `hatch run generate` gives the same output for the same schema and manifest.
 
 ## 1c. Refreshing to a new OSCAL release
 

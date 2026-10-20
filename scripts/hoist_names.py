@@ -59,6 +59,8 @@ import jsonschema_rs
 from manifest import (
     VENDORED_SCHEMA,
     ManifestError,
+    escape_token,
+    format_pointer,
     load_validated_manifest,
     parse_pointer,
     resolve_pointer,
@@ -142,16 +144,8 @@ class _Hoisted:
     """The body for the merge comparison, without annotations."""
 
 
-def _escape(token: str) -> str:
-    return token.replace("~", "~0").replace("/", "~1")
-
-
-def _pointer(tokens: Sequence[str]) -> str:
-    return "#" + "".join("/" + _escape(token) for token in tokens)
-
-
 def _definition_ref(name: str) -> str:
-    return _pointer(("definitions", name))
+    return format_pointer(("definitions", name))
 
 
 def _definition_key(pointer: str) -> str | None:
@@ -186,9 +180,11 @@ def _first_difference(left: object, right: object, path: str = "") -> str:
     if isinstance(left, dict) and isinstance(right, dict):
         for key in [*left, *(k for k in right if k not in left)]:
             if key not in left or key not in right:
-                return f"{path}/{_escape(key)}"
+                return f"{path}/{escape_token(key)}"
             if left[key] != right[key]:
-                return _first_difference(left[key], right[key], f"{path}/{key}")
+                return _first_difference(
+                    left[key], right[key], f"{path}/{escape_token(key)}"
+                )
     if isinstance(left, list) and isinstance(right, list) and len(left) == len(right):
         for i, (a, b) in enumerate(zip(left, right, strict=True)):
             if a != b:
@@ -233,13 +229,13 @@ def _plan(manifest: dict[str, Any], failures: list[str]) -> list[_Site]:
         for site_index, pointer in enumerate(entry.get("sites", [])):
             tokens = parse_pointer(pointer)
             if not tokens:
-                failures.append(f"{name}: the site {pointer} cannot be hoisted")
+                failures.append(f"{name}: the site {pointer!r} cannot be hoisted")
                 continue
             if enum is not None:
                 combinator = "allOf" if enum == "closed" else "anyOf"
                 if len(tokens) <= _PAIR or tokens[-2] != combinator:
                     failures.append(
-                        f"{name}: the {enum}-enum site {pointer} is not a branch "
+                        f"{name}: the {enum}-enum site {pointer!r} is not a branch "
                         f"of an {combinator}"
                     )
                     continue
@@ -262,16 +258,16 @@ def _base_failures(
     branches = holder.get("allOf")
     enum_index = int(site.tokens[-1])
     if not isinstance(branches, list) or enum_index >= len(branches):
-        return [f"{site.name}: the closed-enum site {site.pointer} does not resolve"]
+        return [f"{site.name}: the closed-enum site {site.pointer!r} does not resolve"]
     branch = branches[enum_index]
     values = branch.get("enum") if isinstance(branch, dict) else None
     if not isinstance(values, list):
-        return [f"{site.name}: the closed-enum site {site.pointer} holds no enum"]
+        return [f"{site.name}: the closed-enum site {site.pointer!r} holds no enum"]
     base = [b for i, b in enumerate(branches) if i != enum_index]
     if not base or not set(holder) <= _CLOSED_HOLDER_KEYS:
         return [
             (
-                f"{site.name}: the closed enum at {site.pointer} has no base "
+                f"{site.name}: the closed enum at {site.pointer!r} has no base "
                 "datatype, or its allOf object holds other constraints"
             )
         ]
@@ -279,7 +275,7 @@ def _base_failures(
         {"definitions": definitions, "allOf": base}, validate_formats=False
     )
     return [
-        f"{site.name}: the closed-enum value {value!r} at {site.pointer} is not "
+        f"{site.name}: the closed-enum value {value!r} at {site.pointer!r} is not "
         "valid for its base datatype"
         for value in values
         if not validator.is_valid(value)
@@ -293,10 +289,11 @@ def _take(
     failures: list[str],
 ) -> _Hoisted | None:
     """Replace ``site`` in ``working`` with its ``$ref``. Return its body."""
-    if resolve_pointer(working, _pointer(site.target)) is None:
-        failures.append(f"{site.name}: the site {site.pointer} does not resolve")
+    target = resolve_pointer(working, format_pointer(site.target))
+    if target is None:
+        failures.append(f"{site.name}: the site {site.pointer!r} does not resolve")
         return None
-    body: Any = copy.deepcopy(_get(working, site.target))
+    body: Any = copy.deepcopy(target)
     ref: dict[str, Any] = {"$ref": _definition_ref(site.name)}
     if site.enum == "closed":
         site_failures = _base_failures(site, body, definitions)
@@ -330,8 +327,8 @@ def _merge_failures(name: str, hoisted: list[_Hoisted]) -> list[str]:
     """Return a failure for each site whose body differs from the first site."""
     first = hoisted[0]
     return [
-        f"{name}: the body at {other.pointer} differs from the body at "
-        f"{first.pointer} (first difference at "
+        f"{name}: the body at {other.pointer!r} differs from the body at "
+        f"{first.pointer!r} (first difference at "
         f"{_first_difference(first.comparable, other.comparable)})"
         for other in hoisted[1:]
         if other.comparable != first.comparable
@@ -370,7 +367,7 @@ def _definitions(
 
     def emit(key: str, value: object) -> None:
         if key in result:
-            failures.append(f"the definition key {key} occurs more than once")
+            failures.append(f"the definition key {key!r} occurs more than once")
         result[key] = value
 
     for key in original_keys:
@@ -407,9 +404,11 @@ def _unresolved_refs(node: object, root: object, path: str = "#") -> list[str]:
     elif isinstance(node, dict):
         ref = node.get("$ref")
         if isinstance(ref, str) and resolve_pointer(root, ref) is None:
-            failures.append(f"the $ref {ref} at {path} does not resolve")
+            failures.append(f"the $ref {ref!r} at {path!r} does not resolve")
         for key, value in node.items():
-            failures.extend(_unresolved_refs(value, root, f"{path}/{_escape(key)}"))
+            failures.extend(
+                _unresolved_refs(value, root, f"{path}/{escape_token(key)}")
+            )
     return failures
 
 

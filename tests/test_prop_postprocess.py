@@ -122,7 +122,7 @@ def test_every_duplicate_name_is_reported(data: st.DataObject) -> None:
     # Layout must not matter: duplicates need not be adjacent or in any order.
     blocks = data.draw(st.permutations(blocks), label="layout")
 
-    failures = pp.guard_failures(HEADER + "".join(blocks), _manifest(names))
+    failures = pp.guard_failures(HEADER + "".join(blocks), _manifest(names), {})
 
     assert _reported_duplicates(failures) == counts
     assert all(f.startswith("[guard 3]") for f in failures), failures
@@ -144,7 +144,7 @@ def test_every_missing_and_every_stray_name_is_reported(data: st.DataObject) -> 
     in_manifest = names[:split] + names[stray_split:]
     source = HEADER + "".join(_class_block(name, 0) for name in defined)
 
-    failures = pp.guard_failures(source, _manifest(in_manifest))
+    failures = pp.guard_failures(source, _manifest(in_manifest), {})
 
     missing = {
         m.group(1)

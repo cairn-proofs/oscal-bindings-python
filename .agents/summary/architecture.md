@@ -84,8 +84,8 @@ flowchart LR
     N["spec artifact 0.2.0+oscal.1.2.3<br/>names.json (sha256-pinned)"] -->|"manifest.py<br/>validate"| H
     A["schemas/&lt;release&gt;/oscal_complete_schema.json"] --> H["hoist_names.py"]
     H --> HS["build/codegen/oscal_complete_schema.json<br/>(each manifest site = definitions/&lt;Name&gt;)"]
-    HS -->|"datamodel-codegen"| B["v1/models.py<br/>(raw: manifest-named classes,<br/>RootModel scalars)"]
-    B -->|"postprocess_models.py<br/>--schema / --models"| C["v1/models.py<br/>(final: + union TypeAliases,<br/>MappingCollectionMappings, OscalDocument,<br/>scalar aliases; guards passed)"]
+    HS -->|"datamodel-codegen"| B["build/codegen/models.py<br/>(raw: manifest-named classes,<br/>RootModel scalars)"]
+    B -->|"postprocess_models.py<br/>--schema / --models / --output"| C["v1/models.py<br/>(final: + union TypeAliases,<br/>MappingCollectionMappings, OscalDocument,<br/>scalar aliases; guards passed)"]
     N --> C
 ```
 
@@ -95,11 +95,11 @@ Guards:
 
 | Step | Guard | Behavior |
 |------|-------|----------|
-| `manifest.py` | `names.json` fails its JSON Schema, format/release, vendored-schema sha256, uniqueness, or pointer checks | `ManifestError` with every failure; nothing generated |
+| `manifest.py` | `names.json` fails its JSON Schema, format/release, vendored-schema sha256, uniqueness, keyword/builtin, or pointer checks | `ManifestError` with every failure; nothing generated |
 | `hoist_names.py` | Merged sites with different bodies; closed-enum value that its base datatype rejects | `HoistError` naming the sites |
-| `postprocess_models.py` | Manifest name missing or in the wrong form; a name outside the manifest that is not a scalar alias; a name defined twice or a scalar alias with a manifest name | `PostprocessError` with every offender; `models.py` not written |
+| `postprocess_models.py` | Manifest name missing or in the wrong form; a name outside the manifest that is not a scalar alias of a scalar definition of the schema; a name defined twice, a scalar alias with a manifest name, or a manifest name or scalar alias bound by an import | `PostprocessError` with every offender; `v1/models.py` not written |
 
-The post-processor's schema and models paths are passed explicitly, and each argument carries its own default. The active bundle is selected **by explicit path and pin alone** — no directory scan, no glob, no "newest release wins" — so adding a schema bundle directory changes nothing until the pin and paths change.
+The post-processor's schema, models, and output paths are passed explicitly, and each argument carries its own default (`--output` defaults to `--models`). `generate` has codegen write `build/codegen/models.py`, and the post-processor writes `v1/models.py` atomically (temp file + `os.replace`), so a failed run leaves the committed module untouched. The active bundle is selected **by explicit path and pin alone** — no directory scan, no glob, no "newest release wins" — so adding a schema bundle directory changes nothing until the pin and paths change.
 
 ## Key Architectural Decisions
 

@@ -67,7 +67,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.default.scripts]
-generate = "python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output src/oscal_bindings/v1/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --base-class oscal_bindings.v1._base.OscalBaseModel --collapse-root-models --use-annotated --field-constraints --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models src/oscal_bindings/v1/models.py"
+generate = "python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output ./build/codegen/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --base-class oscal_bindings.v1._base.OscalBaseModel --collapse-root-models --use-annotated --field-constraints --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models ./build/codegen/models.py --output src/oscal_bindings/v1/models.py"
 docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
 # No --install-types: it would pip-install stubs at run time, outside the lockfile.
 # Add any stub packages mypy needs to `dependencies` above instead.

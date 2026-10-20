@@ -22,6 +22,8 @@ import shutil
 import tarfile
 import threading
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 import zlib
 from dataclasses import dataclass
@@ -30,6 +32,7 @@ from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import IO
 
 
 class CorpusError(RuntimeError):
@@ -48,6 +51,8 @@ COMPLETE_MARKER = ".complete"
 
 # HTTP fetch timeout (seconds) for a tarball request.
 HTTP_TIMEOUT = 60
+# The largest response body (bytes) that ``http_get`` accepts.
+MAX_BYTES = 64 * 1024 * 1024
 
 # FileLock spin-with-backoff tuning.
 _LOCK_POLL_INITIAL = 0.01  # first back-off sleep (seconds)
@@ -160,18 +165,74 @@ def thread_lock_for(path: Path) -> threading.Lock:
         return _THREAD_LOCKS.setdefault(path, threading.Lock())
 
 
-def http_get(url: str, *, timeout: int = HTTP_TIMEOUT) -> bytes:
+class ResponseTooLargeError(OSError):
+    """Raised when a response body is larger than the limit of ``http_get``.
+
+    It is an ``OSError``, so ``FETCH_ERRORS`` reports it as a fetch failure.
+    """
+
+
+class HttpsOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only when its target URL is HTTPS.
+
+    A redirect to any other scheme raises ``urllib.error.URLError``, an
+    ``OSError``, so ``FETCH_ERRORS`` reports it as a fetch failure.
+    """
+
+    def redirect_request(  # noqa: PLR0913, PLR0917 — the base method's signature
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: http.client.HTTPMessage,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        """Return the request for ``newurl``, or raise if it is not HTTPS."""
+        if urllib.parse.urlsplit(newurl).scheme.lower() != "https":
+            reason = f"refusing redirect to non-HTTPS URL {newurl!r}"
+            raise urllib.error.URLError(reason)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def build_https_opener(
+    *handlers: urllib.request.BaseHandler,
+) -> urllib.request.OpenerDirector:
+    """Return an opener that follows HTTPS redirects only.
+
+    ``handlers`` are added to the opener, as ``urllib.request.build_opener``
+    adds them. A test can pass a handler that serves fake responses.
+    """
+    return urllib.request.build_opener(HttpsOnlyRedirectHandler(), *handlers)
+
+
+def http_get(
+    url: str,
+    *,
+    timeout: int = HTTP_TIMEOUT,
+    max_bytes: int = MAX_BYTES,
+    opener: urllib.request.OpenerDirector | None = None,
+) -> bytes:
     """Fetch ``url`` and return the response body as bytes (stdlib ``urllib``).
 
-    Only HTTPS URLs are accepted. Non-2xx responses raise
-    ``urllib.error.HTTPError`` from ``urlopen``.
+    Only an HTTPS URL is accepted, and a redirect is followed only to an HTTPS
+    URL. A body of more than ``max_bytes`` bytes raises
+    ``ResponseTooLargeError``. A non-2xx response raises
+    ``urllib.error.HTTPError``. ``opener`` defaults to
+    ``build_https_opener()``.
     """
     if not url.startswith("https://"):
         msg = f"Refusing non-HTTPS archive URL: {url!r}"
         raise ValueError(msg)
-    request = urllib.request.Request(url, method="GET")  # noqa: S310 — https checked
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-        return bytes(response.read())
+    # The scheme is https, and the opener follows https redirects only.
+    request = urllib.request.Request(url, method="GET")  # noqa: S310  # nosec B310
+    opener = opener or build_https_opener()
+    with opener.open(request, timeout=timeout) as response:
+        data = bytes(response.read(max_bytes + 1))
+    if len(data) > max_bytes:
+        msg = f"the response from {url!r} is larger than {max_bytes} bytes"
+        raise ResponseTooLargeError(msg)
+    return data
 
 
 def _is_within_directory(directory: Path, target: Path) -> bool:
@@ -214,18 +275,19 @@ def extract_tar_gz(data: bytes, *, into: Path) -> None:
     Every member is validated with ``check_member_safe`` before anything is
     written, so an unsafe archive is rejected outright (the ``"data"`` filter
     alone would silently strip a leading ``/`` rather than refuse). Extraction
-    then also applies ``tarfile``'s ``"data"`` filter where available (3.12 and
-    3.11.4+), which additionally drops unsafe permission bits and ownership.
+    then also applies ``tarfile``'s ``"data"`` filter, which additionally drops
+    unsafe permission bits and ownership. A Python without the filter (3.11.0
+    to 3.11.3) raises ``CorpusError`` before anything is extracted.
     """
+    if not hasattr(tarfile, "data_filter"):
+        msg = "this Python lacks tarfile data filters; use 3.11.4 or later"
+        raise CorpusError(msg)
     into.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
         members = tar.getmembers()
         for member in members:
             check_member_safe(member, into=into)
-        if hasattr(tarfile, "data_filter"):
-            tar.extractall(into, members=members, filter="data")
-        else:  # pragma: no cover — only on Python 3.11.0-3.11.3
-            tar.extractall(into, members=members)  # noqa: S202 — validated above
+        tar.extractall(into, members=members, filter="data")
 
 
 def tarball_root(extracted: Path) -> Path:

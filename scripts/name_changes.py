@@ -44,6 +44,7 @@ import ast
 import subprocess  # nosec B404 — fixed git argv, no shell
 from collections import defaultdict
 from dataclasses import dataclass
+from operator import attrgetter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -180,11 +181,11 @@ def _class_kind(node: ast.ClassDef, kinds: Mapping[str, str]) -> str:
 def _field_aliases(node: ast.AST) -> set[str]:
     aliases: set[str] = set()
     for call in ast.walk(node):
-        if not isinstance(call, ast.Call):
-            continue
-        func = call.func
-        name = func.id if isinstance(func, ast.Name) else ""
-        if name != "Field":
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "Field"
+        ):
             continue
         for keyword in call.keywords:
             value = keyword.value
@@ -361,14 +362,6 @@ def current_element_types() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _key(definition: Definition) -> _Key:
-    return definition.key
-
-
-def _strict_key(definition: Definition) -> _Key:
-    return definition.strict_key
-
-
 def _group(keys: Mapping[str, _Key]) -> dict[_Key, list[str]]:
     groups: dict[_Key, list[str]] = defaultdict(list)
     for name, key in keys.items():
@@ -410,7 +403,7 @@ def compare(
     targets = set(added | reused)
     # Tier 1 pairs equal structure and docstring; tier 2 pairs the rest by
     # structure alone, so a type whose docstring changed still finds its name.
-    for key_of in (_strict_key, _key):
+    for key_of in (attrgetter("strict_key"), attrgetter("key")):
         found = _unique_pairs(
             {name: key_of(old[name]) for name in sources},
             {name: key_of(new[name]) for name in targets},

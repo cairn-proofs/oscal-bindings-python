@@ -397,6 +397,21 @@ def test_merge_of_different_bodies_fails_and_names_both_sites(
     assert "/properties/extra" in failure
 
 
+@pytest.mark.parametrize(
+    ("left", "right", "expected"),
+    [
+        ({"a/b": {"x": 1}}, {"a/b": {"x": 2}}, "/a~1b/x"),
+        ({"a~b": [1, {"c/d": 1}]}, {"a~b": [1, {"c/d": 2}]}, "/a~0b/1/c~1d"),
+        ({"a/b": 1}, {}, "/a~1b"),
+        ({}, {"a/b": 1}, "/a~1b"),
+    ],
+)
+def test_first_difference_escapes_each_key(
+    left: dict[str, Any], right: dict[str, Any], expected: str
+) -> None:
+    assert hoist_mod._first_difference(left, right) == expected  # noqa: SLF001
+
+
 def test_explicit_merge_of_unrelated_sites_reports_every_failure(
     schema: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -455,7 +470,7 @@ def test_unresolvable_site_fails(
 ) -> None:
     entry = _entry(manifest, "Hash")
     entry["sites"] = ["#/definitions/no-such-definition"]
-    with pytest.raises(HoistError, match="no-such-definition does not resolve"):
+    with pytest.raises(HoistError, match="no-such-definition' does not resolve"):
         hoist_mod.hoist(schema, manifest)
 
 
@@ -463,7 +478,7 @@ def test_name_equal_to_a_scalar_key_fails(
     schema: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
     _entry(manifest, "HashAlgorithm")["name"] = "TokenDatatype"
-    with pytest.raises(HoistError, match="TokenDatatype occurs more than once"):
+    with pytest.raises(HoistError, match="'TokenDatatype' occurs more than once"):
         hoist_mod.hoist(schema, manifest)
 
 

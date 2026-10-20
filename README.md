@@ -63,8 +63,9 @@ This is an upstream pydantic-core bug in its new 2.13 JSON validation path. The 
 
 Version 0.3.0 is a breaking release. The class names now follow the naming manifest of the
 [OSCAL bindings specs](https://github.com/cairn-proofs/oscal-bindings-specs), so each OSCAL type has the same name in
-every language binding. The OSCAL JSON that you parse and serialize does not change. The release has no deprecated
-aliases, because an alias for a reused name would point at the wrong type.
+every language binding. The serialized OSCAL JSON does not change. Parsing is stricter where the schema is strict, and
+some parsed values have a different Python type (items 5 to 9). The release has no deprecated aliases, because an alias
+for a reused name would point at the wrong type.
 
 1. About 95 classes have a new name. Some examples:
 
@@ -93,8 +94,19 @@ aliases, because an alias for a reused name would point at the wrong type.
    ([#21](https://github.com/cairn-proofs/oscal-bindings-python/issues/21)). For example, a field of type
    `ParameterSelectionHowMany` accepts `one` and `one-or-more`, and a document with `"how-many": "many"` raises
    `OscalParseError`.
-6. The strings of `get_supported_element_types()` follow the new class names, for example `rlink` is now
-   `back-matter-resource-rlink`.
+6. A closed-enum field holds an `Enum` member, not a `str`. Thus `sel.how_many == "one-or-more"` is `False`. Compare
+   the value with `ParameterSelectionHowMany.one_or_more`, or compare `sel.how_many.value` with the string. An
+   open-enum field, such as `Hash.algorithm`, holds a `str` when it is parsed from a string.
+7. In a profile merge, `combine` and `flat` are the empty models `MergeCombine` and `MergeFlat`, with
+   `extra='forbid'`. They are not `dict` values. Thus `merge.combine["method"]` and `merge.combine == {}` do not work.
+   A non-empty object fails validation, as in 0.2.x.
+8. `MappingCollection.mappings` is always a `MappingCollectionMappings` root model. Read the item or the list
+   through `.root`.
+9. The variants of each union are in manifest order. Data that has no variant property parses as the first variant.
+   For example, a `Parameter` with no `select` and no `values` parses as `ParameterWithSelect`. The serialized JSON
+   does not change.
+10. The strings of `get_supported_element_types()` follow the new class names, for example `rlink` is now
+    `back-matter-resource-rlink`.
 
 The [release notes of v0.3.0](https://github.com/cairn-proofs/oscal-bindings-python/releases/tag/v0.3.0) list each
 renamed, removed, and added name, and each changed element-type string.

@@ -64,7 +64,7 @@ oscal-bindings-python/
 │   ├── manifest.py              # Validates names.json of the pinned artifact
 │   ├── hoist_names.py           # Writes build/codegen/oscal_complete_schema.json (manifest-named definitions)
 │   ├── postprocess_models.py    # Structure fixes, added manifest types, guards against the manifest
-│   │                            # (takes --schema / --models; each has its own default)
+│   │                            # (takes --schema / --models / --output; --output defaults to --models)
 │   └── name_changes.py          # Writes build/name-changes.md (release-notes list)
 ├── schemas/                     # OSCAL JSON Schema bundles, one dir per release
 │   ├── 1.2.2/                   # Prior release, retained for reference
@@ -95,7 +95,7 @@ graph TD
     subgraph Codegen["Code generation (dev-time)"]
         HOIST["scripts/hoist_names.py<br/>→ build/codegen/oscal_complete_schema.json"]
         DCG["datamodel-code-generator"]
-        PP["scripts/postprocess_models.py<br/>--schema / --models"]
+        PP["scripts/postprocess_models.py<br/>--schema / --models / --output"]
     end
     subgraph V1["src/oscal_bindings/v1 (implementation)"]
         MODELS["models.py (GENERATED)"]

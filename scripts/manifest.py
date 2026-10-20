@@ -11,7 +11,8 @@ applies these checks in order and returns every failure:
 2. ``format`` is a supported format version, and ``oscal-release`` is the
    release of the schema that generation uses.
 3. ``schema.sha256`` is the sha256 of the schema bytes that generation reads.
-4. The rules that a JSON Schema cannot express: each name is unique, each
+4. The rules that a JSON Schema cannot express: each name is unique and is
+   not a Python keyword, soft keyword, or builtin, each
    pointer occurs in one entry only and resolves in the schema, each type
    reference names an entry, each union variant property is a property key of
    its branch at every branch site, and each document body field is a property
@@ -23,8 +24,10 @@ to validate the manifest of the pinned artifact against the vendored schema.
 
 from __future__ import annotations
 
+import builtins
 import hashlib
 import json
+import keyword
 import re
 from typing import TYPE_CHECKING, Final
 
@@ -37,7 +40,7 @@ from spec_artifact import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
     from pathlib import Path
 
     from spec_artifact import ArtifactPaths
@@ -52,6 +55,13 @@ VENDORED_SCHEMA: Final[Path] = (
 
 # The pattern of a canonical name and of a type reference, over the full string.
 _NAME: Final = re.compile(r"[A-Z][A-Za-z0-9]*")
+# Names that a canonical name must not be, because a module-level definition
+# with the name would shadow a keyword or a builtin of Python.
+_RESERVED: Final = (
+    frozenset(keyword.kwlist)
+    | frozenset(keyword.softkwlist)
+    | (frozenset(dir(builtins)))
+)
 # An array index token of RFC 6901: no leading zero, no sign.
 _ARRAY_INDEX: Final = re.compile(r"0|[1-9][0-9]*")
 # A "~" that does not start one of the escapes "~0" and "~1".
@@ -95,6 +105,20 @@ def parse_pointer(pointer: str) -> list[str] | None:
     return tokens
 
 
+def format_pointer(tokens: Sequence[str | int]) -> str:
+    """Return the ``#``-fragment JSON pointer of ``tokens``.
+
+    It is the inverse of ``parse_pointer``: ``~`` encodes to ``~0`` and ``/``
+    to ``~1``.
+    """
+    return "#" + "".join("/" + escape_token(token) for token in tokens)
+
+
+def escape_token(token: str | int) -> str:
+    """Return ``token`` encoded as one RFC 6901 reference token."""
+    return str(token).replace("~", "~0").replace("/", "~1")
+
+
 def resolve_pointer(root: object, pointer: str) -> object | None:
     """Return the subschema at ``pointer`` in ``root``, or ``None``.
 
@@ -120,16 +144,6 @@ def resolve_pointer(root: object, pointer: str) -> object | None:
     return node if isinstance(node, dict | bool) else None
 
 
-def _sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _json_pointer(path: list[str | int]) -> str:
-    return "".join(
-        "/" + str(token).replace("~", "~0").replace("/", "~1") for token in path
-    )
-
-
 def _schema_failures(manifest: object, names_schema: dict[str, object]) -> list[str]:
     """Return the JSON Schema errors of ``manifest``, each with its location.
 
@@ -141,7 +155,7 @@ def _schema_failures(manifest: object, names_schema: dict[str, object]) -> list[
     failures: list[str] = []
     for error in validator.iter_errors(manifest):
         path = list(error.instance_path)
-        where = f"names.json{_json_pointer(path)}"
+        where = f"names.json{format_pointer(path).removeprefix('#')}"
         if (
             len(path) >= 2  # noqa: PLR2004 - "types" and the entry index
             and path[0] == "types"
@@ -211,18 +225,23 @@ def _name_and_site_failures(
                 f"[manifest] the name {name!r} is not a PascalCase identifier"
             )
             continue
+        if name in _RESERVED:
+            failures.append(
+                f"[manifest] the name {name!r} is a Python keyword or builtin"
+            )
+            continue
         if name in by_name:
             failures.append(f"[manifest] the name {name} occurs more than once")
         by_name.setdefault(name, entry)
         for site in _strings(entry.get("sites")):
             if site in seen_sites:
                 failures.append(
-                    f"[manifest] the pointer {site} occurs in more than one entry"
+                    f"[manifest] the pointer {site!r} occurs in more than one entry"
                 )
             seen_sites.add(site)
             if resolve_pointer(schema, site) is None:
                 failures.append(
-                    f"[manifest] {name}: the pointer {site} does not resolve"
+                    f"[manifest] {name}: the pointer {site!r} does not resolve"
                 )
     return by_name
 
@@ -250,13 +269,14 @@ def _entry_failures(
         branch_sites = _strings(branch.get("sites"))
         if not all(_has_property(schema, site, prop) for site in branch_sites):
             failures.append(
-                f"{name}: {prop} is not a property of the branch {variant.get('type')}"
+                f"{name}: {prop!r} is not a property of the branch "
+                f"{variant.get('type')!r}"
             )
     body_field = entry.get("body-field")
     if isinstance(body_field, str) and not all(
         _has_property(schema, site, body_field) for site in _strings(entry.get("sites"))
     ):
-        failures.append(f"{name}: {body_field} is not a property of the wrapper")
+        failures.append(f"{name}: {body_field!r} is not a property of the wrapper")
     return [f"[manifest] {failure}" for failure in failures]
 
 
@@ -299,7 +319,7 @@ def validate_manifest(
 
     schema_info = manifest.get("schema")
     recorded = schema_info.get("sha256") if isinstance(schema_info, dict) else None
-    actual = _sha256(schema_bytes)
+    actual = hashlib.sha256(schema_bytes).hexdigest()
     if recorded != actual:
         failures.append(
             f"[manifest] schema.sha256 {recorded!r} does not match the schema "

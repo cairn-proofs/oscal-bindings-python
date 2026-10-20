@@ -10,6 +10,7 @@ of generated source with a small manifest, and they check the committed
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import json
 import sys
@@ -126,6 +127,13 @@ def _manifest(*extra: dict[str, Any]) -> dict[str, Any]:
         },
     ]
     return {"format": 1, "types": [*types, *extra]}
+
+
+@functools.cache
+def _vendored() -> dict[str, Any]:
+    """The vendored schema that the committed ``models.py`` was generated from."""
+    schema: dict[str, Any] = json.loads(pp.DEFAULT_SCHEMA_PATH.read_bytes())
+    return schema
 
 
 @pytest.fixture(scope="module")
@@ -279,6 +287,40 @@ class TestScalarAliases:
     def test_open_enum_field_keeps_the_base_alias(self, done: str) -> None:
         assert "algorithm: TokenDatatype | HashAlgorithm | None = None" in done
 
+    @pytest.mark.parametrize(
+        ("local", "published"),
+        [("2fa-code", "2faCode"), ("x_y", "X_y"), ("caf\u00e9", "Caf\u00e9")],
+    )
+    def test_a_published_name_that_is_not_pascal_case_fails(
+        self, local: str, published: str
+    ) -> None:
+        key = f"oscal-complete-oscal-metadata:{local}"
+        codegen = "OscalCompleteOscalMetadata" + published
+        schema = {"definitions": {**SCHEMA["definitions"], key: {"type": "string"}}}
+        source = RAW + f"\n\n{codegen} = Annotated[str, Field(min_length=1)]\n"
+        failures: list[str] = []
+        renames = pp.scalar_renames(source, schema, _manifest(), failures)
+        assert codegen not in renames
+        assert failures == [
+            (
+                f"the scalar alias {codegen} cannot take the name {published!r}: "
+                "it is not a PascalCase identifier"
+            )
+        ]
+
+    def test_a_published_name_bound_by_an_import_fails(self) -> None:
+        key = "oscal-complete-oscal-metadata:field"
+        schema = {"definitions": {**SCHEMA["definitions"], key: {"type": "string"}}}
+        source = RAW + "\n\nOscalCompleteOscalMetadataField = Annotated[str, Field()]\n"
+        with pytest.raises(PostprocessError) as info:
+            pp.postprocess(source, _manifest(), schema)
+        assert info.value.failures == [
+            (
+                "the scalar alias OscalCompleteOscalMetadataField cannot take the name "
+                "'Field': an import statement binds it"
+            )
+        ]
+
     def test_only_scalar_aliases_are_renamed(self) -> None:
         """A class with a namespaced name is not renamed, so guard 2 reports it."""
         source = RAW + (
@@ -347,14 +389,14 @@ class TestPhase1:
 
 class TestGuards:
     def test_output_of_the_small_manifest_passes(self, done: str) -> None:
-        assert pp.guard_failures(done, _manifest()) == []
+        assert pp.guard_failures(done, _manifest(), SCHEMA) == []
 
     def test_every_missing_manifest_name_is_listed(self, done: str) -> None:
         manifest = _manifest(
             {"name": "Absent", "kind": "object"},
             {"name": "AlsoAbsent", "kind": "union", "variants": []},
         )
-        failures = pp.guard_failures(done, manifest)
+        failures = pp.guard_failures(done, manifest, SCHEMA)
         assert failures == [
             "[guard 1] the manifest name Absent (object) is missing",
             "[guard 1] the manifest name AlsoAbsent (union) is missing",
@@ -365,12 +407,12 @@ class TestGuards:
         for entry in manifest["types"]:
             if entry["name"] == "Mapping":
                 entry["kind"] = "enum"
-        failures = pp.guard_failures(done, manifest)
+        failures = pp.guard_failures(done, manifest, SCHEMA)
         assert failures == ["[guard 1] Mapping (enum) is defined as class, not as enum"]
 
     def test_every_class_outside_the_manifest_is_listed(self, done: str) -> None:
         content = done + _object("Stray", "x: str") + _enum("StrayEnum", "a")
-        failures = pp.guard_failures(content, _manifest())
+        failures = pp.guard_failures(content, _manifest(), SCHEMA)
         assert len(failures) == 2
         assert failures[0].startswith("[guard 2] Stray (line ")
         assert failures[0].endswith(") is defined as class outside the manifest")
@@ -395,11 +437,58 @@ class TestGuards:
             + _object("Mapping", "again: str")
             + _object("Mapping", "third: str")
         )
-        failures = pp.guard_failures(content, _manifest())
+        failures = pp.guard_failures(content, _manifest(), SCHEMA)
         duplicates = [f for f in failures if "is defined" in f]
         assert len(duplicates) == 2
         assert duplicates[0].startswith("[guard 3] Catalog is defined 2 times")
         assert duplicates[1].startswith("[guard 3] Mapping is defined 3 times")
+
+    def test_every_scalar_alias_outside_the_schema_is_listed(self, done: str) -> None:
+        content = (
+            done
+            + "\n\nFoo1 = Annotated[str, Field(min_length=1)]\n"
+            + "\n\nBar = Annotated[int, Field(ge=0)]\n"
+        )
+        failures = pp.guard_failures(content, _manifest(), SCHEMA)
+        assert len(failures) == 2, failures
+        assert failures[0].startswith("[guard 2] the scalar alias Foo1 (line ")
+        assert failures[0].endswith(") names no scalar definition of the schema")
+        assert failures[1].startswith("[guard 2] the scalar alias Bar (line ")
+
+    def test_a_scalar_alias_of_a_site_key_is_outside_the_schema(
+        self, done: str
+    ) -> None:
+        """A definition key that is a manifest site is not a scalar definition."""
+        manifest = _manifest()
+        manifest["types"][1]["sites"] = ["#/definitions/TokenDatatype"]
+        failures = pp.guard_failures(done, manifest, SCHEMA)
+        assert len(failures) == 1, failures
+        assert failures[0].startswith("[guard 2] the scalar alias TokenDatatype ")
+
+    def test_a_manifest_name_bound_by_an_import_fails(self, done: str) -> None:
+        manifest = _manifest({"name": "Field", "kind": "object"})
+        failures = pp.guard_failures(done, manifest, SCHEMA)
+        assert "[guard 3] the manifest name Field is bound by an import statement" in (
+            failures
+        )
+
+    def test_a_scalar_alias_bound_by_an_import_fails(self) -> None:
+        content = (
+            HEADER
+            + "\n\nimport json as TokenDatatype\n"
+            + ("\n\nTokenDatatype = Annotated[str, Field(min_length=1)]\n")
+        )
+        failures = pp.guard_failures(content, {"types": []}, SCHEMA)
+        assert len(failures) == 1, failures
+        assert failures[0].startswith("[guard 3] the scalar alias TokenDatatype ")
+        assert failures[0].endswith("is bound by an import statement")
+
+    def test_import_bindings_cover_names_and_asnames(self) -> None:
+        source = (
+            "import os.path\nimport json as j\nfrom typing import Any, Final as F\n"
+            "def f():\n    import sys\n"
+        )
+        assert pp.import_bindings(source) == {"os", "j", "Any", "F"}
 
     def test_all_guards_report_in_one_error(self) -> None:
         source = RAW + _object("Stray", "x: str") + _object("Catalog", "again: str")
@@ -418,29 +507,47 @@ class TestCli:
         models_path = tmp_path / "models.py"
         args = pp.parse_args(["--models", str(models_path)])
         assert args.models == models_path
+        assert args.output == models_path
         assert args.schema == pp.DEFAULT_SCHEMA_PATH
         args = pp.parse_args([])
         assert args.models == pp.DEFAULT_MODELS_PATH
+        assert args.output == pp.DEFAULT_MODELS_PATH
         assert args.schema == pp.DEFAULT_SCHEMA_PATH
+        output = tmp_path / "out.py"
+        args = pp.parse_args(["--models", str(models_path), "--output", str(output)])
+        assert args.output == output
 
     def test_defaults_point_at_existing_files(self) -> None:
         assert pp.DEFAULT_MODELS_PATH.exists()
         assert pp.DEFAULT_SCHEMA_PATH.exists()
 
+    def test_active_schema_release_is_the_release_of_the_pin(self) -> None:
+        assert load_script("spec_artifact").OSCAL_RELEASE == pp.ACTIVE_SCHEMA_RELEASE
+
+    def test_load_manifest_checks_the_schema_hash(self, tmp_path: Path) -> None:
+        """The manifest must record the sha256 of the ``--schema`` file."""
+        other = tmp_path / "schema.json"
+        other.write_text(json.dumps(SCHEMA))
+        manifest_error = load_script("manifest").ManifestError
+        with pytest.raises(manifest_error, match=r"schema\.sha256"):
+            pp.load_manifest(other)
+        assert pp.load_manifest(pp.DEFAULT_SCHEMA_PATH)["types"]
+
     @pytest.fixture
     def files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-        monkeypatch.setattr(pp, "load_manifest", _manifest)
+        monkeypatch.setattr(pp, "load_manifest", lambda _schema: _manifest())
         (tmp_path / "schema.json").write_text(json.dumps(SCHEMA))
         (tmp_path / "models.py").write_text(RAW)
         return tmp_path
 
-    def _run(self, files: Path) -> int:
+    def _run(self, files: Path, *extra: str) -> int:
         status: int = pp.main(
             [
                 "--models",
                 str(files / "models.py"),
                 "--schema",
                 str(files / "schema.json"),
+                *extra,
             ]
         )
         return status
@@ -452,6 +559,55 @@ class TestCli:
         written = (files / "models.py").read_text()
         assert "Group: TypeAlias = GroupWithControls | GroupWithGroups" in written
         assert str(files / "models.py") in capsys.readouterr().out
+        assert sorted(p.name for p in files.iterdir()) == ["models.py", "schema.json"]
+
+    def test_main_writes_the_output_and_keeps_the_input(self, files: Path) -> None:
+        output = files / "out.py"
+        output.write_text("old\n")
+        output.chmod(0o640)
+        assert self._run(files, "--output", str(output)) == 0
+        assert (files / "models.py").read_text() == RAW
+        assert "Group: TypeAlias" in output.read_text()
+        assert output.stat().st_mode & 0o777 == 0o640
+        assert sorted(p.name for p in files.iterdir()) == [
+            "models.py",
+            "out.py",
+            "schema.json",
+        ]
+
+    def test_main_writes_nothing_to_the_output_on_a_guard_failure(
+        self, files: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        (files / "models.py").write_text(RAW + _object("Stray", "x: str"))
+        output = files / "out.py"
+        output.write_text("committed\n")
+        assert self._run(files, "--output", str(output)) == 1
+        assert output.read_text() == "committed\n"
+        assert f"{output} was not written" in capsys.readouterr().err
+        assert sorted(p.name for p in files.iterdir()) == [
+            "models.py",
+            "out.py",
+            "schema.json",
+        ]
+
+    def test_a_failed_write_leaves_no_temporary_file(
+        self, files: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = files / "out.py"
+        output.write_text("committed\n")
+
+        def fail(*_args: object) -> None:
+            msg = "disk full"
+            raise OSError(msg)
+
+        monkeypatch.setattr(pp.Path, "replace", fail)
+        assert self._run(files, "--output", str(output)) == 1
+        assert output.read_text() == "committed\n"
+        assert sorted(p.name for p in files.iterdir()) == [
+            "models.py",
+            "out.py",
+            "schema.json",
+        ]
 
     def test_main_writes_nothing_on_a_guard_failure(
         self, files: Path, capsys: pytest.CaptureFixture[str]
@@ -494,7 +650,7 @@ def released_manifest() -> dict[str, Any]:
 class TestCommittedModels:
     def test_passes_the_guards(self, released_manifest: dict[str, Any]) -> None:
         content = pp.DEFAULT_MODELS_PATH.read_text()
-        assert pp.guard_failures(content, released_manifest) == []
+        assert pp.guard_failures(content, released_manifest, _vendored()) == []
 
     def test_each_union_alias_is_the_union_of_its_variants(
         self, released_manifest: dict[str, Any]
@@ -533,3 +689,131 @@ class TestCommittedModels:
             }
         )
         assert isinstance(group, models.CatalogGroupWithGroups)
+
+
+# ---------------------------------------------------------------------------
+# Drift between the committed models.py and the released manifest
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def committed() -> str:
+    """The source of the committed ``models.py``."""
+    return pp.DEFAULT_MODELS_PATH.read_text()
+
+
+def _without(manifest: dict[str, Any], name: str) -> dict[str, Any]:
+    return {**manifest, "types": [t for t in manifest["types"] if t["name"] != name]}
+
+
+class TestRealDrift:
+    """The guards on the real module and manifest, with one change each."""
+
+    @pytest.mark.parametrize(
+        ("name", "form"),
+        [
+            ("Catalog", "class"),
+            ("CatalogDocument", "class"),
+            ("HashAlgorithm", "enum"),
+            ("CatalogGroup", "type alias"),
+            ("MappingCollectionMappings", "root model"),
+            ("OscalDocument", "root model"),
+        ],
+    )
+    def test_a_manifest_without_an_entry_names_its_definition(
+        self, committed: str, released_manifest: dict[str, Any], name: str, form: str
+    ) -> None:
+        failures = pp.guard_failures(
+            committed, _without(released_manifest, name), _vendored()
+        )
+        assert len(failures) == 1, failures
+        assert failures[0].startswith(f"[guard 2] {name} (line ")
+        assert failures[0].endswith(f") is defined as {form} outside the manifest")
+
+    def test_a_renamed_class_is_missing_and_stray(
+        self, committed: str, released_manifest: dict[str, Any]
+    ) -> None:
+        renamed = pp.rename_names(
+            committed, {"CatalogGroupWithControls": "CatalogGroupWithControls1"}
+        )
+        failures = pp.guard_failures(renamed, released_manifest, _vendored())
+        assert len(failures) == 2, failures
+        assert failures[0] == (
+            "[guard 1] the manifest name CatalogGroupWithControls (object) is missing"
+        )
+        assert failures[1].startswith("[guard 2] CatalogGroupWithControls1 (line ")
+
+    def test_a_manifest_entry_of_another_kind_fails(
+        self, committed: str, released_manifest: dict[str, Any]
+    ) -> None:
+        manifest = {
+            **released_manifest,
+            "types": [
+                {**t, "kind": "union", "variants": []}
+                if t["name"] == "HashAlgorithm"
+                else t
+                for t in released_manifest["types"]
+            ],
+        }
+        assert pp.guard_failures(committed, manifest, _vendored()) == [
+            "[guard 1] HashAlgorithm (union) is defined as enum, not as type alias"
+        ]
+
+    def test_a_second_definition_of_a_manifest_name_fails(
+        self, committed: str, released_manifest: dict[str, Any]
+    ) -> None:
+        content = committed + _object("HashAlgorithm", "x: str")
+        failures = pp.guard_failures(content, released_manifest, _vendored())
+        assert len(failures) == 1, failures
+        assert failures[0].startswith("[guard 3] HashAlgorithm is defined 2 times")
+
+
+# ---------------------------------------------------------------------------
+# A second run on the post-processed output
+# ---------------------------------------------------------------------------
+
+
+class TestRerun:
+    """A second run is rejected: the single-or-many step needs the codegen form.
+
+    The committed module holds ``MappingCollectionMappings`` as a ``RootModel``
+    of ``Mapping | list[Mapping]`` already, so no ``RootModel[list[Mapping]]``
+    is left to convert.
+    """
+
+    EXPECTED: typing.ClassVar[list[str]] = [
+        (
+            "MappingCollectionMappings: expected one RootModel of list[Mapping] in a "
+            "field union with Mapping, found 0"
+        )
+    ]
+
+    def test_postprocess_of_its_own_output_raises(
+        self, released_manifest: dict[str, Any]
+    ) -> None:
+        schema = json.loads(pp.DEFAULT_SCHEMA_PATH.read_bytes())
+        with pytest.raises(PostprocessError) as info:
+            pp.postprocess(
+                pp.DEFAULT_MODELS_PATH.read_text(), released_manifest, schema
+            )
+        assert info.value.failures == self.EXPECTED
+
+    def test_main_on_its_own_output_writes_nothing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        released_manifest: dict[str, Any],
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(pp, "load_manifest", lambda _schema: released_manifest)
+        models_path = tmp_path / "models.py"
+        before = pp.DEFAULT_MODELS_PATH.read_bytes()
+        models_path.write_bytes(before)
+        status = pp.main(
+            ["--models", str(models_path), "--schema", str(pp.DEFAULT_SCHEMA_PATH)]
+        )
+        assert status == 1
+        assert models_path.read_bytes() == before
+        err = capsys.readouterr().err
+        assert self.EXPECTED[0] in err
+        assert f"{models_path} was not written" in err

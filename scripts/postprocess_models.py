@@ -21,14 +21,20 @@ as a class with its manifest name. This script completes the module:
 3. It names each scalar alias from its definition key without the
    ``oscal-complete-oscal-<module>:`` prefix (``LocationUuid``). A scalar has
    no manifest entry. Its name is a binding name, not a contract name.
-4. It applies three guards to the result, and it writes nothing when one
-   fails. Each guard reports every offender:
+4. It applies three guards to the result. Each guard reports every offender:
 
    1. Each manifest name is defined at module level in the form that its kind
       requires.
-   2. Each other module-level name is a scalar alias.
-   3. No module-level name is defined twice, and no scalar alias has a
-      manifest name.
+   2. Each other module-level name is a scalar alias, and its name is the
+      name of a scalar definition of the vendored schema.
+   3. No module-level name is defined twice, no scalar alias has a manifest
+      name, and no manifest name or scalar alias is a name that a
+      module-level import statement binds.
+
+The command line reads the codegen output at ``--models`` and writes the
+completed module to ``--output`` (by default the ``--models`` path) through a
+temporary file and ``os.replace``. When a step or a guard fails, it writes
+nothing to ``--output``.
 """
 
 from __future__ import annotations
@@ -37,8 +43,11 @@ import argparse
 import ast
 import io
 import json
+import os
 import re
+import stat
 import sys
+import tempfile
 import tokenize
 from collections import Counter
 from dataclasses import dataclass
@@ -64,6 +73,10 @@ DEFAULT_SCHEMA_PATH = (
 
 #: The prefix of a namespaced definition key of the complete schema.
 SCHEMA_KEY_PREFIX: Final = "oscal-complete-oscal-"
+#: The prefix of a manifest site that is a definition of the schema.
+_DEFINITION_SITE: Final = "#/definitions/"
+#: The pattern of a published scalar alias name, over the full string.
+_PASCAL_NAME: Final = re.compile(r"[A-Z][A-Za-z0-9]*")
 
 #: The module-level form that each manifest kind requires (guard 1).
 KIND_FORMS: Final[Mapping[str, str]] = {
@@ -366,13 +379,6 @@ def module_definitions(content: str) -> list[Definition]:
     return definitions
 
 
-def _class_node(content: str, name: str) -> ast.ClassDef | None:
-    for node in ast.parse(content).body:
-        if isinstance(node, ast.ClassDef) and node.name == name:
-            return node
-    return None
-
-
 def _union_names(node: ast.expr) -> list[str] | None:
     """Return the names of a ``A | B | ...`` expression, else ``None``."""
     if isinstance(node, ast.Name):
@@ -641,15 +647,70 @@ def add_union_aliases(
     return ensure_typing_import("\n".join(lines), "TypeAlias")
 
 
+def import_bindings(content: str) -> frozenset[str]:
+    """Return each name that a module-level import statement binds."""
+    names: set[str] = set()
+    for node in ast.parse(content).body:
+        if isinstance(node, ast.Import):
+            names.update(
+                alias.asname or alias.name.split(".", maxsplit=1)[0]
+                for alias in node.names
+            )
+        elif isinstance(node, ast.ImportFrom):
+            names.update(alias.asname or alias.name for alias in node.names)
+    return frozenset(names)
+
+
+def _site_keys(manifest: Mapping[str, Any]) -> frozenset[str]:
+    """Return each definition key that is a site of a manifest entry."""
+    keys: set[str] = set()
+    for entry in manifest.get("types", []):
+        for site in entry.get("sites", []):
+            if not isinstance(site, str) or not site.startswith(_DEFINITION_SITE):
+                continue
+            token = site.removeprefix(_DEFINITION_SITE)
+            if "/" not in token:
+                keys.add(token.replace("~1", "/").replace("~0", "~"))
+    return frozenset(keys)
+
+
+def scalar_names(
+    schema: Mapping[str, Any], manifest: Mapping[str, Any]
+) -> dict[str, str]:
+    """Return the codegen name and the published name of each scalar definition.
+
+    A scalar definition is a definition key of ``schema`` that is not a site of
+    a manifest entry. A key ``oscal-complete-oscal-<module>:<local>`` gives the
+    codegen name ``OscalCompleteOscal<Module><Local>`` and the published name
+    ``<Local>``. Each other key, such as ``TokenDatatype``, keeps its name.
+    The result maps each codegen name to its published name.
+    """
+    sites = _site_keys(manifest)
+    names: dict[str, str] = {}
+    for key in schema.get("definitions", {}):
+        if key in sites:
+            continue
+        if key.startswith(SCHEMA_KEY_PREFIX):
+            codegen_name = "".join(_kebab_to_pascal(part) for part in key.split(":"))
+            names[codegen_name] = _kebab_to_pascal(key.split(":")[-1])
+        else:
+            name = key if key.isidentifier() else _kebab_to_pascal(key)
+            names[name] = name
+    return names
+
+
 def scalar_renames(
-    content: str, schema: Mapping[str, Any], manifest: Mapping[str, Any]
+    content: str,
+    schema: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    failures: list[str],
 ) -> dict[str, str]:
     """Return the renames of the scalar aliases that keep a namespaced name.
 
-    A definition key ``oscal-complete-oscal-<module>:<local>`` gives the codegen
-    name ``OscalCompleteOscal<Module><Local>`` and the published name
-    ``<Local>``. Only a module-level scalar alias outside the manifest is
-    renamed.
+    ``scalar_names`` gives the published name of each scalar definition. Only
+    a module-level scalar alias outside the manifest is renamed. A published
+    name that is not a PascalCase identifier, or that an import statement of
+    the module binds, is added to ``failures`` and is not renamed.
     """
     scalars = {
         definition.name
@@ -657,13 +718,25 @@ def scalar_renames(
         if definition.form == SCALAR_FORM
     }
     reserved = manifest_names(manifest)
+    imports = import_bindings(content)
     renames: dict[str, str] = {}
-    for key in schema.get("definitions", {}):
-        if not key.startswith(SCHEMA_KEY_PREFIX):
+    for codegen_name, published in scalar_names(schema, manifest).items():
+        if codegen_name == published:
             continue
-        codegen_name = "".join(_kebab_to_pascal(part) for part in key.split(":"))
-        if codegen_name in scalars and codegen_name not in reserved:
-            renames[codegen_name] = _kebab_to_pascal(key.split(":")[-1])
+        if codegen_name not in scalars or codegen_name in reserved:
+            continue
+        if not (_PASCAL_NAME.fullmatch(published) and published.isidentifier()):
+            failures.append(
+                f"the scalar alias {codegen_name} cannot take the name "
+                f"{published!r}: it is not a PascalCase identifier"
+            )
+        elif published in imports:
+            failures.append(
+                f"the scalar alias {codegen_name} cannot take the name "
+                f"{published!r}: an import statement binds it"
+            )
+        else:
+            renames[codegen_name] = published
     return renames
 
 
@@ -672,8 +745,14 @@ def scalar_renames(
 # ---------------------------------------------------------------------------
 
 
-def guard_failures(content: str, manifest: Mapping[str, Any]) -> list[str]:
-    """Return every failure of the three guards on ``content``."""
+def guard_failures(
+    content: str, manifest: Mapping[str, Any], schema: Mapping[str, Any]
+) -> list[str]:
+    """Return every failure of the three guards on ``content``.
+
+    ``schema`` is the vendored schema. Its scalar definitions give the names
+    that a scalar alias can have (``scalar_names``).
+    """
     definitions = module_definitions(content)
     by_name: dict[str, list[Definition]] = {}
     for definition in definitions:
@@ -693,12 +772,20 @@ def guard_failures(content: str, manifest: Mapping[str, Any]) -> list[str]:
                 f"[guard 1] {name} ({kind}) is defined as {forms}, not as {expected}"
             )
 
-    # Guard 2: each other module-level name is a scalar alias.
+    # Guard 2: each other module-level name is a scalar alias of a scalar
+    # definition of the schema.
     failures.extend(
         f"[guard 2] {d.name} (line {d.lineno}) is defined as {d.form} outside "
         "the manifest"
         for d in definitions
         if d.name not in kinds and d.form != SCALAR_FORM
+    )
+    scalars = frozenset(scalar_names(schema, manifest).values())
+    failures.extend(
+        f"[guard 2] the scalar alias {d.name} (line {d.lineno}) names no scalar "
+        "definition of the schema"
+        for d in definitions
+        if d.form == SCALAR_FORM and d.name not in kinds and d.name not in scalars
     )
 
     # Guard 3: no name is defined twice, and no scalar alias has a manifest name.
@@ -713,6 +800,19 @@ def guard_failures(content: str, manifest: Mapping[str, Any]) -> list[str]:
         f"[guard 3] the scalar alias {d.name} (line {d.lineno}) has a manifest name"
         for d in definitions
         if d.form == SCALAR_FORM and d.name in kinds
+    )
+    # Guard 3: no manifest name or scalar alias is a name that an import binds.
+    imports = import_bindings(content)
+    failures.extend(
+        f"[guard 3] the manifest name {name} is bound by an import statement"
+        for name in kinds
+        if name in imports
+    )
+    failures.extend(
+        f"[guard 3] the scalar alias {d.name} (line {d.lineno}) is bound by an "
+        "import statement"
+        for d in definitions
+        if d.form == SCALAR_FORM and d.name not in kinds and d.name in imports
     )
     return failures
 
@@ -744,7 +844,8 @@ def postprocess(
     content = fix_email_str_patterns(content)
     content = fix_non_string_patterns(content)
 
-    content = rename_names(content, scalar_renames(content, schema, manifest))
+    renames = scalar_renames(content, schema, manifest, failures)
+    content = rename_names(content, renames)
     content = rename_document_union(content, manifest, failures)
     content = add_union_aliases(content, manifest, failures)
 
@@ -757,14 +858,17 @@ def postprocess(
 
     if failures:
         raise PostprocessError(failures)
-    failures = guard_failures(content, manifest)
+    failures = guard_failures(content, manifest, schema)
     if failures:
         raise PostprocessError(failures)
     return content
 
 
-def load_manifest() -> dict[str, Any]:
+def load_manifest(schema_path: Path) -> dict[str, Any]:
     """Return the validated manifest of the pinned spec artifact.
+
+    The manifest must record the sha256 of the schema at ``schema_path``, so
+    the scalar names and the manifest come from the same schema.
 
     The sibling scripts are imported here, so the module loads without
     ``scripts/`` on ``sys.path``.
@@ -772,7 +876,30 @@ def load_manifest() -> dict[str, Any]:
     from manifest import load_validated_manifest  # noqa: PLC0415
     from spec_artifact import artifact_paths, ensure_spec_artifact  # noqa: PLC0415
 
-    return load_validated_manifest(artifact_paths(ensure_spec_artifact()))
+    return load_validated_manifest(
+        artifact_paths(ensure_spec_artifact()), schema_path=schema_path
+    )
+
+
+def write_atomically(path: Path, content: str) -> None:
+    """Write ``content`` to ``path`` through a temporary file in its directory.
+
+    ``os.replace`` moves the complete file into place, so a reader never sees
+    a partial file. An existing file keeps its permission bits.
+    """
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        tmp.chmod(mode)
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -780,7 +907,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     ``--models`` and ``--schema`` each carry their own default, so an omitted
     argument resolves to its own default regardless of whether the other one
-    was supplied.
+    was supplied. ``--output`` defaults to the ``--models`` path.
     """
     parser = argparse.ArgumentParser(
         description=(
@@ -799,14 +926,28 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_SCHEMA_PATH,
         help="Path to the vendored OSCAL schema file (default: %(default)s)",
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Path to write the completed module to (default: the --models path)",
+    )
+    args = parser.parse_args(argv)
+    if args.output is None:
+        args.output = args.models
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Complete and check the models file in place. Return the exit status."""
+    """Complete and check the codegen output. Return the exit status.
+
+    The completed module is written to ``--output`` only when every step and
+    every guard passes.
+    """
     args = parse_args(argv)
     models_path: Path = args.models
     schema_path: Path = args.schema
+    output_path: Path = args.output
 
     missing = [path for path in (models_path, schema_path) if not path.exists()]
     if missing:
@@ -815,17 +956,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     try:
-        manifest = load_manifest()
+        manifest = load_manifest(schema_path)
         schema = json.loads(schema_path.read_bytes())
         content = postprocess(models_path.read_text(), manifest, schema)
+        write_atomically(output_path, content)
     except (ValueError, OSError) as exc:
         # ValueError covers ManifestError, PostprocessError, and invalid JSON.
         print(f"Error: {exc}", file=sys.stderr)
-        print(f"{models_path} was not written", file=sys.stderr)
+        print(f"{output_path} was not written", file=sys.stderr)
         return 1
 
-    models_path.write_text(content)
-    print(f"Post-processed {models_path}")
+    print(f"Post-processed {models_path} into {output_path}")
     return 0
 
 
