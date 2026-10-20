@@ -49,7 +49,6 @@ scripts/               # Not a package: scripts import siblings by plain name
   hoist_names.py       # Writes build/codegen/oscal_complete_schema.json: each manifest
                        # site becomes definitions/<CanonicalName>
   postprocess_models.py# Structure fixes, adds unions/root models, guards against manifest
-  name_changes.py      # Writes build/name-changes.md (release-notes list of name changes)
 schemas/<release>/     # Release-versioned OSCAL JSON Schema bundles (hoist INPUT);
                        # oscal_complete_schema.json in the active release is the one used
 tests/                 # One test module per source module + import smoke test
@@ -100,7 +99,6 @@ See `.agents/summary/workflows.md` for the flow diagram.
 - **Top level re-exports; it is not the implementation.** `oscal_bindings/__init__.py` plus the alias modules `oscal_bindings/models.py`, `parser.py`, `extensions/__init__.py` are pure re-exports of their `v1` counterparts (explicit modules, not `sys.modules` tricks). Edit the `v1` copies; the top level takes its `__all__` from `oscal_bindings.v1.__all__`, so the surfaces can't drift. Names reached through either path are the same objects.
 - **Names come only from `names.json`.** To change a type name, change the manifest in the store (`cairn-proofs/oscal-bindings-specs`), release a new spec artifact, and move the pin in `scripts/spec_artifact.py`. Never rename a manifest type in the post-processor or in the hoist; the guards fail on any class name outside the manifest. Scalar alias names are binding names, not contract names.
 - **Scripts share one pin and one cache.** `scripts/spec_artifact.py` is the only pin of the spec artifact; `tests/support/spec_artifact.py` reads it. Tests import script modules through `tests/support/scripts.py` (`load_script`), not via `sys.path` hacks of their own.
-- **Name changes for release notes** come from `hatch run python scripts/name_changes.py`, which compares `models.py` against the merge base with `main` and writes `build/name-changes.md`.
 - **Extensions are never injected into generated code.** Convenience layers live in `extensions/` so the codegen output stays a pristine generate + post-process pass.
 
 <!-- meta: config-facts -->

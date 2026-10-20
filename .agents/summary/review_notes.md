@@ -6,7 +6,7 @@ Audit of the generated documentation set in `.agents/summary/` for internal cons
 
 ## Consistency Check
 
-Cross-document facts were verified against the source files (`v1/parser.py`, `v1/extensions/*.py`, `scripts/{spec_artifact,manifest,hoist_names,postprocess_models,name_changes}.py`, `pyproject.toml`, `v1/__init__.py`, and the top-level re-export modules).
+Cross-document facts were verified against the source files (`v1/parser.py`, `v1/extensions/*.py`, `scripts/{spec_artifact,manifest,hoist_names,postprocess_models}.py`, `pyproject.toml`, `v1/__init__.py`, and the top-level re-export modules).
 
 | Fact | Consistent across docs? | Notes |
 |------|-------------------------|-------|
@@ -54,4 +54,4 @@ The `codebase-summary` process fully supports Python, which is the entire implem
 
 ## Verification Method
 
-Facts were checked against the actual source read during analysis (not inferred): `src/oscal_bindings/v1/{__init__,parser}.py`, `src/oscal_bindings/v1/extensions/{document,builders,validate_element,__init__}.py`, the top-level re-export modules `src/oscal_bindings/{__init__,models,parser}.py` and `src/oscal_bindings/extensions/__init__.py`, `scripts/{spec_artifact,pinned_archive,manifest,hoist_names,postprocess_models,name_changes}.py`, `pyproject.toml`, `mise.toml`, `tests/test_oscal_bindings.py`, `tests/test_postprocess.py`, `build/name-changes.md`, the schema `$id` of `schemas/1.2.3/oscal_complete_schema.json`, and the head of `v1/models.py`.
+Facts were checked against the actual source read during analysis (not inferred): `src/oscal_bindings/v1/{__init__,parser}.py`, `src/oscal_bindings/v1/extensions/{document,builders,validate_element,__init__}.py`, the top-level re-export modules `src/oscal_bindings/{__init__,models,parser}.py` and `src/oscal_bindings/extensions/__init__.py`, `scripts/{spec_artifact,pinned_archive,manifest,hoist_names,postprocess_models}.py`, `pyproject.toml`, `mise.toml`, `tests/test_oscal_bindings.py`, `tests/test_postprocess.py`, the schema `$id` of `schemas/1.2.3/oscal_complete_schema.json`, and the head of `v1/models.py`.

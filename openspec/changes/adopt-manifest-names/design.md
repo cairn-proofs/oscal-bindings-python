@@ -145,8 +145,10 @@ alias and the enum class. Serialization writes the value, as it does for open en
 ### D7 — A clean break, with a full list of names
 
 1. The package version goes from `0.2.1` to `0.3.0`. No deprecated alias stays (proposal, What Changes, item 3).
-2. `scripts/name_changes.py` writes `build/name-changes.md`: the removed names, the added names, and the changed
-   element-type strings. The README and the GitHub release notes take that list.
+2. A one-off list of the renamed, removed, and added names and of the changed element-type strings, from `v0.2.1` to
+   this change, goes into the GitHub release notes. The README section "Upgrading to 0.3.0" gives the examples. The
+   script that made the list compared two versions of `models.py`. It is not kept, because after the merge it has no
+   base to compare with, and no later change needs it. It is in git history at commit `1744dcd`.
 3. `tests/support/element_types_snapshot.txt` is regenerated from the new classes.
 
 ## Risks / Trade-offs

@@ -79,7 +79,7 @@ Bundles are vendored one directory per release under `schemas/<release>/`, retai
 4. Update `__oscal_schema_version__` in `src/oscal_bindings/v1/__init__.py` to the new release (a test asserts it against the bundle's schema `$id`).
 5. Run `hatch run generate` and review the `v1/models.py` diff as schema-driven change only. If a guard fails, fix the
    manifest in the store. Never add a rename to the post-processor.
-6. Run `hatch run python scripts/name_changes.py` for the release-notes list (`build/name-changes.md`), then the suite.
+6. Run the suite.
    Within OSCAL 1.x the package name does **not** change — the refresh regenerates `v1` in place.
 
 ## 2. Parsing a Document (runtime)

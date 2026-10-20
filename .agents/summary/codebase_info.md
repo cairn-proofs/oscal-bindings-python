@@ -63,9 +63,8 @@ oscal-bindings-python/
 │   ├── pinned_archive.py        # Locked, sha256-checked fetch + safe extraction
 │   ├── manifest.py              # Validates names.json of the pinned artifact
 │   ├── hoist_names.py           # Writes build/codegen/oscal_complete_schema.json (manifest-named definitions)
-│   ├── postprocess_models.py    # Structure fixes, added manifest types, guards against the manifest
-│   │                            # (takes --schema / --models / --output; --output defaults to --models)
-│   └── name_changes.py          # Writes build/name-changes.md (release-notes list)
+│   └── postprocess_models.py    # Structure fixes, added manifest types, guards against the manifest
+│                                # (takes --schema / --models / --output; --output defaults to --models)
 ├── schemas/                     # OSCAL JSON Schema bundles, one dir per release
 │   ├── 1.2.2/                   # Prior release, retained for reference
 │   └── 1.2.3/                   # Active_Schema_Bundle

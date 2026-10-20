@@ -143,7 +143,6 @@ The scripts' CLI contracts:
 ```
 hoist_names.py [--output PATH]
 postprocess_models.py [--models PATH] [--schema PATH] [--output PATH]   # --output defaults to --models
-name_changes.py [--base REF] [--output PATH]   # default output build/name-changes.md
 ```
 
 Each post-processor argument has its own independent default, so a bare invocation and a one-argument invocation both work. A missing path exits non-zero naming the path. An invalid manifest (including a `schema.sha256` that does not match `--schema`), a hoist guard, or a post-processor guard also exits non-zero, and each lists every failure at once. On a failure nothing is written to the output path; the post-processor writes `--output` through a temp file and `os.replace`.

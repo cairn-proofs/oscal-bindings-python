@@ -124,7 +124,6 @@ Not part of the installed package. `scripts/` is not a package: a script imports
 | `manifest.py` | Validates `names.json`: JSON Schema (`jsonschema-rs`), format/release, vendored-schema sha256, unique names, resolvable pointers, type references | `validate_manifest`, `load_validated_manifest`, `ManifestError`, `VENDORED_SCHEMA` |
 | `hoist_names.py` | Writes `build/codegen/oscal_complete_schema.json`, in which each manifest site is `definitions/<Name>` with a `$ref` at the site | `hoist`, `HoistError`, `OUTPUT` |
 | `postprocess_models.py` | Phase 1 structure fixes, adds union aliases / `MappingCollectionMappings` / `OscalDocument`, names scalar aliases, applies three guards against the manifest | `postprocess`, `guard_failures`, `PostprocessError`, `add_union_aliases`, `add_single_or_many`, `rename_document_union`, `scalar_renames`, `collapse_scalar_root_models`, `fix_non_string_patterns`, `ACTIVE_SCHEMA_RELEASE`, `scalar_names`, `import_bindings`, `load_manifest(schema_path)`, `write_atomically`, `parse_args`/`main` (`--models`/`--schema`, each with its own default; `--output`, defaulting to `--models`) |
-| `name_changes.py` | Writes `build/name-changes.md`, the release-notes list of renamed, reused, removed, and added names and changed element types, against the merge base with `main` | `compare`, `render`, `build_document`, `NameChangesError` |
 | `bench_serialization.py` | Serialization benchmark (see `DEVELOPING.md`) | — |
 
 ## 9. `tests/` — test suite
@@ -138,7 +137,6 @@ Not part of the installed package. `scripts/` is not a package: a script imports
 | `test_postprocess.py` | Post-processor units: phase 1, the added manifest types, the three guards (each lists every offender), and CLI argument combinations |
 | `test_prop_postprocess.py` | Hypothesis property tests for the post-processor |
 | `test_closed_enums.py` | Closed enums accept their values, reject others with `OscalParseError`, and serialize back to strings |
-| `test_name_changes.py` | The release-notes name-change list |
 | `test_prop_version_package.py` | Properties 3–6: published-surface round trip, type identity across the top-level and `v1` paths, version-constant consistency, namespace stability |
 | `support/version_package.py` | Public-surface `__all__` snapshot and schema `$id` helpers shared by the import-path tests |
 | `support/corpus.py` | Shared fixtures/corpus helpers; imports `PinnedArchive` from `scripts/pinned_archive.py` |

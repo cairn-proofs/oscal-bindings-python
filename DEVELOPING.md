@@ -136,8 +136,7 @@ cache, `hatch run generate` needs network access. `scripts/` is not a package: a
 name, and tests load scripts through `tests/support/scripts.py`.
 
 To change a type name, change the manifest in the store, release a new spec artifact, and move the pin. Never rename a
-manifest type in the post-processor. `hatch run python scripts/name_changes.py` writes `build/name-changes.md`, the
-release-notes list of the names that `models.py` changes against `main`.
+manifest type in the post-processor.
 
 ## Refreshing to a new OSCAL release
 
@@ -157,7 +156,7 @@ the `schemas/` directory, so adding a bundle changes nothing until the paths cha
    (`ns/oscal/1.0/<release>/…`).
 5. Run `hatch run generate` and review the `models.py` diff as schema-driven change
    only. If a guard fails, fix the manifest in the store. Do not add a rename to the post-processor.
-6. Run `hatch run python scripts/name_changes.py` for the release notes, and run `hatch test --all`.
+6. Run `hatch test --all`.
 
 A minor or patch refresh regenerates `oscal_bindings.v1` in place. The package name
 changes only for a new OSCAL **major** version.
@@ -224,7 +223,6 @@ scripts/
   manifest.py              # Validates names.json of the pinned artifact
   hoist_names.py           # Writes build/codegen/oscal_complete_schema.json with manifest-named definitions
   postprocess_models.py    # Phase 1 structure fixes, added manifest types, and guards against the manifest
-  name_changes.py          # Writes build/name-changes.md (release-notes list of name changes)
 tests/
   test_parser.py           # Parser / serializer / validator tests
   test_document.py         # OscalDoc facade tests
@@ -236,7 +234,6 @@ tests/
   test_postprocess.py      # Post-processor phase and guard tests
   test_prop_postprocess.py # Property tests for the post-processor
   test_closed_enums.py     # Closed-enum acceptance and rejection
-  test_name_changes.py     # Name-change list tests
   support/scripts.py       # load_script: loads a module from scripts/ in the test process
 ```
 

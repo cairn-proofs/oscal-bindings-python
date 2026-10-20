@@ -55,8 +55,9 @@
 
 ## 5. Docs, version, and gate
 
-- [x] 5.1 Add `scripts/name_changes.py` (design.md D7, item 2). Verify that `build/name-changes.md` lists the four
-      reused names `Status`, `Origin`, `LocalDefinitions`, and `MergeFlat`, each with its old and its new type.
+- [x] 5.1 Make the one-off name list of design.md D7, item 2, with a script that is then removed. Verify that the
+      list names each reused name (`Status`, `Origin`, `LocalDefinitions`, `MergeFlat`, `MergeCustom`) with its old and
+      its new type.
 - [x] 5.2 Update `README.md`, `DEVELOPING.md`, `AGENTS.md`, and `.agents/summary/` for the new pipeline and the names.
       Set `version` to `0.3.0`. Verify that no doc names a removed constant or phase.
 - [x] 5.3 Run `hatch run release` from a clean clone with an empty `tests/.corpus_cache`. Verify that it passes and
@@ -97,7 +98,7 @@ waves:
     dependsOn: [W5-generate]
   - id: W7-name-list
     tasks: ["5.1"]
-    owns: [scripts/name_changes.py, tests/test_name_changes.py]
+    owns: [scripts/name_changes.py, tests/test_name_changes.py]  # removed after the list was made
     dependsOn: [W5-generate]
   - id: W8-docs
     tasks: ["5.2"]
