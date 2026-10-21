@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 # the language suffix (oscal-bindings-python) because sibling bindings in other
 # languages share the cairn-proofs org; package registries don't need it.
 name = "oscal-bindings"
-version = "0.3.0"
+version = "0.3.1"
 description = "Typed Python data bindings for OSCAL, generated from the NIST JSON Schema"
 readme = "README.md"
 # PEP 639 license expression; no License :: classifier alongside it.
