@@ -74,6 +74,11 @@ jobs:
       - name: Release checks
         run: hatch run release
 
+      # `release` regenerates models.py from the pinned spec artifact. A diff
+      # means the committed file is not what the pin generates.
+      - name: Check that the committed models.py matches the generated one
+        run: git diff --exit-code -- src/oscal_bindings/v1/models.py
+
       - name: Build wheel and sdist
         run: hatch build
 

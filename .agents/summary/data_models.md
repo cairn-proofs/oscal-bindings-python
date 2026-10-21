@@ -102,7 +102,7 @@ Every type name comes from the naming manifest (`names.json`) of the pinned spec
 | `single-or-many` | `RootModel[T \| list[T]]` | `MappingCollectionMappings` |
 | `document-union` | `RootModel` of the 8 wrappers | `OscalDocument` |
 
-Scalar definitions have no manifest entry. Their `Annotated` aliases take the definition key without the `oscal-complete-oscal-<module>:` prefix (`LocationUuid`). The post-processor guards fail the build on a missing manifest name, a name outside the manifest that is not a scalar alias of a scalar definition of the vendored schema, a name defined twice, or a manifest name or scalar alias that a module-level import binds. To change a name, change the manifest in the store.
+Scalar definitions have no manifest entry. Their `Annotated` aliases take the definition key without the `oscal-complete-oscal-<module>:` prefix (`LocationUuid`). The post-processor guards fail the build on a missing manifest name, a name outside the manifest that is not a scalar alias of a scalar definition of the artifact schema, a name defined twice, or a manifest name or scalar alias that a module-level import binds. To change a name, change the manifest in the store.
 
 When an object matches more than one union variant, pydantic selects the first variant in manifest order. For example, a `Parameter` with neither `select` nor `values` parses as `ParameterWithSelect`. The serialized output is the same.
 

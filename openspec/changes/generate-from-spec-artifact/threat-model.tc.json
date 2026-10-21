@@ -112,7 +112,7 @@
       "id": "262c26db-131e-42a7-8e3e-70d5e2a6f28d",
       "numericId": 6,
       "content": "CI runs git diff --exit-code on the tracked tree (at least src/oscal_bindings/v1/models.py) after hatch run release and before hatch build. A difference fails the build job.",
-      "status": "mitigationIdentified",
+      "status": "mitigationResolved",
       "tags": ["ci", "models.py"],
       "metadata": [
         { "key": "custom:mitigationType", "value": "Detective" },
@@ -138,7 +138,7 @@
       "id": "b6608ea8-7b3a-4231-9567-a4f7d85831c6",
       "numericId": 8,
       "content": "Each script reads the schema bytes once. load_validated_manifest hashes those bytes, and the hoist and the post-processor parse the same bytes, not a second read of the path.",
-      "status": "mitigationIdentified",
+      "status": "mitigationResolved",
       "tags": ["manifest", "hoist"],
       "metadata": [
         { "key": "custom:mitigationType", "value": "Preventive" },
@@ -151,7 +151,7 @@
       "id": "2d8e5837-cbb1-420b-9c7d-f3a3d7775799",
       "numericId": 9,
       "content": "DEVELOPING.md tells the pin mover and the reviewer to compare SPEC_ARTIFACT_SHA256 with SHA256SUMS of the published store release and to keep the URL owner and repo. A test asserts the URL prefix https://github.com/cairn-proofs/oscal-bindings-specs/releases/download/.",
-      "status": "mitigationIdentified",
+      "status": "mitigationResolved",
       "tags": ["review", "pin"],
       "metadata": [
         { "key": "custom:mitigationType", "value": "Preventive" },
@@ -164,7 +164,7 @@
       "id": "351c0584-f2b2-4e72-a3f7-b6cc274c99ab",
       "numericId": 10,
       "content": "CI keeps no cache of tests/.corpus_cache/, so each CI run downloads and hash-checks the artifact. A future CI cache must re-verify the archive sha256 on a hit.",
-      "status": "mitigationIdentified",
+      "status": "mitigationResolved",
       "tags": ["ci", "cache"],
       "metadata": [
         { "key": "custom:mitigationType", "value": "Preventive" },
@@ -190,7 +190,7 @@
       "id": "7ed0b8f1-507a-49b1-b3f2-d7c1cdeb2713",
       "numericId": 12,
       "content": "Two tests check that __oscal_schema_version__ equals OSCAL_RELEASE of the pin, and that OSCAL_RELEASE equals the release in the $id of the artifact schema (D2).",
-      "status": "mitigationIdentified",
+      "status": "mitigationResolved",
       "tags": ["tests", "version"],
       "metadata": [
         { "key": "custom:mitigationType", "value": "Detective" },
@@ -203,7 +203,7 @@
       "id": "93a351f8-c8a3-4d5f-801e-69e66bae3966",
       "numericId": 13,
       "content": "Before git rm -r schemas/, a task checks that the sha256 of the vendored schema, of the artifact schema, and schema.sha256 in names.json are equal, and records the value in the commit message.",
-      "status": "mitigationIdentified",
+      "status": "mitigationResolved",
       "tags": ["provenance"],
       "metadata": [
         { "key": "custom:mitigationType", "value": "Detective" },

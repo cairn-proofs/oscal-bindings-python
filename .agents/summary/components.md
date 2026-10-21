@@ -97,7 +97,7 @@ graph LR
 
 - Re-exports only; defines no symbols of its own beyond `__oscal_schema_version__`.
 - `from .models import *`, then explicit named imports from `.parser` and `.extensions`.
-- `__oscal_schema_version__ = "1.2.3"` — the full OSCAL release the vendored bundle (and therefore the models) came from. A literal by design; a test asserts it against the release element of the bundle's schema `$id`.
+- `__oscal_schema_version__ = "1.2.3"` — the full OSCAL release of the spec artifact pin (and therefore of the models). A literal by design, because the package cannot import from `scripts/`. Tests assert that it equals `OSCAL_RELEASE` of the pin, and that `OSCAL_RELEASE` equals the release element of the artifact schema `$id`.
 - `__all__` is the curated ~35-name surface (wrappers, parsers, facade, builders, validation, exceptions); the generated model names arrive via the star-import and are intentionally *not* in `__all__`.
 
 ## 7. Top-level re-exports — `oscal_bindings/`
@@ -119,11 +119,11 @@ Not part of the installed package. `scripts/` is not a package: a script imports
 
 | File | Responsibility | Notable symbols |
 |------|----------------|-----------------|
-| `spec_artifact.py` | The one pin of the spec artifact (`0.2.0+oscal.1.2.3` + sha256), shared by `generate` and the tests; cache `tests/.corpus_cache/` | `SPEC_ARTIFACT_VERSION`, `SPEC_ARTIFACT`, `OSCAL_RELEASE`, `ensure_spec_artifact`, `artifact_paths` |
+| `spec_artifact.py` | The one pin of the spec artifact (`0.2.0+oscal.1.2.3` + sha256), shared by `generate` and the tests; cache `tests/.corpus_cache/`. The artifact supplies the complete OSCAL schema (`artifact_paths(...).schema`), `names.json`, and the corpus, and the pin is the only selector of the OSCAL release | `SPEC_ARTIFACT_VERSION`, `SPEC_ARTIFACT_SHA256`, `SPEC_ARTIFACT`, `OSCAL_RELEASE`, `ensure_spec_artifact`, `artifact_paths`, `ArtifactPaths` |
 | `pinned_archive.py` | Stdlib-only, cross-process-locked download (HTTPS only, HTTPS-only redirects, 64 MiB body cap), sha256 check before extraction, tar-slip-safe extraction with the `data` filter (Python 3.11.4+), atomic publish | `PinnedArchive`, `ensure_pinned_archive`, `http_get`, `build_https_opener`, `CorpusError`, `ResponseTooLargeError`, `FileLock` |
-| `manifest.py` | Validates `names.json`: JSON Schema (`jsonschema-rs`), format/release, vendored-schema sha256, unique names, resolvable pointers, type references | `validate_manifest`, `load_validated_manifest`, `ManifestError`, `VENDORED_SCHEMA` |
-| `hoist_names.py` | Writes `build/codegen/oscal_complete_schema.json`, in which each manifest site is `definitions/<Name>` with a `$ref` at the site | `hoist`, `HoistError`, `OUTPUT` |
-| `postprocess_models.py` | Phase 1 structure fixes, adds union aliases / `MappingCollectionMappings` / `OscalDocument`, names scalar aliases, applies three guards against the manifest | `postprocess`, `guard_failures`, `PostprocessError`, `add_union_aliases`, `add_single_or_many`, `rename_document_union`, `scalar_renames`, `collapse_scalar_root_models`, `fix_non_string_patterns`, `ACTIVE_SCHEMA_RELEASE`, `scalar_names`, `import_bindings`, `load_manifest(schema_path)`, `write_atomically`, `parse_args`/`main` (`--models`/`--schema`, each with its own default; `--output`, defaulting to `--models`) |
+| `manifest.py` | Validates `names.json`: JSON Schema (`jsonschema-rs`), format/release, schema sha256 against the schema bytes, unique names, resolvable pointers, type references | `validate_manifest`, `load_validated_manifest(paths, *, schema_bytes=None, schema_path=None)` (no bytes and no path means `paths.schema`), `read_schema_bytes`, `ManifestError` |
+| `hoist_names.py` | Reads the artifact schema from `paths.schema` one time, and writes `build/codegen/oscal_complete_schema.json`, in which each manifest site is `definitions/<Name>` with a `$ref` at the site | `hoist`, `HoistError`, `OUTPUT` |
+| `postprocess_models.py` | Phase 1 structure fixes, adds union aliases / `MappingCollectionMappings` / `OscalDocument`, names scalar aliases, applies three guards against the manifest | `postprocess`, `guard_failures`, `PostprocessError`, `add_union_aliases`, `add_single_or_many`, `rename_document_union`, `scalar_renames`, `collapse_scalar_root_models`, `fix_non_string_patterns`, `scalar_names`, `import_bindings`, `artifact_schema_path`, `load_manifest(schema_bytes)`, `write_atomically`, `parse_args`/`main` (`--models`/`--schema`, each with its own default, `--schema` resolved in `main` to the artifact schema; `--output`, defaulting to `--models`) |
 | `bench_serialization.py` | Serialization benchmark (see `DEVELOPING.md`) | — |
 
 ## 9. `tests/` — test suite
@@ -131,14 +131,15 @@ Not part of the installed package. `scripts/` is not a package: a script imports
 | Module | Covers |
 |--------|--------|
 | `test_parser.py`, `test_document.py`, `test_builders.py`, `test_validate_element.py` | One per source component; test classes group scenarios (`TestAssessmentPeriod`, `TestMakeResource`, `TestTypedParsers`) |
-| `test_oscal_bindings.py` | Import smoke test **and** top-level parity: every name in the public-surface snapshot imports from `oscal_bindings`, all three top-level module paths resolve, type identity holds across paths, and `__oscal_schema_version__` is semver-shaped and matches the bundle `$id` |
+| `test_oscal_bindings.py` | Import smoke test **and** top-level parity: every name in the public-surface snapshot imports from `oscal_bindings`, all three top-level module paths resolve, type identity holds across paths, and `__oscal_schema_version__` is semver-shaped, equals the release of the pin, and the release of the pin matches the artifact schema `$id` |
 | `test_manifest.py` | Manifest validation: the released manifest passes; changed copies fail each check |
-| `test_hoist_names.py` | Hoist: every site becomes a `$ref`, no old site keys remain, deterministic output, merge and closed-enum guards, and corpus-level equivalence of the hoisted and vendored schemas |
+| `test_hoist_names.py` | Hoist: every site becomes a `$ref`, no old site keys remain, deterministic output, merge and closed-enum guards, and corpus-level equivalence of the hoisted and artifact schemas |
 | `test_postprocess.py` | Post-processor units: phase 1, the added manifest types, the three guards (each lists every offender), and CLI argument combinations |
 | `test_prop_postprocess.py` | Hypothesis property tests for the post-processor |
 | `test_closed_enums.py` | Closed enums accept their values, reject others with `OscalParseError`, and serialize back to strings |
 | `test_prop_version_package.py` | Properties 3–6: published-surface round trip, type identity across the top-level and `v1` paths, version-constant consistency, namespace stability |
 | `support/version_package.py` | Public-surface `__all__` snapshot and schema `$id` helpers shared by the import-path tests |
 | `support/corpus.py` | Shared fixtures/corpus helpers; imports `PinnedArchive` from `scripts/pinned_archive.py` |
-| `support/spec_artifact.py` | Reads the pin from `scripts/spec_artifact.py` |
+| `support/spec_artifact.py` | Reads the pin from `scripts/spec_artifact.py`; `corpus_root()` and `schema_path()` return paths inside the fetched artifact |
+| `support/oscal_shape.py` | OSCAL-shape checks of serialized output; `schema_property_names()` reads the artifact schema lazily on first use (cached) |
 | `support/scripts.py` | `load_script(name)`: loads `scripts/<name>.py` in the test process |

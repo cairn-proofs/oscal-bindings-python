@@ -46,7 +46,7 @@ The implementation lives in the major-version package **`oscal_bindings.v1`**; t
 
 - **8 OSCAL document types:** Catalog, Profile, Component Definition, System Security Plan, Assessment Plan, Assessment Results, Plan of Action and Milestones, Mapping Collection.
 - **Layout:** implementation under `src/oscal_bindings/v1/`; top-level package re-exports it through explicit alias modules at `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py`.
-- **Active schema:** `schemas/1.2.3/oscal_complete_schema.json`. Bundles are vendored one directory per OSCAL release (`schemas/1.2.2/` is retained); the active one is selected by the explicit pin and paths only — no glob, no "newest wins".
+- **Active schema:** `oscal_complete_schema.json` of the spec artifact pinned in `scripts/spec_artifact.py` (`0.2.0+oscal.1.2.3`, by sha256). The repo holds no copy of the schema. The pin is the only selector of the schema and its release.
 - **`__oscal_schema_version__`** (`"1.2.3"`) on `oscal_bindings.v1`, re-exported at the top level, records the exact release the models came from.
 - **Entry points:** `parse_oscal`, `parse_oscal_file`, 8 typed `parse_*` functions, `serialize_oscal`, `validate_oscal`, `OscalDoc`, `make_hash`/`make_rlink`/`make_resource`, `validate_element`/`get_supported_element_types`.
 - **Parsers accept `str | bytes`;** bytes skips a UTF-8 decode (useful for HTTP/S3/file byte-sources).

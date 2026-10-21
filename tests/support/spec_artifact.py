@@ -35,3 +35,11 @@ def corpus_root(*, cache_root: Path = CACHE_ROOT) -> Path:
         ensure_spec_artifact(cache_root=cache_root)
     ).corpus
     return corpus
+
+
+def schema_path(*, cache_root: Path = CACHE_ROOT) -> Path:
+    """Return the complete OSCAL JSON Schema inside the spec artifact."""
+    schema: Path = _pin.artifact_paths(
+        ensure_spec_artifact(cache_root=cache_root)
+    ).schema
+    return schema

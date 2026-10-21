@@ -1,9 +1,9 @@
 """Corpus schema validation: default ``model_dump_json()`` is valid OSCAL (2.5).
 
 Every NIST and AWS corpus document is parsed, dumped with an argument-less
-``doc.model_dump_json()``, and validated against the vendored OSCAL 1.2.3
-complete JSON Schema. One test per document (parametrized at collection), so a
-failure names the document.
+``doc.model_dump_json()``, and validated against the complete OSCAL JSON
+Schema of the pinned spec artifact. One test per document (parametrized at
+collection), so a failure names the document.
 
 Validator choices:
 
@@ -27,21 +27,17 @@ from __future__ import annotations
 
 import functools
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import jsonschema_rs
 import pytest
 from support.corpus import AWS_CORPUS, NIST_CORPUS, CorpusDoc, load_corpus_docs
+from support.spec_artifact import schema_path
 
 from oscal_bindings import parse_oscal, serialize_oscal
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-
-SCHEMA_PATH = (
-    Path(__file__).parent.parent / "schemas" / "1.2.3" / "oscal_complete_schema.json"
-)
 
 #: How many validation errors to show per failing document.
 MAX_REPORTED_ERRORS = 5
@@ -49,7 +45,8 @@ MAX_REPORTED_ERRORS = 5
 
 @functools.cache
 def _schema() -> dict[str, Any]:
-    return json.loads(SCHEMA_PATH.read_bytes())
+    """The complete schema of the pinned spec artifact, read on first use."""
+    return json.loads(schema_path().read_bytes())
 
 
 @functools.cache

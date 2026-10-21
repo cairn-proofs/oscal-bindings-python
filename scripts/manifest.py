@@ -11,6 +11,8 @@ applies these checks in order and returns every failure:
 2. ``format`` is a supported format version, and ``oscal-release`` is the
    release of the schema that generation uses.
 3. ``schema.sha256`` is the sha256 of the schema bytes that generation reads.
+   The caller gives these bytes, or ``load_validated_manifest`` reads them one
+   time, so the check hashes the same bytes that the caller parses.
 4. The rules that a JSON Schema cannot express: each name is unique and is
    not a Python keyword, soft keyword, or builtin, each
    pointer occurs in one entry only and resolves in the schema, each type
@@ -19,7 +21,7 @@ applies these checks in order and returns every failure:
    key of the wrapper at its site.
 
 The module uses the standard library and ``jsonschema_rs`` only. Run this file
-to validate the manifest of the pinned artifact against the vendored schema.
+to validate the manifest of the pinned artifact against the artifact schema.
 """
 
 from __future__ import annotations
@@ -32,12 +34,7 @@ import re
 from typing import TYPE_CHECKING, Final
 
 import jsonschema_rs
-from spec_artifact import (
-    OSCAL_RELEASE,
-    REPO_ROOT,
-    artifact_paths,
-    ensure_spec_artifact,
-)
+from spec_artifact import OSCAL_RELEASE, artifact_paths, ensure_spec_artifact
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -47,11 +44,6 @@ if TYPE_CHECKING:
 
 # The manifest format versions that this module can read.
 SUPPORTED_FORMATS: Final[tuple[int, ...]] = (1,)
-
-# The vendored schema that codegen reads. Its bytes must match schema.sha256.
-VENDORED_SCHEMA: Final[Path] = (
-    REPO_ROOT / "schemas" / OSCAL_RELEASE / "oscal_complete_schema.json"
-)
 
 # The pattern of a canonical name and of a type reference, over the full string.
 _NAME: Final = re.compile(r"[A-Z][A-Za-z0-9]*")
@@ -342,30 +334,50 @@ def _read_json(path: Path) -> object:
         raise ManifestError(str(path), [f"cannot read {path.name}: {exc}"]) from exc
 
 
+def read_schema_bytes(schema_path: Path) -> bytes:
+    """Return the bytes of the schema at ``schema_path``.
+
+    Raise ``ManifestError`` when the file cannot be read.
+    """
+    try:
+        return schema_path.read_bytes()
+    except OSError as exc:
+        raise ManifestError(
+            str(schema_path), [f"cannot read the schema {schema_path}: {exc}"]
+        ) from exc
+
+
 def load_validated_manifest(
     paths: ArtifactPaths,
     *,
-    schema_path: Path = VENDORED_SCHEMA,
+    schema_bytes: bytes | None = None,
+    schema_path: Path | None = None,
     release: str = OSCAL_RELEASE,
 ) -> dict[str, object]:
     """Read, validate, and return the manifest of the artifact at ``paths``.
 
-    ``schema_path`` is the complete schema that codegen reads, by default the
-    vendored schema. Raise ``ManifestError`` with every failure when a file
-    cannot be read or the manifest is invalid.
+    A caller that parses the schema gives the bytes that it parses as
+    ``schema_bytes``, so the ``schema.sha256`` check hashes those bytes.
+    Otherwise the function reads ``schema_path`` (by default ``paths.schema``)
+    one time. Give at most one of the two.
+
+    Raise ``ManifestError`` with every failure when a file cannot be read or
+    the manifest is invalid. Raise ``TypeError`` when both schema arguments
+    are given.
     """
+    if schema_bytes is not None and schema_path is not None:
+        msg = "give schema_bytes or schema_path, not both"
+        raise TypeError(msg)
     manifest = _read_json(paths.names)
     names_schema = _read_json(paths.names_schema)
     if not isinstance(names_schema, dict):
         raise ManifestError(
             str(paths.names_schema), ["names.schema.json is not a JSON object"]
         )
-    try:
-        schema_bytes = schema_path.read_bytes()
-    except OSError as exc:
-        raise ManifestError(
-            str(paths.names), [f"cannot read the schema {schema_path}: {exc}"]
-        ) from exc
+    if schema_bytes is None:
+        schema_bytes = read_schema_bytes(
+            paths.schema if schema_path is None else schema_path
+        )
     failures = validate_manifest(manifest, names_schema, schema_bytes, release)
     if failures or not isinstance(manifest, dict):
         raise ManifestError(str(paths.names), failures)
@@ -373,7 +385,7 @@ def load_validated_manifest(
 
 
 def main() -> int:
-    """Validate the manifest of the pinned artifact against the vendored schema."""
+    """Validate the manifest of the pinned artifact against the artifact schema."""
     paths = artifact_paths(ensure_spec_artifact())
     try:
         manifest = load_validated_manifest(paths)

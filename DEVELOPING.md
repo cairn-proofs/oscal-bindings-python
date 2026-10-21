@@ -98,10 +98,11 @@ rule for a manifest type. `hatch run generate` runs three steps:
    1. It fetches the spec artifact that `scripts/spec_artifact.py` pins (`0.2.0+oscal.1.2.3`, by sha256) through
       `scripts/pinned_archive.py`.
    2. `scripts/manifest.py` validates `names.json`: its JSON Schema from the same artifact (with `jsonschema-rs`), the
-      format version and OSCAL release, the sha256 of the vendored schema, unique names, and pointers that resolve.
-   3. It copies the vendored schema `schemas/<release>/oscal_complete_schema.json` and moves each manifest site into
-      `definitions/<Name>`, with a `$ref` at each site. A merge of sites with different bodies fails and names both
-      sites. A closed-enum value that its base datatype rejects fails and names the site.
+      format version and OSCAL release, the sha256 of the artifact schema, unique names, and pointers that resolve.
+   3. It copies the complete OSCAL schema of the same artifact (`artifact_paths(...).schema`) and moves each manifest
+      site into `definitions/<Name>`, with a `$ref` at each site. It reads the schema bytes one time: the manifest
+      check hashes them, and the hoist parses the same bytes. A merge of sites with different bodies fails and names
+      both sites. A closed-enum value that its base datatype rejects fails and names the site.
 2. `datamodel-codegen` reads the hoisted copy and writes the raw module `build/codegen/models.py` (git-ignored).
    1. Key flags: `--collapse-root-models`, `--use-annotated`, `--field-constraints`, `--formatters black isort`.
    2. `--base-class oscal_bindings.v1._base.OscalBaseModel` makes every generated object model inherit the
@@ -117,46 +118,61 @@ rule for a manifest type. `hatch run generate` runs three steps:
       `MappingCollectionMappings` root model, and the `OscalDocument` root model.
    3. It names each scalar alias from its definition key without the `oscal-complete-oscal-<module>:` prefix
       (`LocationUuid`). A scalar has no manifest entry, so its name is a binding name and not a contract name.
-   4. Three guards compare the result with the manifest and the vendored schema. Each guard reports every offender.
+   4. Three guards compare the result with the manifest and the artifact schema. Each guard reports every offender.
       The guards check these rules:
       1. Each manifest name is defined once in the form of its kind.
-      2. Each other module-level name is a scalar alias, with the name of a scalar definition of the vendored schema.
+      2. Each other module-level name is a scalar alias, with the name of a scalar definition of the artifact schema.
       3. No name is defined twice, no scalar alias has a manifest name, and no manifest name or scalar alias is a
          name that a module-level import binds.
 
-The post-processor takes its paths explicitly: the `generate` script passes `--schema`, `--models` (the raw codegen
-output), and `--output`. An omitted `--schema` or `--models` falls back to its own default
-(`schemas/<ACTIVE_SCHEMA_RELEASE>/oscal_complete_schema.json` and `src/oscal_bindings/v1/models.py`), and an omitted
-`--output` is the `--models` path. The manifest must record the sha256 of the `--schema` file. A missing path is a
-non-zero exit. The script writes `--output` through a temporary file in the same directory and `os.replace`, and on a
-failure it writes nothing to `--output`. Thus a failed `hatch run generate` leaves the committed `models.py` as it was.
+The `generate` script passes `--models` (the raw codegen output) and `--output` to the post-processor, and no
+`--schema`. An omitted `--schema` is the complete schema of the pinned spec artifact. An omitted `--models` is
+`src/oscal_bindings/v1/models.py`, and an omitted `--output` is the `--models` path. An explicit `--schema` lets you
+try a candidate schema. The manifest must record the sha256 of the `--schema` bytes, so a wrong file fails. A missing
+path is a non-zero exit. The script writes `--output` through a temporary file in the same directory and
+`os.replace`, and on a failure it writes nothing to `--output`. Thus a failed `hatch run generate` leaves the committed
+`models.py` as it was.
 
-Generation and `hatch test` share the pin in `scripts/spec_artifact.py` and the cache `tests/.corpus_cache/`. On a cold
-cache, `hatch run generate` needs network access. `scripts/` is not a package: a script imports its siblings by plain
-name, and tests load scripts through `tests/support/scripts.py`.
+The repo holds no copy of the OSCAL schema. The pinned spec artifact supplies it, and the pin is the only selector of
+the OSCAL release. Generation and `hatch test` share the pin in `scripts/spec_artifact.py` and the cache
+`tests/.corpus_cache/`. On a cold cache, `hatch run generate` and `hatch test` need network access. An sdist checkout
+also needs network access to run `generate`, because the sdist does not ship the schema. A wheel build from the sdist
+does not need the schema, because the sdist ships `models.py`. `scripts/` is not a package: a script imports its
+siblings by plain name, and tests load scripts through `tests/support/scripts.py`.
+
+CI runs `git diff --exit-code -- src/oscal_bindings/v1/models.py` after `hatch run release` and before `hatch build`.
+A difference fails the `build` job, so the committed `models.py` must be what the pin generates.
 
 To change a type name, change the manifest in the store, release a new spec artifact, and move the pin. Never rename a
 manifest type in the post-processor.
 
-## Refreshing to a new OSCAL release
+## Moving the pin to a new spec artifact
 
-Schemas are vendored per release under `schemas/<release>/`, filenames unchanged. The
-active bundle is selected **by explicit path only** — nothing scans, globs, or orders
-the `schemas/` directory, so adding a bundle changes nothing until the paths change.
+The store [cairn-proofs/oscal-bindings-specs](https://github.com/cairn-proofs/oscal-bindings-specs) vendors the NIST
+schema and publishes it in the spec artifact. To move to a new OSCAL release, or to a new artifact of the same release,
+move the pin. The build metadata of the pin version (`+oscal.<release>`) selects the release. Nothing else in this repo
+names it, except `__oscal_schema_version__`.
 
-1. Add the new release's schema set under `schemas/<release>/` (keep the existing
-   bundle in place; the directories are a visible, reviewable history).
-2. Move the pin in `scripts/spec_artifact.py` (version and sha256 together) to a spec artifact of the new release.
-   Its naming manifest must record the sha256 of the new vendored schema. The manifest and hoist steps read the
-   release from this pin.
-3. Point the remaining references at the new release: `ACTIVE_SCHEMA_RELEASE` in `scripts/postprocess_models.py`,
-   and the `--schema` path in the `generate` script in `pyproject.toml`.
-4. Update `__oscal_schema_version__` in `src/oscal_bindings/v1/__init__.py` to the new
-   release. It must match the release element of the schema `$id`
-   (`ns/oscal/1.0/<release>/…`).
-5. Run `hatch run generate` and review the `models.py` diff as schema-driven change
-   only. If a guard fails, fix the manifest in the store. Do not add a rename to the post-processor.
-6. Run `hatch test --all`.
+1. In `scripts/spec_artifact.py`, change `SPEC_ARTIFACT_VERSION` and `SPEC_ARTIFACT_SHA256` together. Take the sha256
+   from `SHA256SUMS` of the published store release.
+2. Update `__oscal_schema_version__` in `src/oscal_bindings/v1/__init__.py` to the release of the pin. Tests check
+   that it equals the release of the pin, and that the release of the pin equals the release element of the schema
+   `$id` (`ns/oscal/1.0/<release>/…`).
+3. Run `hatch run generate`. If a guard fails, fix the manifest in the store. Do not add a rename to the
+   post-processor.
+4. Run `hatch test --all`.
+5. Commit the regenerated `src/oscal_bindings/v1/models.py` with the pin. The CI drift check fails when the committed
+   file is not what the pin generates.
+
+A reviewer of the pull request checks these items:
+
+1. `SPEC_ARTIFACT_SHA256` equals the value in `SHA256SUMS` of the published store release.
+2. The URL keeps the owner and the repository `cairn-proofs/oscal-bindings-specs`. A test checks that the URL starts
+   with `https://github.com/cairn-proofs/oscal-bindings-specs/releases/download/`.
+3. The pull request commits the regenerated `models.py`. Read its diff as schema-driven change only. The pin shows
+   only a version and a hash, so this diff is the reviewable record of what the pin generates.
+4. `__oscal_schema_version__` moves with the release of the pin.
+5. CI keeps no cache of `tests/.corpus_cache/`. If a CI cache is added, it must check the archive sha256 on each hit.
 
 A minor or patch refresh regenerates `oscal_bindings.v1` in place. The package name
 changes only for a new OSCAL **major** version.
@@ -180,7 +196,7 @@ changes only for a new OSCAL **major** version.
 - **Typed parser functions** — `parse_catalog()`, `parse_profile()`, etc. for type-safe document access.
 - **Hand-written extensions, not patched generated code** — uniform accessors (`OscalDoc`) and back-matter builders live under `extensions/` rather than being injected into `models.py`. This keeps the codegen pipeline a pristine `datamodel-codegen` run plus a post-pass that adds manifest types and checks names. Convenience layers can evolve without touching generated output.
 - **Major-version namespace** — the bindings live in `oscal_bindings.v1`, named for the OSCAL major version with no minor or patch component. OSCAL is backward-compatible within a major version (newer schemas accept older documents; minor bumps have not added required fields), so the compatibility boundary is the major version and one binding set covers every 1.x producer. A minor-version namespace (`v1_2`, `v1_3`) was considered and rejected: it would encode a break at each routine refresh that does not exist. `__oscal_schema_version__` records the exact release the models were generated from. This mirrors NIST's own schema `$id` (`ns/oscal/1.0/1.2.2/...`), which scopes the namespace to the major line and hangs the release off it. OSCAL 2.0 is the trigger for a second version package; nothing is factored out between version packages before then, because the seam is unknowable until 2.0's differences are in hand.
-- **Strict models tie coverage to the vendored release** — every model carries `extra='forbid'`, so bindings generated from 1.2.3 reject a later 1.x document that uses a new field. "Supports OSCAL 1.x" therefore means "supports the vendored release and earlier"; `__oscal_schema_version__` makes that gap visible. `extra='ignore'` was rejected because `serialize_oscal` would silently drop unknown fields. An opt-in lenient mode is deferred, not rejected.
+- **Strict models tie coverage to the release of the pin** — every model carries `extra='forbid'`, so bindings generated from 1.2.3 reject a later 1.x document that uses a new field. "Supports OSCAL 1.x" therefore means "supports the release of the pin and earlier"; `__oscal_schema_version__` makes that gap visible. `extra='ignore'` was rejected because `serialize_oscal` would silently drop unknown fields. An opt-in lenient mode is deferred, not rejected.
 - **Valid OSCAL by default** — `v1/_base.py` defines `OscalBaseModel`, wired in through codegen's `--base-class` so `models.py` stays pristine generator output. It sets `serialize_by_alias=True` (the reason for the pydantic ≥2.11 floor) and adds a wrap `model_serializer` that drops None values, so every serialization path, including `pydantic_core.to_json` and `TypeAdapter` calls that never see our kwargs, emits OSCAL keys and no `null`. `serialize_oscal` keeps its explicit `by_alias=True, exclude_none=True`. The wrap serializer costs a Python callback per model node (benchmarks below). Per-field `Field(exclude_if=lambda v: v is None)` measured about 1.35× the pre-fix time in a prototype (the wrap serializer was about 2.4× there), with identical output, but it isn't implemented: the post-processor would have to rewrite all 698 optional fields, and `exclude_if` needs pydantic ≥2.12. It's the documented fallback if serialize time becomes a problem.
   - **Construction by name, validation by alias.** `OscalBaseModel.__init__` maps field-name kwargs to aliases, so `BackMatterResourceRlink(media_type=...)` works and the builders construct directly. The override carries `__pydantic_base_init__ = True`, the marker `RootModel.__init__` uses. Without it pydantic sets `__pydantic_custom_init__` and routes `model_validate*` through `__init__`: a probe of that variant accepted and kept name-keyed input at every depth, in dict and JSON mode, even with `by_alias=True, by_name=False`. The marker is undocumented, so tests pin it structurally and behaviorally.
   - **Not config `validate_by_name`.** Setting `validate_by_name=True` in the base config, with per-call `by_alias=True, by_name=False` at our validation sites (Option A), was rejected. Alias-only would become opt-in per call, so a user's direct `Model.model_validate` would accept and populate name-keyed OSCAL. Nested plain dicts in constructor kwargs would accept names too, and in JSON mode the per-call override only gives the drop below. Don't add `validate_by_name`, `validate_by_alias`, or `populate_by_name` to the base config. Revisit if pydantic adds per-mode by-name validation (pydantic#12056).
@@ -214,11 +230,9 @@ src/oscal_bindings/
       document.py          # OscalDoc facade (uniform accessors)
       builders.py          # make_hash / make_rlink / make_resource
       validate_element.py  # Element-level schema validation
-schemas/
-  1.2.2/                   # Vendored schema bundles, one directory per OSCAL release
-  1.2.3/                   # Active bundle (selected by explicit path)
 scripts/
   spec_artifact.py         # Pin (version + sha256) of the spec artifact; shared by generate and tests
+                           # (the artifact supplies the OSCAL schema, names.json, and the corpus)
   pinned_archive.py        # Locked, sha256-checked download and safe extraction of a pinned archive
   manifest.py              # Validates names.json of the pinned artifact
   hoist_names.py           # Writes build/codegen/oscal_complete_schema.json with manifest-named definitions

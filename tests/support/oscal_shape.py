@@ -4,10 +4,11 @@ Used by the example-based ``tests/test_serialization_defaults.py`` and the
 property-based ``tests/test_prop_serialization_defaults.py`` so both assert
 against one schema key set and one table of default serialization paths.
 
-- `SCHEMA_PROPERTY_NAMES`: every ``properties`` key, collected recursively from
-  the vendored OSCAL JSON Schema (built once at import).
+- `schema_property_names`: every ``properties`` key, collected recursively from
+  the OSCAL JSON Schema of the pinned spec artifact (computed once, on first
+  use, so a fetch failure fails the test that needs it, not collection).
 - `oscal_shape_violations` / `assert_valid_oscal_shape`: every ``null`` and
-  every key outside `SCHEMA_PROPERTY_NAMES`, at any depth.
+  every key outside `schema_property_names`, at any depth.
 - `DEFAULT_PATHS`: the serialization entry points a framework or user may call
   without ``by_alias``/``exclude_none``; each returns the model's own dumped
   tree with any container wrapper removed.
@@ -15,24 +16,20 @@ against one schema key set and one table of default serialization paths.
 
 from __future__ import annotations
 
+import functools
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pydantic_core
 from pydantic import TypeAdapter
+
+from support.spec_artifact import schema_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from pydantic import BaseModel
 
-SCHEMA_PATH = (
-    Path(__file__).resolve().parent.parent.parent
-    / "schemas"
-    / "1.2.3"
-    / "oscal_complete_schema.json"
-)
 CONTAINER_KEY = "k"
 
 
@@ -48,14 +45,13 @@ def _collect_property_names(node: object, out: set[str]) -> None:
             _collect_property_names(value, out)
 
 
-def _schema_property_names() -> frozenset[str]:
+@functools.cache
+def schema_property_names() -> frozenset[str]:
+    """Every ``properties`` key of the artifact schema, read on first use."""
     names: set[str] = set()
-    _collect_property_names(json.loads(SCHEMA_PATH.read_text()), names)
-    assert names, "no properties found in the vendored schema"
+    _collect_property_names(json.loads(schema_path().read_bytes()), names)
+    assert names, "no properties found in the artifact schema"
     return frozenset(names)
-
-
-SCHEMA_PROPERTY_NAMES = _schema_property_names()
 
 
 def oscal_shape_violations(value: object, path: str = "$") -> list[str]:
@@ -65,7 +61,7 @@ def oscal_shape_violations(value: object, path: str = "$") -> list[str]:
         found.append(f"{path}: null")
     elif isinstance(value, dict):
         for key, child in value.items():
-            if key not in SCHEMA_PROPERTY_NAMES:
+            if key not in schema_property_names():
                 found.append(f"{path}: non-OSCAL key {key!r}")
             found.extend(oscal_shape_violations(child, f"{path}.{key}"))
     elif isinstance(value, list):

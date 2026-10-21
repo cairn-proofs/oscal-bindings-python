@@ -55,8 +55,8 @@ See [proposal.md](proposal.md#why) for the motivation. The current state that sh
    `None`, and `None` means `paths.schema`. The function keeps the comparison of `schema.sha256` with the bytes at
    `schema_path` ([NAM-002], scenario NAM-002.03).
 2. Each script reads the schema bytes one time. The manifest check hashes those bytes, and the script parses the same
-   bytes. `load_validated_manifest` accepts the bytes from its caller, or reads `schema_path` one time and gives the
-   bytes back. A second read of the path after the check is not permitted (threat T7).
+   bytes. `load_validated_manifest` accepts the bytes from its caller. A caller that does not parse the schema lets it
+   read `schema_path` one time. A second read of the path after the check is not permitted (threat T7).
 3. `scripts/hoist_names.py` reads the schema from `paths.schema`, the same `ArtifactPaths` value that it gives to the
    manifest check. Thus the hoist and the manifest check use one file and one read.
 4. `scripts/postprocess_models.py` removes `ACTIVE_SCHEMA_RELEASE` and `DEFAULT_SCHEMA_PATH`. `--schema` defaults to

@@ -134,8 +134,8 @@ sequenceDiagram
 
 Not a runtime interface, but a contract between the schema and the models:
 
-- **Inputs:** `schemas/1.2.3/oscal_complete_schema.json` (the Active_Schema_Bundle, selected by explicit pin and path only) and `names.json` of the spec artifact pinned in `scripts/spec_artifact.py`
-- **Command:** `hatch run generate` → `python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output ./build/codegen/models.py ... && python scripts/postprocess_models.py --schema <schema> --models ./build/codegen/models.py --output src/oscal_bindings/v1/models.py`
+- **Inputs:** `oscal_complete_schema.json` and `names.json` of the spec artifact pinned in `scripts/spec_artifact.py`. The pin is the only selector of the schema and its release.
+- **Command:** `hatch run generate` → `python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output ./build/codegen/models.py ... && python scripts/postprocess_models.py --models ./build/codegen/models.py --output src/oscal_bindings/v1/models.py`
 - **Output:** `src/oscal_bindings/v1/models.py` (replaced atomically, only when every guard passes); `build/codegen/oscal_complete_schema.json` and `build/codegen/models.py` as intermediate build files
 
 The scripts' CLI contracts:
@@ -145,6 +145,6 @@ hoist_names.py [--output PATH]
 postprocess_models.py [--models PATH] [--schema PATH] [--output PATH]   # --output defaults to --models
 ```
 
-Each post-processor argument has its own independent default, so a bare invocation and a one-argument invocation both work. A missing path exits non-zero naming the path. An invalid manifest (including a `schema.sha256` that does not match `--schema`), a hoist guard, or a post-processor guard also exits non-zero, and each lists every failure at once. On a failure nothing is written to the output path; the post-processor writes `--output` through a temp file and `os.replace`.
+Each post-processor argument has its own independent default, so a bare invocation and a one-argument invocation both work. An omitted `--schema` resolves at call time to the schema of the pinned spec artifact. A missing path exits non-zero naming the path. An invalid manifest (including a `schema.sha256` that does not match `--schema`), a hoist guard, or a post-processor guard also exits non-zero, and each lists every failure at once. On a failure nothing is written to the output path; the post-processor writes `--output` through a temp file and `os.replace`.
 
 Every type name in `models.py` is a canonical name from the naming manifest, and the only other module-level names are scalar aliases. Downstream code uses those names. See `data_models.md` and `workflows.md`.

@@ -142,7 +142,7 @@ from oscal_bindings import __oscal_schema_version__
 __oscal_schema_version__      # '1.2.3'
 ```
 
-Worth checking, because models are strict about unknown fields: a document from a newer 1.x release than the vendored one can fail validation on a field these bindings have never seen. The constant makes that gap visible rather than a mystery.
+Worth checking, because models are strict about unknown fields: a document from a newer 1.x release than the one the models come from can fail validation on a field these bindings have never seen. The constant makes that gap visible rather than a mystery.
 
 ## Usage
 
@@ -311,7 +311,7 @@ hatch build
 hatch run release  # generate + lint + typing + security + test + coverage + docs
 ```
 
-`hatch run generate` and `hatch test` download the pinned spec artifact once into `tests/.corpus_cache/`, so the first run needs network access.
+`hatch run generate` and `hatch test` download the pinned spec artifact once into `tests/.corpus_cache/`, so the first run needs network access. The artifact supplies the OSCAL JSON Schema, so this also applies to an sdist checkout. A wheel build from the sdist needs no network access for the schema, because the sdist ships the generated `models.py`.
 
 ## Architecture
 
@@ -320,7 +320,7 @@ hatch run release  # generate + lint + typing + security + test + coverage + doc
 - **Model base** (`src/oscal_bindings/v1/_base.py`) — hand-written `OscalBaseModel`, which every generated object model inherits via `--base-class`: OSCAL keys and no nulls by default, field-name constructor kwargs.
 - **Names** — every type name comes from the naming manifest (`names.json`) of the pinned spec artifact of [oscal-bindings-specs](https://github.com/cairn-proofs/oscal-bindings-specs). `scripts/hoist_names.py` writes a copy of the schema in which each manifest type is a definition with its canonical name, and codegen reads that copy.
 - **Post-processing** (`scripts/postprocess_models.py`) — collapses scalar root models, adds the union type aliases, `MappingCollectionMappings`, and `OscalDocument`, and checks every module-level name against the manifest.
-- **Vendored schemas** (`schemas/<release>/`) — one directory per OSCAL release; the active bundle is chosen by explicit path.
+- **Schema** — the complete OSCAL JSON Schema comes from the pinned spec artifact (`scripts/spec_artifact.py`, version and sha256). The pin selects the OSCAL release. This repo holds no copy of the schema.
 - **Runtime** (`src/oscal_bindings/v1/parser.py`) — parse / serialize / validate utilities and per-type typed parsers.
 - **Extensions** (`src/oscal_bindings/v1/extensions/`) — hand-written helpers layered on top of the generated models:
   - `document.py` — `OscalDoc` facade (uniform `metadata` / `uuid` / `oscal_version` / `assessment_period()` accessors).
@@ -337,4 +337,4 @@ Public symbols are re-exported from `oscal_bindings.v1` and from the top-level `
 
 ## License
 
-Apache License 2.0; see [LICENSE](LICENSE). The vendored OSCAL schemas are from NIST and are in the public domain; see [NOTICE](NOTICE).
+Apache License 2.0; see [LICENSE](LICENSE). The models are generated from the OSCAL JSON Schema of NIST, which is in the public domain; see [NOTICE](NOTICE).

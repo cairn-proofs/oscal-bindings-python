@@ -2,7 +2,7 @@
 
 datamodel-codegen names a class from the key of its schema definition. An
 inline type has no key, so codegen invents a name for it. This script writes a
-copy of the vendored schema in which each manifest type is a definition whose
+copy of the artifact schema in which each manifest type is a definition whose
 key is its canonical name. Codegen then reads the copy and emits each class with
 its manifest name. ``hoist`` makes these changes in the copy:
 
@@ -40,10 +40,10 @@ its manifest name. ``hoist`` makes these changes in the copy:
 Each site is resolved in the working copy when its turn comes. A descendant of
 a site has more pointer tokens than the site, so it is processed first, and no
 ancestor of a site is replaced before the site. Thus each pointer still
-resolves in the working copy as it does in the vendored schema.
+resolves in the working copy as it does in the artifact schema.
 
 Run this file to write ``build/codegen/oscal_complete_schema.json`` from the
-vendored schema and the validated manifest of the pinned spec artifact.
+artifact schema and the validated manifest of the pinned spec artifact.
 """
 
 from __future__ import annotations
@@ -57,14 +57,15 @@ from typing import TYPE_CHECKING, Any, Final
 
 import jsonschema_rs
 from manifest import (
-    VENDORED_SCHEMA,
     ManifestError,
     escape_token,
     format_pointer,
     load_validated_manifest,
     parse_pointer,
+    read_schema_bytes,
     resolve_pointer,
 )
+from pinned_archive import CorpusError
 from spec_artifact import REPO_ROOT, artifact_paths, ensure_spec_artifact
 
 if TYPE_CHECKING:
@@ -252,8 +253,8 @@ def _base_failures(
 ) -> list[str]:
     """Check each closed-enum value against the other branches of its ``allOf``.
 
-    The values are checked against the vendored definitions, so the check sees
-    the base datatype as the vendored schema defines it.
+    The values are checked against the original definitions, so the check sees
+    the base datatype as the artifact schema defines it.
     """
     branches = holder.get("allOf")
     enum_index = int(site.tokens[-1])
@@ -457,9 +458,9 @@ def dumps(schema: dict[str, Any]) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Write the hoisted copy of the vendored schema. Return the exit status."""
+    """Write the hoisted copy of the artifact schema. Return the exit status."""
     parser = argparse.ArgumentParser(
-        description="Write the hoisted copy of the vendored OSCAL schema."
+        description="Write the hoisted copy of the artifact OSCAL schema."
     )
     parser.add_argument(
         "--output",
@@ -471,10 +472,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     output: Path = REPO_ROOT / args.output
     try:
-        manifest = load_validated_manifest(artifact_paths(ensure_spec_artifact()))
-        schema = json.loads(VENDORED_SCHEMA.read_bytes())
+        paths = artifact_paths(ensure_spec_artifact())
+        # One read: the manifest check hashes the bytes that the hoist parses.
+        schema_bytes = read_schema_bytes(paths.schema)
+        manifest = load_validated_manifest(paths, schema_bytes=schema_bytes)
+        schema = json.loads(schema_bytes)
         result = hoist(schema, manifest)
-    except (ManifestError, HoistError) as exc:
+    except (ManifestError, HoistError, CorpusError) as exc:
         print(exc)
         return 1
     output.parent.mkdir(parents=True, exist_ok=True)

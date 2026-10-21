@@ -26,7 +26,7 @@ as a class with its manifest name. This script completes the module:
    1. Each manifest name is defined at module level in the form that its kind
       requires.
    2. Each other module-level name is a scalar alias, and its name is the
-      name of a scalar definition of the vendored schema.
+      name of a scalar definition of the artifact schema.
    3. No module-level name is defined twice, no scalar alias has a manifest
       name, and no manifest name or scalar alias is a name that a
       module-level import statement binds.
@@ -34,7 +34,10 @@ as a class with its manifest name. This script completes the module:
 The command line reads the codegen output at ``--models`` and writes the
 completed module to ``--output`` (by default the ``--models`` path) through a
 temporary file and ``os.replace``. When a step or a guard fails, it writes
-nothing to ``--output``.
+nothing to ``--output``. ``--schema`` defaults to the complete schema of the
+pinned spec artifact, which ``main`` resolves when it runs. The script reads
+the schema bytes one time: the manifest check hashes the bytes that the scalar
+names come from.
 """
 
 from __future__ import annotations
@@ -57,19 +60,12 @@ from typing import TYPE_CHECKING, Any, Final
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
+    from spec_artifact import ArtifactPaths
+
 REPO_ROOT = Path(__file__).parent.parent
 
 #: Default path to the generated models file (the Version_Package models path).
 DEFAULT_MODELS_PATH = REPO_ROOT / "src" / "oscal_bindings" / "v1" / "models.py"
-#: OSCAL release whose vendored Schema_Bundle is currently active. Schema bundles live
-#: under ``schemas/<release>/``; the active one is selected by this explicit path
-#: alone — never by scanning, globbing, or ordering the ``schemas/`` directory.
-ACTIVE_SCHEMA_RELEASE = "1.2.3"
-#: Default path to the vendored schema. The scalar names come from its definition
-#: keys.
-DEFAULT_SCHEMA_PATH = (
-    REPO_ROOT / "schemas" / ACTIVE_SCHEMA_RELEASE / "oscal_complete_schema.json"
-)
 
 #: The prefix of a namespaced definition key of the complete schema.
 SCHEMA_KEY_PREFIX: Final = "oscal-complete-oscal-"
@@ -750,7 +746,7 @@ def guard_failures(
 ) -> list[str]:
     """Return every failure of the three guards on ``content``.
 
-    ``schema`` is the vendored schema. Its scalar definitions give the names
+    ``schema`` is the artifact schema. Its scalar definitions give the names
     that a scalar alias can have (``scalar_names``).
     """
     definitions = module_definitions(content)
@@ -828,7 +824,7 @@ def postprocess(
     """Return the completed module. Raise ``PostprocessError`` with every failure.
 
     ``content`` is the codegen output for the hoisted schema, ``manifest`` is
-    the validated ``names.json``, and ``schema`` is the vendored schema.
+    the validated ``names.json``, and ``schema`` is the artifact schema.
     """
     failures: list[str] = []
     content = add_single_or_many(content, manifest, failures)
@@ -864,21 +860,32 @@ def postprocess(
     return content
 
 
-def load_manifest(schema_path: Path) -> dict[str, Any]:
-    """Return the validated manifest of the pinned spec artifact.
+def _artifact_paths() -> ArtifactPaths:
+    """Return the paths of the pinned spec artifact.
 
-    The manifest must record the sha256 of the schema at ``schema_path``, so
-    the scalar names and the manifest come from the same schema.
-
-    The sibling scripts are imported here, so the module loads without
-    ``scripts/`` on ``sys.path``.
+    A cache miss downloads the artifact. A failure raises
+    ``pinned_archive.CorpusError``. The sibling scripts are imported here, so
+    the module loads without ``scripts/`` on ``sys.path`` and without a fetch.
     """
-    from manifest import load_validated_manifest  # noqa: PLC0415
     from spec_artifact import artifact_paths, ensure_spec_artifact  # noqa: PLC0415
 
-    return load_validated_manifest(
-        artifact_paths(ensure_spec_artifact()), schema_path=schema_path
-    )
+    return artifact_paths(ensure_spec_artifact())
+
+
+def artifact_schema_path() -> Path:
+    """Return the path of the complete schema of the pinned spec artifact."""
+    return _artifact_paths().schema
+
+
+def load_manifest(schema_bytes: bytes) -> dict[str, Any]:
+    """Return the validated manifest of the pinned spec artifact.
+
+    The manifest must record the sha256 of ``schema_bytes``, so the scalar
+    names and the manifest come from the same schema bytes.
+    """
+    from manifest import load_validated_manifest  # noqa: PLC0415
+
+    return load_validated_manifest(_artifact_paths(), schema_bytes=schema_bytes)
 
 
 def write_atomically(path: Path, content: str) -> None:
@@ -907,7 +914,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     ``--models`` and ``--schema`` each carry their own default, so an omitted
     argument resolves to its own default regardless of whether the other one
-    was supplied. ``--output`` defaults to the ``--models`` path.
+    was supplied. ``--schema`` defaults to ``None``, which ``main`` resolves to
+    the artifact schema. ``--output`` defaults to the ``--models`` path.
     """
     parser = argparse.ArgumentParser(
         description=(
@@ -923,8 +931,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--schema",
         type=Path,
-        default=DEFAULT_SCHEMA_PATH,
-        help="Path to the vendored OSCAL schema file (default: %(default)s)",
+        default=None,
+        help=(
+            "Path to the complete OSCAL schema file "
+            "(default: the schema of the pinned spec artifact)"
+        ),
     )
     parser.add_argument(
         "--output",
@@ -946,21 +957,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     args = parse_args(argv)
     models_path: Path = args.models
-    schema_path: Path = args.schema
+    schema_path: Path | None = args.schema
     output_path: Path = args.output
 
-    missing = [path for path in (models_path, schema_path) if not path.exists()]
+    missing = [
+        path
+        for path in (models_path, schema_path)
+        if path is not None and not path.exists()
+    ]
     if missing:
         for path in missing:
             print(f"Error: {path} not found", file=sys.stderr)
         return 1
 
+    # Imported here for the same reason as in ``_artifact_paths``.
+    from pinned_archive import CorpusError  # noqa: PLC0415
+
     try:
-        manifest = load_manifest(schema_path)
-        schema = json.loads(schema_path.read_bytes())
+        if schema_path is None:
+            schema_path = artifact_schema_path()
+        # One read: the manifest check hashes the bytes that the scalar names
+        # come from.
+        schema_bytes = schema_path.read_bytes()
+        manifest = load_manifest(schema_bytes)
+        schema = json.loads(schema_bytes)
         content = postprocess(models_path.read_text(), manifest, schema)
         write_atomically(output_path, content)
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, CorpusError) as exc:
         # ValueError covers ManifestError, PostprocessError, and invalid JSON.
         print(f"Error: {exc}", file=sys.stderr)
         print(f"{output_path} was not written", file=sys.stderr)

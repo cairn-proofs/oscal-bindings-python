@@ -67,7 +67,7 @@ dependencies = [
 ]
 
 [tool.hatch.envs.default.scripts]
-generate = "python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output ./build/codegen/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --base-class oscal_bindings.v1._base.OscalBaseModel --collapse-root-models --use-annotated --field-constraints --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --schema ./schemas/1.2.3/oscal_complete_schema.json --models ./build/codegen/models.py --output src/oscal_bindings/v1/models.py"
+generate = "python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output ./build/codegen/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --base-class oscal_bindings.v1._base.OscalBaseModel --collapse-root-models --use-annotated --field-constraints --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --models ./build/codegen/models.py --output src/oscal_bindings/v1/models.py"
 docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
 # No --install-types: it would pip-install stubs at run time, outside the lockfile.
 # Add any stub packages mypy needs to `dependencies` above instead.
@@ -207,16 +207,15 @@ packages = ["src/oscal_bindings"]
 # Explicit allowlist: without it Hatch ships every non-gitignored file, including
 # untracked ones. The sdist holds what's needed to build the wheel, regenerate
 # models, and run the tests under the locked envs. Repo-only material (.kiro/,
-# .agents/, AGENTS.md, mise.toml) and inactive schema bundles stay out. Keep the
-# schema path in step with ACTIVE_SCHEMA_RELEASE in scripts/postprocess_models.py.
-# pyproject.toml and PKG-INFO are always added; declared license-files are
-# added automatically.
+# .agents/, AGENTS.md, mise.toml) stays out. The schema is not in the sdist:
+# generate and the tests fetch it from the spec artifact pinned in
+# scripts/spec_artifact.py. pyproject.toml and PKG-INFO are always added;
+# declared license-files are added automatically.
 [tool.hatch.build.targets.sdist]
 only-include = [
   "src",
   "tests",
   "scripts",
-  "schemas/1.2.3",
   "requirements.txt",
   "requirements",
   "README.md",
