@@ -1,0 +1,498 @@
+{
+  "schema": 1,
+  "applicationInfo": {
+    "name": "oscal-bindings-python: generate-from-spec-artifact",
+    "description": "The OpenSpec change `generate-from-spec-artifact` moves the OSCAL JSON Schema that `hatch run generate` reads from the git-tracked `schemas/1.2.3/` directory to `schemas/<release>/oscal_complete_schema.json` inside the pinned spec artifact. The artifact is a GitHub release tarball of cairn-proofs/oscal-bindings-specs. The build already reads `names.json` and the conformance corpus from it. The pin in `scripts/spec_artifact.py` (`0.2.0+oscal.1.2.3` and its sha256) becomes the only identifier of the OSCAL release. `ACTIVE_SCHEMA_RELEASE`, `VENDORED_SCHEMA`, `DEFAULT_SCHEMA_PATH`, and the `--schema` literal of the `generate` script are removed. The manifest check keeps the comparison of `schema.sha256` in `names.json` with the schema bytes ([NAM-002]). The change deletes `schemas/`, removes it from the sdist, and keeps `models.py` byte-identical.\n\nThe load-bearing trust boundary: a build input that git held now arrives over the network, and on a cache hit from `tests/.corpus_cache/` with no new hash check. CI has no cache. Residual ratings in this model assume that each listed mitigation lands. Mitigations whose Comments start with NEW are not in the design yet and need a design amendment or a task."
+  },
+  "architecture": {
+    "description": "### Components touched\n\n1. `scripts/spec_artifact.py`: the pin (version, sha256, URL), `OSCAL_RELEASE`, `artifact_paths`, `ensure_spec_artifact`.\n2. `scripts/pinned_archive.py` (unchanged): HTTPS-only fetch with HTTPS-only redirects, 60 s timeout, 64 MiB cap, sha256 check before extraction, tar-slip checks and the `data` filter, atomic publish with a `.complete` marker, cross-process lock. A cache hit returns the directory with no new hash check.\n3. `scripts/manifest.py`: `load_validated_manifest` defaults `schema_path` to the artifact schema and keeps the [NAM-002] sha256 comparison.\n4. `scripts/hoist_names.py`: reads the artifact schema and writes `build/codegen/oscal_complete_schema.json`.\n5. `scripts/postprocess_models.py`: `--schema` defaults to the artifact schema, resolved at call time. It writes `src/oscal_bindings/v1/models.py` through a temp file and `os.replace`.\n6. `pyproject.toml`: the `generate` script passes no `--schema`. The sdist `only-include` drops `schemas/1.2.3`.\n7. Tests and `tests/support/spec_artifact.py`: lazy reads of the artifact schema. Two tests guard `__oscal_schema_version__` against the pin and the schema `$id`.\n8. `.github/workflows/build.yml` (unchanged by the design): `hatch run release` regenerates `models.py`, tests it, and `hatch build` packages it. No step compares the regenerated file with the committed file.\n9. Removed: `schemas/1.2.2/`, `schemas/1.2.3/`."
+  },
+  "dataflow": {
+    "description": "### New and changed flows\n\n1. A pull request changes the pin. Review and the required `build` check gate the merge to `main`.\n2. On a cache miss, `pinned_archive` downloads the tarball from the GitHub release, checks its sha256, extracts it safely, and publishes it in `tests/.corpus_cache/`. CI always has a cache miss.\n3. On a cache hit, the scripts and the tests read the extracted schema and `names.json` with no new hash check.\n4. The manifest check compares `schema.sha256` with the schema bytes. The hoist, codegen, and the post-processor write `models.py`.\n5. In CI, `hatch run release` regenerates `models.py`, and `hatch build` packages the regenerated file into the wheel and the sdist.\n\n### Trust-boundary DFD\n\n```mermaid\nflowchart LR\n    subgraph untrusted [Untrusted input]\n        PR[Pull request: pin move, scripts, models.py]\n        NET[Network path to github.com]\n    end\n    subgraph upstream [Upstream: spec store release]\n        GH[Release asset: spec artifact tar.gz]\n    end\n    subgraph local [Local cache: writable by the developer]\n        CACHE[tests/.corpus_cache: schema, names.json, corpus]\n    end\n    subgraph trusted [Trusted processing: hatch run generate and hatch test]\n        PIN[scripts/spec_artifact.py: version and sha256]\n        FETCH[pinned_archive: HTTPS fetch, sha256 check, safe extract]\n        MAN[manifest check: NAM-002 schema.sha256]\n        HOIST[hoist, codegen, postprocess]\n        TESTS[tests: version and schema id checks]\n    end\n    subgraph release [Build and release: CI build job, contents read]\n        MODELS[src/oscal_bindings/v1/models.py]\n        DIFF[drift check: git diff, exit code]\n        WHEEL[wheel and sdist]\n    end\n    PR -->|review, merge| PIN\n    PIN --> FETCH\n    GH --> NET\n    NET -->|cache miss only| FETCH\n    FETCH -->|atomic publish| CACHE\n    CACHE -->|cache hit, no re-hash| MAN\n    MAN --> HOIST\n    CACHE --> TESTS\n    HOIST --> MODELS\n    MODELS --> DIFF\n    DIFF --> WHEEL\n    style untrusted fill:#fdd,stroke:#c00\n    style upstream fill:#fee,stroke:#c00\n    style local fill:#ffd,stroke:#aa0\n    style DIFF fill:#ffd,stroke:#aa0\n```\n\nCrossings and threats: pull request to pin (T2, T9), release asset and network to fetch (T1, T6), cache to scripts and tests (T3, T7), regenerated models.py to wheel (T4), fetch errors to CI logs (T8), removal of schemas/ from git (T5). DIFF is a NEW control (M6). It is not in the design yet."
+  },
+  "assumptions": [
+    {
+      "id": "28130854-346c-4e07-bcd5-9a892c751c21",
+      "numericId": 1,
+      "content": "The store releases an artifact only from a v* tag on main, through CI and a draft release that a person publishes. A store tag ruleset blocks update and deletion of v* tags, as the store threat model of define-names-manifest-format records. Release assets themselves are not immutable unless the store enables immutable releases.",
+      "tags": ["upstream", "governance"]
+    },
+    {
+      "id": "87b23661-0d03-43cb-aa98-d8f6158ec1bd",
+      "numericId": 2,
+      "content": "The vendored schemas/1.2.3/oscal_complete_schema.json and the artifact copy are byte-identical (sha256 384324105c7a...a206), as design.md Context item 5 states. The store keeps the NIST bytes unchanged and checks released schema files for changes.",
+      "tags": ["upstream", "schema"]
+    },
+    {
+      "id": "26d9850b-481a-4654-9e76-b9d71ad34b86",
+      "numericId": 3,
+      "content": "tests/.corpus_cache/ is not a privilege boundary. An actor who can write it can also write src/, scripts/, and the pin. Local tampering is therefore a concern for accidental change and for review signal, not for privilege.",
+      "tags": ["cache"]
+    },
+    {
+      "id": "ee89aae9-c4a3-417c-9387-2ba7030801af",
+      "numericId": 4,
+      "content": "The workflows do not use pull_request_target. Pull request runs get a read-only token and no secrets. The build job has contents: read. Only draft-release has contents: write, on tag pushes. main is branch-protected and requires the build check.",
+      "tags": ["ci"]
+    },
+    {
+      "id": "9c350a0d-1f65-4cfd-8b48-958155340855",
+      "numericId": 5,
+      "content": "The spec artifact holds data only (JSON Schema, JSON, Markdown). The build executes nothing from it. Its content reaches code only through codegen, as identifiers, docstrings, constraints, and enum values.",
+      "tags": ["artifact"]
+    }
+  ],
+  "mitigations": [
+    {
+      "id": "fd0e141c-6cdd-45d3-bc56-f964f3827c99",
+      "numericId": 1,
+      "content": "The sha256 of the archive bytes is checked against SPEC_ARTIFACT_SHA256 before extraction. A mismatch raises CorpusError and publishes nothing (VER-005.01, VER-005.02).",
+      "status": "mitigationIdentified",
+      "tags": ["pinned_archive"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "High" },
+        { "key": "Comments", "value": "Existing baseline in scripts/pinned_archive.py._fetch_verify_publish." }
+      ]
+    },
+    {
+      "id": "4d05a300-38f8-4848-8ca7-0563f802a7e9",
+      "numericId": 2,
+      "content": "http_get accepts only an HTTPS URL, follows only HTTPS redirects, times out after 60 s, and rejects a body larger than 64 MiB.",
+      "status": "mitigationIdentified",
+      "tags": ["pinned_archive"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "Existing baseline. The size cap and the hash check bound what is extracted to the pinned bytes, so a decompression bomb needs a pin move (T2)." }
+      ]
+    },
+    {
+      "id": "8a37e71e-da2e-4672-b934-399a226ad89c",
+      "numericId": 3,
+      "content": "Extraction rejects absolute names, .. traversal, escaping links, and device nodes, applies the tarfile data filter, and publishes with an atomic rename and a .complete marker.",
+      "status": "mitigationIdentified",
+      "tags": ["pinned_archive"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "High" },
+        { "key": "Comments", "value": "Existing baseline. A partial extraction is never a cache hit." }
+      ]
+    },
+    {
+      "id": "5ec85cd7-391e-469e-819d-7991ffaad7c1",
+      "numericId": 4,
+      "content": "The pin (version, sha256, URL) is in git and changes only through a reviewed pull request to the branch-protected main, with the required build check.",
+      "status": "mitigationIdentified",
+      "tags": ["governance"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "Existing baseline. Effectiveness depends on the reviewer, see M5 and M9." }
+      ]
+    },
+    {
+      "id": "da4b76ab-0e5a-4245-9832-8a104a00f778",
+      "numericId": 5,
+      "content": "A pin move commits the regenerated src/oscal_bindings/v1/models.py in the same pull request, so the reviewer reads the effect of the new schema on the generated code.",
+      "status": "mitigationIdentified",
+      "tags": ["review", "models.py"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Detective" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "Existing practice. It replaces the schema diff that schemas/ gave. It is only as good as M6, which makes CI fail when the committed file is not the generated file." }
+      ]
+    },
+    {
+      "id": "262c26db-131e-42a7-8e3e-70d5e2a6f28d",
+      "numericId": 6,
+      "content": "CI runs git diff --exit-code on the tracked tree (at least src/oscal_bindings/v1/models.py) after hatch run release and before hatch build. A difference fails the build job.",
+      "status": "mitigationIdentified",
+      "tags": ["ci", "models.py"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Detective" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "High" },
+        { "key": "Comments", "value": "NEW. Design D5 runs this check locally only, and build.yml has no such step. Add build.yml to the proposal Impact list and add a task. Land it before the task that removes schemas/, so the first CI run from the artifact proves byte identity." }
+      ]
+    },
+    {
+      "id": "3795eb81-1f0b-488b-bb09-dd5212d9b195",
+      "numericId": 7,
+      "content": "The manifest check compares schema.sha256 in names.json with the sha256 of the schema bytes that codegen reads, and fails on a mismatch (NAM-002.03).",
+      "status": "mitigationIdentified",
+      "tags": ["manifest"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Detective" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "Existing, kept by D1. Both files come from the same artifact, so this is a consistency check, not an authenticity check. It catches an edit of the schema alone or a wrong explicit --schema. It does not catch a consistent edit of both files." }
+      ]
+    },
+    {
+      "id": "b6608ea8-7b3a-4231-9567-a4f7d85831c6",
+      "numericId": 8,
+      "content": "Each script reads the schema bytes once. load_validated_manifest hashes those bytes, and the hoist and the post-processor parse the same bytes, not a second read of the path.",
+      "status": "mitigationIdentified",
+      "tags": ["manifest", "hoist"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "NEW. D1.2 has the hoist read paths.schema again after the manifest check reads it. A small API change (return or accept the bytes) closes the gap. Optional; Low risk." }
+      ]
+    },
+    {
+      "id": "2d8e5837-cbb1-420b-9c7d-f3a3d7775799",
+      "numericId": 9,
+      "content": "DEVELOPING.md tells the pin mover and the reviewer to compare SPEC_ARTIFACT_SHA256 with SHA256SUMS of the published store release and to keep the URL owner and repo. A test asserts the URL prefix https://github.com/cairn-proofs/oscal-bindings-specs/releases/download/.",
+      "status": "mitigationIdentified",
+      "tags": ["review", "pin"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "NEW. D4.4 already rewrites the DEVELOPING.md procedure. Add these review steps and the URL prefix test to that task." }
+      ]
+    },
+    {
+      "id": "351c0584-f2b2-4e72-a3f7-b6cc274c99ab",
+      "numericId": 10,
+      "content": "CI keeps no cache of tests/.corpus_cache/, so each CI run downloads and hash-checks the artifact. A future CI cache must re-verify the archive sha256 on a hit.",
+      "status": "mitigationIdentified",
+      "tags": ["ci", "cache"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "High" },
+        { "key": "Comments", "value": "Existing baseline, stated as a constraint. Design Risk 2 relies on it. Record it in DEVELOPING.md so a later actions/cache step does not remove the per-run check silently." }
+      ]
+    },
+    {
+      "id": "e4471832-a7ad-482c-a8d8-bb28d2a846d4",
+      "numericId": 11,
+      "content": "A fetch failure, a hash mismatch, or a lock timeout raises CorpusError with the archive name, URL, and cause. Nothing skips. Tests read the schema lazily, so a failure stays in the test that needs the schema (D3).",
+      "status": "mitigationIdentified",
+      "tags": ["pinned_archive", "tests"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Corrective" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "Existing fail-closed behavior plus D3." }
+      ]
+    },
+    {
+      "id": "7ed0b8f1-507a-49b1-b3f2-d7c1cdeb2713",
+      "numericId": 12,
+      "content": "Two tests check that __oscal_schema_version__ equals OSCAL_RELEASE of the pin, and that OSCAL_RELEASE equals the release in the $id of the artifact schema (D2).",
+      "status": "mitigationIdentified",
+      "tags": ["tests", "version"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Detective" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "High" },
+        { "key": "Comments", "value": "Planned in D2." }
+      ]
+    },
+    {
+      "id": "93a351f8-c8a3-4d5f-801e-69e66bae3966",
+      "numericId": 13,
+      "content": "Before git rm -r schemas/, a task checks that the sha256 of the vendored schema, of the artifact schema, and schema.sha256 in names.json are equal, and records the value in the commit message.",
+      "status": "mitigationIdentified",
+      "tags": ["provenance"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Detective" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "NEW. Context item 5 states the identity, but no task proves it at the point of no return. The commit message keeps the link from git history to the bytes that git no longer holds." }
+      ]
+    },
+    {
+      "id": "edb9ac96-2d49-40dc-95ec-e7110928c852",
+      "numericId": 14,
+      "content": "The artifact fetch is unauthenticated and sends no token. Error messages carry the archive name, URL, local paths, and the cause only, never file content.",
+      "status": "mitigationIdentified",
+      "tags": ["pinned_archive", "logs"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "High" },
+        { "key": "Comments", "value": "Existing baseline. Keep GITHUB_TOKEN out of the fetch if rate limits ever push toward authenticated downloads." }
+      ]
+    },
+    {
+      "id": "d309805b-15e6-46d4-8951-3d01441dab07",
+      "numericId": 15,
+      "content": "The store keeps each published release and its assets: the v* tag ruleset blocks tag update and deletion, and GitHub immutable releases lock the assets.",
+      "status": "mitigationIdentified",
+      "tags": ["upstream", "store"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "Medium" },
+        { "key": "Comments", "value": "Tag ruleset exists (A1). Immutable releases are a recommended store follow-up, outside this repo and this change." }
+      ]
+    },
+    {
+      "id": "e45b6b50-c246-422c-9de4-0b4983e44ad0",
+      "numericId": 16,
+      "content": "The codegen toolchain (datamodel-code-generator, black, isort) is exact-pinned and installed from the hatch-pip-compile lockfile, so the same schema bytes give the same models.py locally and in CI.",
+      "status": "mitigationIdentified",
+      "tags": ["codegen", "lockfile"],
+      "metadata": [
+        { "key": "custom:mitigationType", "value": "Preventive" },
+        { "key": "custom:mitigationCost", "value": "Low" },
+        { "key": "custom:mitigationEffectiveness", "value": "High" },
+        { "key": "Comments", "value": "Existing baseline. It makes M6 a clean signal: a CI diff means an input differs, not a tool." }
+      ]
+    }
+  ],
+  "threats": [
+    {
+      "id": "2c22a6c0-9033-432c-b574-62d6d8a9071f",
+      "numericId": 1,
+      "threatSource": "network attacker or actor with write access to the store release assets",
+      "prerequisites": "who can serve or upload a different archive at the pinned URL",
+      "threatAction": "deliver a spec artifact whose schema, names.json, or corpus differs from the pinned archive",
+      "threatImpact": "codegen and the tests read a schema that the reviewed pin does not name",
+      "impactedGoal": ["integrity", "authenticity"],
+      "impactedAssets": ["spec artifact tarball", "artifact oscal_complete_schema.json", "src/oscal_bindings/v1/models.py"],
+      "statement": "A network attacker or actor with write access to the store release assets who can serve or upload a different archive at the pinned URL can deliver a spec artifact whose schema, names.json, or corpus differs from the pinned archive, which leads to codegen and the tests read a schema that the reviewed pin does not name, resulting in reduced integrity and authenticity of spec artifact tarball, artifact oscal_complete_schema.json, and src/oscal_bindings/v1/models.py",
+      "status": "threatIdentified",
+      "tags": ["pinned_archive", "upstream"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["S", "T"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Unlikely" },
+        { "key": "custom:attackVector", "value": "Network" },
+        { "key": "custom:attackComplexity", "value": "High" },
+        { "key": "Comments", "value": "The sha256 check before extraction turns a substituted archive into a hard failure (availability, T6), not an integrity loss. This is the same control that names.json and the corpus already rely on." }
+      ]
+    },
+    {
+      "id": "b9124a7a-65db-4644-af4f-649d24838cef",
+      "numericId": 2,
+      "threatSource": "contributor with a pull request",
+      "prerequisites": "who changes the version, sha256, or URL of the pin in scripts/spec_artifact.py",
+      "threatAction": "move the pin to an artifact whose schema is wrong or crafted, while the pull request shows only a version and a hash",
+      "threatImpact": "a models.py with changed types or injected code that the wheel ships, with no schema diff for a reviewer to read",
+      "impactedGoal": ["integrity", "authorization"],
+      "impactedAssets": ["spec artifact pin", "src/oscal_bindings/v1/models.py", "wheel and sdist"],
+      "statement": "A contributor with a pull request who changes the version, sha256, or URL of the pin in scripts/spec_artifact.py can move the pin to an artifact whose schema is wrong or crafted, while the pull request shows only a version and a hash, which leads to a models.py with changed types or injected code that the wheel ships, with no schema diff for a reviewer to read, resulting in reduced integrity and authorization of spec artifact pin, src/oscal_bindings/v1/models.py, and wheel and sdist",
+      "status": "threatIdentified",
+      "tags": ["pin", "review", "codegen"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["T", "E"] },
+        { "key": "Priority", "value": "Medium" },
+        { "key": "custom:residualRisk", "value": "Medium" },
+        { "key": "custom:likelihood", "value": "Unlikely" },
+        { "key": "custom:attackVector", "value": "Network" },
+        { "key": "custom:attackComplexity", "value": "High" },
+        { "key": "Comments", "value": "Inherent High: schema strings become identifiers, docstrings, and constraints in shipped code. Before this change, a schema change showed as a diff of schemas/. After it, the review signal is the models.py diff (M5) and the store's own release review (A1). M6 makes CI fail when the committed models.py is not what the pin generates. M9 adds the SHA256SUMS and URL checks. Residual stays Medium because binding-side review is the main control. Not a gate blocker." }
+      ]
+    },
+    {
+      "id": "688b47ea-3ab9-406c-82d2-19bbfad0ac62",
+      "numericId": 3,
+      "threatSource": "local process or developer",
+      "prerequisites": "with write access to tests/.corpus_cache/ after a complete extraction",
+      "threatAction": "change the extracted schema or names.json, which a cache hit returns with no new hash check",
+      "threatImpact": "a local hatch run generate writes a models.py that the pin does not produce, and a developer can commit it",
+      "impactedGoal": ["integrity"],
+      "impactedAssets": ["tests/.corpus_cache/", "src/oscal_bindings/v1/models.py"],
+      "statement": "A local process or developer with write access to tests/.corpus_cache/ after a complete extraction can change the extracted schema or names.json, which a cache hit returns with no new hash check, which leads to a local hatch run generate writes a models.py that the pin does not produce, and a developer can commit it, resulting in reduced integrity of tests/.corpus_cache/ and src/oscal_bindings/v1/models.py",
+      "status": "threatIdentified",
+      "tags": ["cache"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["T"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Possible" },
+        { "key": "custom:attackVector", "value": "Local" },
+        { "key": "custom:attackComplexity", "value": "Low" },
+        { "key": "Comments", "value": "Design Non-Goal 3 and Risk 2 accept this. The cache is not a privilege boundary (A3). The likely case is an accidental in-place edit, which M7 catches for the schema alone. CI regenerates from a verified download (M10), and M6 turns a committed drift into a CI failure. Design note: VER-005.01 says verify before use. State in Non-Goal 3 that the design reads it as verify before first use after download." }
+      ]
+    },
+    {
+      "id": "f59e750a-677c-4e4d-ad75-62eea4a291a3",
+      "numericId": 4,
+      "threatSource": "defect or local drift in a pull request",
+      "prerequisites": "when the committed models.py differs from the output of generate on a clean download",
+      "threatAction": "pass CI, because CI regenerates models.py, tests that file, and builds the wheel from it with no check against the committed file",
+      "threatImpact": "the released wheel holds code that no reviewer saw, and the repository holds code that no release ships",
+      "impactedGoal": ["integrity", "non-repudiation"],
+      "impactedAssets": ["src/oscal_bindings/v1/models.py", "wheel and sdist", "CI build job"],
+      "statement": "A defect or local drift in a pull request when the committed models.py differs from the output of generate on a clean download can pass CI, because CI regenerates models.py, tests that file, and builds the wheel from it with no check against the committed file, which leads to the released wheel holds code that no reviewer saw, and the repository holds code that no release ships, resulting in reduced integrity and non-repudiation of src/oscal_bindings/v1/models.py, wheel and sdist, and CI build job",
+      "status": "threatIdentified",
+      "tags": ["ci", "models.py"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["T", "R"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Possible" },
+        { "key": "custom:attackVector", "value": "Local" },
+        { "key": "custom:attackComplexity", "value": "Low" },
+        { "key": "Comments", "value": "The gap exists before this change. The change raises its weight: the schema bytes leave git, so the committed models.py is the only reviewable record of what the pin generates. D5 runs git diff --exit-code locally only. Low assumes M6 lands. Without M6 the rating is Medium." }
+      ]
+    },
+    {
+      "id": "c42cd4b8-fc9e-4047-90cc-65abbbbf2d37",
+      "numericId": 5,
+      "threatSource": "store maintainer or GitHub-side event",
+      "prerequisites": "after schemas/ is removed from this repository",
+      "threatAction": "delete or replace the release asset of a pinned spec artifact version",
+      "threatImpact": "an earlier commit cannot regenerate or re-verify models.py, and git history no longer holds the schema bytes that produced it",
+      "impactedGoal": ["non-repudiation", "availability"],
+      "impactedAssets": ["spec artifact pin", "git history", "spec artifact tarball"],
+      "statement": "A store maintainer or GitHub-side event after schemas/ is removed from this repository can delete or replace the release asset of a pinned spec artifact version, which leads to an earlier commit cannot regenerate or re-verify models.py, and git history no longer holds the schema bytes that produced it, resulting in reduced non-repudiation and availability of spec artifact pin, git history, and spec artifact tarball",
+      "status": "threatIdentified",
+      "tags": ["provenance", "upstream"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["R", "D"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Unlikely" },
+        { "key": "custom:attackVector", "value": "Network" },
+        { "key": "custom:attackComplexity", "value": "Low" },
+        { "key": "Comments", "value": "A replaced asset fails the hash check (M1), so integrity holds and only reproducibility is lost. The removal of schemas/ is reversible from git history. M13 records the schema sha256 at the point of removal. M15 is a store follow-up." }
+      ]
+    },
+    {
+      "id": "e9251f4b-f862-4a8b-8f9d-308e3b479115",
+      "numericId": 6,
+      "threatSource": "GitHub outage, rate limit, or slow network",
+      "prerequisites": "on a cold cache, which is each CI run and each fresh sdist checkout",
+      "threatAction": "make the artifact fetch fail or time out",
+      "threatImpact": "hatch run generate, hatch test, and the CI release gate fail and block merges and releases",
+      "impactedGoal": ["availability"],
+      "impactedAssets": ["CI build job", "hatch run generate", "sdist"],
+      "statement": "A GitHub outage, rate limit, or slow network on a cold cache, which is each CI run and each fresh sdist checkout can make the artifact fetch fail or time out, which leads to hatch run generate, hatch test, and the CI release gate fail and block merges and releases, resulting in reduced availability of CI build job, hatch run generate, and sdist",
+      "status": "threatIdentified",
+      "tags": ["availability", "ci"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["D"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Possible" },
+        { "key": "custom:attackVector", "value": "Network" },
+        { "key": "custom:attackComplexity", "value": "High" },
+        { "key": "Comments", "value": "No new endpoint: generate and the tests already need the artifact for names.json and the corpus. A wheel build from the sdist does not need the network (design Risk 4). Fail closed with a clear cause is the intended behavior." }
+      ]
+    },
+    {
+      "id": "7fd297f3-5ef5-4cae-a56b-ab83cecfd937",
+      "numericId": 7,
+      "threatSource": "concurrent writer or defect in the scripts",
+      "prerequisites": "when one generate run reads the schema file more than once, or the post-processor gets an explicit --schema",
+      "threatAction": "make the manifest check hash one set of bytes while the hoist or the post-processor parses another",
+      "threatImpact": "the NAM-002 check passes for bytes that codegen does not use",
+      "impactedGoal": ["integrity"],
+      "impactedAssets": ["artifact oscal_complete_schema.json", "build/codegen/oscal_complete_schema.json"],
+      "statement": "A concurrent writer or defect in the scripts when one generate run reads the schema file more than once, or the post-processor gets an explicit --schema can make the manifest check hash one set of bytes while the hoist or the post-processor parses another, which leads to the NAM-002 check passes for bytes that codegen does not use, resulting in reduced integrity of artifact oscal_complete_schema.json and build/codegen/oscal_complete_schema.json",
+      "status": "threatIdentified",
+      "tags": ["manifest", "hoist"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["T"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Unlikely" },
+        { "key": "custom:attackVector", "value": "Local" },
+        { "key": "custom:attackComplexity", "value": "High" },
+        { "key": "Comments", "value": "D1.2 reads paths.schema in the hoist after load_validated_manifest reads it. The post-processor reads --schema twice (load_manifest, then json.loads). M8 removes the window. An explicit --schema with other bytes fails M7." }
+      ]
+    },
+    {
+      "id": "edbb920f-8776-418e-931b-56a2a6f8ac14",
+      "numericId": 8,
+      "threatSource": "reader of CI logs",
+      "prerequisites": "with access to the public CI logs of the repository",
+      "threatAction": "read the fetch and hash error messages",
+      "threatImpact": "disclosure of runner paths and URLs, or of a token if one is later added to the fetch",
+      "impactedGoal": ["confidentiality"],
+      "impactedAssets": ["CI logs", "pinned_archive error messages"],
+      "statement": "A reader of CI logs with access to the public CI logs of the repository can read the fetch and hash error messages, which leads to disclosure of runner paths and URLs, or of a token if one is later added to the fetch, resulting in reduced confidentiality of CI logs and pinned_archive error messages",
+      "status": "threatIdentified",
+      "tags": ["logs"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["I"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Unlikely" },
+        { "key": "custom:attackVector", "value": "Network" },
+        { "key": "custom:attackComplexity", "value": "Low" },
+        { "key": "Comments", "value": "The URL and the runner paths are public. The fetch sends no token today (M14)." }
+      ]
+    },
+    {
+      "id": "9ffacda4-5c2a-4858-8298-eb31cfe442e1",
+      "numericId": 9,
+      "threatSource": "maintainer",
+      "prerequisites": "who moves the pin to a new OSCAL release",
+      "threatAction": "leave __oscal_schema_version__ at the old release, or pin an artifact whose version metadata disagrees with the $id of its schema",
+      "threatImpact": "consumers read a wrong coverage boundary for the models (VER-002.02)",
+      "impactedGoal": ["integrity"],
+      "impactedAssets": ["__oscal_schema_version__", "spec artifact pin"],
+      "statement": "A maintainer who moves the pin to a new OSCAL release can leave __oscal_schema_version__ at the old release, or pin an artifact whose version metadata disagrees with the $id of its schema, which leads to consumers read a wrong coverage boundary for the models (VER-002.02), resulting in reduced integrity of __oscal_schema_version__ and spec artifact pin",
+      "status": "threatIdentified",
+      "tags": ["version"],
+      "metadata": [
+        { "key": "STRIDE", "value": ["T"] },
+        { "key": "Priority", "value": "Low" },
+        { "key": "custom:residualRisk", "value": "Low" },
+        { "key": "custom:likelihood", "value": "Possible" },
+        { "key": "custom:attackVector", "value": "Local" },
+        { "key": "custom:attackComplexity", "value": "Low" },
+        { "key": "Comments", "value": "D2 tests (M12) catch both cases. The manifest check also compares oscal-release in names.json with OSCAL_RELEASE." }
+      ]
+    }
+  ],
+  "assumptionLinks": [
+    { "assumptionId": "28130854-346c-4e07-bcd5-9a892c751c21", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f", "type": "Threat" },
+    { "assumptionId": "28130854-346c-4e07-bcd5-9a892c751c21", "linkedId": "b9124a7a-65db-4644-af4f-649d24838cef", "type": "Threat" },
+    { "assumptionId": "28130854-346c-4e07-bcd5-9a892c751c21", "linkedId": "c42cd4b8-fc9e-4047-90cc-65abbbbf2d37", "type": "Threat" },
+    { "assumptionId": "87b23661-0d03-43cb-aa98-d8f6158ec1bd", "linkedId": "c42cd4b8-fc9e-4047-90cc-65abbbbf2d37", "type": "Threat" },
+    { "assumptionId": "87b23661-0d03-43cb-aa98-d8f6158ec1bd", "linkedId": "93a351f8-c8a3-4d5f-801e-69e66bae3966", "type": "Mitigation" },
+    { "assumptionId": "26d9850b-481a-4654-9e76-b9d71ad34b86", "linkedId": "688b47ea-3ab9-406c-82d2-19bbfad0ac62", "type": "Threat" },
+    { "assumptionId": "ee89aae9-c4a3-417c-9387-2ba7030801af", "linkedId": "b9124a7a-65db-4644-af4f-649d24838cef", "type": "Threat" },
+    { "assumptionId": "ee89aae9-c4a3-417c-9387-2ba7030801af", "linkedId": "edbb920f-8776-418e-931b-56a2a6f8ac14", "type": "Threat" },
+    { "assumptionId": "9c350a0d-1f65-4cfd-8b48-958155340855", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f", "type": "Threat" },
+    { "assumptionId": "9c350a0d-1f65-4cfd-8b48-958155340855", "linkedId": "b9124a7a-65db-4644-af4f-649d24838cef", "type": "Threat" }
+  ],
+  "mitigationLinks": [
+    { "mitigationId": "fd0e141c-6cdd-45d3-bc56-f964f3827c99", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f" },
+    { "mitigationId": "fd0e141c-6cdd-45d3-bc56-f964f3827c99", "linkedId": "c42cd4b8-fc9e-4047-90cc-65abbbbf2d37" },
+    { "mitigationId": "4d05a300-38f8-4848-8ca7-0563f802a7e9", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f" },
+    { "mitigationId": "4d05a300-38f8-4848-8ca7-0563f802a7e9", "linkedId": "e9251f4b-f862-4a8b-8f9d-308e3b479115" },
+    { "mitigationId": "8a37e71e-da2e-4672-b934-399a226ad89c", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f" },
+    { "mitigationId": "8a37e71e-da2e-4672-b934-399a226ad89c", "linkedId": "688b47ea-3ab9-406c-82d2-19bbfad0ac62" },
+    { "mitigationId": "5ec85cd7-391e-469e-819d-7991ffaad7c1", "linkedId": "b9124a7a-65db-4644-af4f-649d24838cef" },
+    { "mitigationId": "5ec85cd7-391e-469e-819d-7991ffaad7c1", "linkedId": "c42cd4b8-fc9e-4047-90cc-65abbbbf2d37" },
+    { "mitigationId": "5ec85cd7-391e-469e-819d-7991ffaad7c1", "linkedId": "9ffacda4-5c2a-4858-8298-eb31cfe442e1" },
+    { "mitigationId": "da4b76ab-0e5a-4245-9832-8a104a00f778", "linkedId": "b9124a7a-65db-4644-af4f-649d24838cef" },
+    { "mitigationId": "262c26db-131e-42a7-8e3e-70d5e2a6f28d", "linkedId": "b9124a7a-65db-4644-af4f-649d24838cef" },
+    { "mitigationId": "262c26db-131e-42a7-8e3e-70d5e2a6f28d", "linkedId": "688b47ea-3ab9-406c-82d2-19bbfad0ac62" },
+    { "mitigationId": "262c26db-131e-42a7-8e3e-70d5e2a6f28d", "linkedId": "f59e750a-677c-4e4d-ad75-62eea4a291a3" },
+    { "mitigationId": "3795eb81-1f0b-488b-bb09-dd5212d9b195", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f" },
+    { "mitigationId": "3795eb81-1f0b-488b-bb09-dd5212d9b195", "linkedId": "688b47ea-3ab9-406c-82d2-19bbfad0ac62" },
+    { "mitigationId": "3795eb81-1f0b-488b-bb09-dd5212d9b195", "linkedId": "7fd297f3-5ef5-4cae-a56b-ab83cecfd937" },
+    { "mitigationId": "b6608ea8-7b3a-4231-9567-a4f7d85831c6", "linkedId": "7fd297f3-5ef5-4cae-a56b-ab83cecfd937" },
+    { "mitigationId": "2d8e5837-cbb1-420b-9c7d-f3a3d7775799", "linkedId": "b9124a7a-65db-4644-af4f-649d24838cef" },
+    { "mitigationId": "2d8e5837-cbb1-420b-9c7d-f3a3d7775799", "linkedId": "9ffacda4-5c2a-4858-8298-eb31cfe442e1" },
+    { "mitigationId": "351c0584-f2b2-4e72-a3f7-b6cc274c99ab", "linkedId": "688b47ea-3ab9-406c-82d2-19bbfad0ac62" },
+    { "mitigationId": "351c0584-f2b2-4e72-a3f7-b6cc274c99ab", "linkedId": "f59e750a-677c-4e4d-ad75-62eea4a291a3" },
+    { "mitigationId": "e4471832-a7ad-482c-a8d8-bb28d2a846d4", "linkedId": "e9251f4b-f862-4a8b-8f9d-308e3b479115" },
+    { "mitigationId": "e4471832-a7ad-482c-a8d8-bb28d2a846d4", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f" },
+    { "mitigationId": "7ed0b8f1-507a-49b1-b3f2-d7c1cdeb2713", "linkedId": "9ffacda4-5c2a-4858-8298-eb31cfe442e1" },
+    { "mitigationId": "93a351f8-c8a3-4d5f-801e-69e66bae3966", "linkedId": "c42cd4b8-fc9e-4047-90cc-65abbbbf2d37" },
+    { "mitigationId": "edb9ac96-2d49-40dc-95ec-e7110928c852", "linkedId": "edbb920f-8776-418e-931b-56a2a6f8ac14" },
+    { "mitigationId": "d309805b-15e6-46d4-8951-3d01441dab07", "linkedId": "c42cd4b8-fc9e-4047-90cc-65abbbbf2d37" },
+    { "mitigationId": "d309805b-15e6-46d4-8951-3d01441dab07", "linkedId": "2c22a6c0-9033-432c-b574-62d6d8a9071f" },
+    { "mitigationId": "e45b6b50-c246-422c-9de4-0b4983e44ad0", "linkedId": "f59e750a-677c-4e4d-ad75-62eea4a291a3" }
+  ]
+}

@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-21
+# The contract is in the oscal-bindings-specs store (schema-versioning, naming-manifest). This change moves the build
+# input of the binding to the pinned spec artifact and adds no requirement of its own.
+skip_specs: true
