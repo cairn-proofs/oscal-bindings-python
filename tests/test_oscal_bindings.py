@@ -13,8 +13,9 @@ behavior-preserving for existing consumers:
   (Req 5.6);
 * the Version_Package surface equals the snapshotted pre-move ``__all__``, in
   both directions, so nothing was added or dropped (Req 4.4);
-* ``__oscal_schema_version__`` is semver-shaped and matches the release encoded
-  in the Active_Schema_Bundle's schema ``$id`` (Req 6.1-6.3, 9.2).
+* ``__oscal_schema_version__`` is semver-shaped and equals the OSCAL release of
+  the spec artifact pin, which equals the release encoded in the ``$id`` of the
+  artifact schema (Req 6.1-6.3, 9.2).
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import json
 from typing import TYPE_CHECKING
 
 import pytest
+from support.spec_artifact import OSCAL_RELEASE
 from support.version_package import (
     PRE_MOVE_ALL,
     SEMVER_RE,
@@ -185,14 +187,18 @@ class TestSchemaVersionConstant:
         assert isinstance(version, str)
         assert SEMVER_RE.match(version), f"not major.minor.patch: {version!r}"
 
-    def test_constant_equals_the_release_in_the_schema_id(self):
-        """Req 6.3 — parsed out of the real bundle, not restated.
+    def test_constant_equals_the_release_of_the_pin(self):
+        """A pin move without an edit of ``__oscal_schema_version__`` fails here."""
+        assert oscal_bindings.v1.__oscal_schema_version__ == OSCAL_RELEASE
+
+    def test_release_of_the_pin_equals_the_release_in_the_schema_id(self):
+        """Req 6.3 — parsed out of the artifact schema, not restated.
 
         The ``$id`` is ``.../ns/oscal/<namespace>/<release>/oscal-complete-schema.json``
-        so the release is the path element before the filename.
+        so the release is the path element before the filename. A pin whose
+        build metadata disagrees with the schema it holds fails here.
         """
-        schema_path = active_schema_path()
-        assert schema_release(schema_path) == oscal_bindings.v1.__oscal_schema_version__
+        assert schema_release(active_schema_path()) == OSCAL_RELEASE
 
     def test_version_package_name_carries_the_major_version_only(self):
         """Req 4.3, 4.6 — ``v1``, so no 1.x refresh can perturb the path."""

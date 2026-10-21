@@ -3,11 +3,12 @@ Copyright 2026 Always August, LLC
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
-This product includes the OSCAL JSON Schemas (schemas/<release>/) developed by
-the National Institute of Standards and Technology (NIST),
-https://github.com/usnistgov/OSCAL. The schemas are vendored unmodified.
-src/oscal_bindings/v1/models.py is generated from them by
-datamodel-code-generator and scripts/postprocess_models.py.
+The generated models (src/oscal_bindings/v1/models.py) are derived from the
+OSCAL JSON Schema developed by the National Institute of Standards and
+Technology (NIST), https://github.com/usnistgov/OSCAL.
+datamodel-code-generator and scripts/postprocess_models.py generate the models
+from that schema. The build obtains the schema from the pinned spec artifact of
+cairn-proofs/oscal-bindings-specs.
 
 As a work of the United States government, the NIST OSCAL materials are in the
 public domain within the United States and are made available worldwide under

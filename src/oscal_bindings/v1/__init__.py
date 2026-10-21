@@ -6,7 +6,7 @@ using datamodel-code-generator with Pydantic v2 models.
 
 The namespace carries the OSCAL **major** version only: OSCAL 1.x is
 backward-compatible within its major version, so a minor or patch refresh of the
-vendored schema regenerates this package in place rather than creating a new
+pinned schema regenerates this package in place rather than creating a new
 import path. ``__oscal_schema_version__`` records the exact release the bindings
 were generated from.
 
@@ -70,14 +70,14 @@ from .parser import (
     validate_oscal,
 )
 
-#: The full OSCAL release the vendored schema bundle — and therefore the models
-#: in this package — was generated from. Matches the release element of the
-#: bundle's schema ``$id``
+#: The full OSCAL release that the models in this package were generated from:
+#: the release of the pinned spec artifact. Matches the release element of the
+#: artifact schema ``$id``
 #: (``http://csrc.nist.gov/ns/oscal/1.0/1.2.3/oscal-complete-schema.json``,
 #: where ``1.0`` is the namespace and ``1.2.3`` the release). Deliberately a
-#: literal: the schema bundle is not guaranteed to ship in the wheel, and
-#: parsing a multi-megabyte JSON file at import time to recover one string is a
-#: cost no consumer should pay. A test asserts it against the real ``$id``.
+#: literal: the schema does not ship in the wheel, and parsing a multi-megabyte
+#: JSON file at import time to recover one string is a cost no consumer should
+#: pay. Tests assert it against the pin and the artifact schema ``$id``.
 __oscal_schema_version__ = "1.2.3"
 
 __all__ = [

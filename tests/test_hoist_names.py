@@ -1,10 +1,10 @@
-"""Tests for ``scripts/hoist_names.py``: the hoisted copy of the vendored schema.
+"""Tests for ``scripts/hoist_names.py``: the hoisted copy of the artifact schema.
 
-The released manifest of the pinned spec artifact is hoisted into the vendored
+The released manifest of the pinned spec artifact is hoisted into the artifact
 schema. The tests check that each site becomes a ``$ref`` to a definition with
 its manifest name, that no old site key stays, that the output is the same on
 each run, that the guards fail on a changed copy, and that the hoisted copy
-accepts and rejects the same documents as the vendored schema.
+accepts and rejects the same documents as the artifact schema.
 """
 
 from __future__ import annotations
@@ -48,23 +48,23 @@ def released_manifest(paths: Any) -> dict[str, Any]:
 
 
 @pytest.fixture(scope="module")
-def vendored() -> dict[str, Any]:
-    schema: dict[str, Any] = json.loads(manifest_mod.VENDORED_SCHEMA.read_bytes())
+def artifact_schema(paths: Any) -> dict[str, Any]:
+    schema: dict[str, Any] = json.loads(paths.schema.read_bytes())
     return schema
 
 
 @pytest.fixture(scope="module")
 def hoisted(
-    vendored: dict[str, Any], released_manifest: dict[str, Any]
+    artifact_schema: dict[str, Any], released_manifest: dict[str, Any]
 ) -> dict[str, Any]:
-    result: dict[str, Any] = hoist_mod.hoist(vendored, released_manifest)
+    result: dict[str, Any] = hoist_mod.hoist(artifact_schema, released_manifest)
     return result
 
 
 @pytest.fixture
-def schema(vendored: dict[str, Any]) -> dict[str, Any]:
-    """A deep copy of the vendored schema that a test can change."""
-    return copy.deepcopy(vendored)
+def schema(artifact_schema: dict[str, Any]) -> dict[str, Any]:
+    """A deep copy of the artifact schema that a test can change."""
+    return copy.deepcopy(artifact_schema)
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ def _refs(node: object) -> Iterator[str]:
 
 
 def _follow(root: dict[str, Any], tokens: list[str], renamed: dict[str, str]) -> Any:
-    """Walk ``tokens`` through ``root`` as a reader of the vendored pointer would.
+    """Walk ``tokens`` through ``root`` as a reader of the original pointer would.
 
     A node that is a ``$ref`` and has no key for the next token is followed to
     its definition. An old site key of ``definitions`` is read under its new
@@ -198,15 +198,17 @@ def test_no_ref_targets_an_old_site_key(
 
 
 def test_scalar_definitions_keep_their_keys(
-    hoisted: dict[str, Any], vendored: dict[str, Any], released_manifest: dict[str, Any]
+    hoisted: dict[str, Any],
+    artifact_schema: dict[str, Any],
+    released_manifest: dict[str, Any],
 ) -> None:
     old = _old_site_keys(released_manifest)
-    kept = [key for key in vendored["definitions"] if key not in old]
+    kept = [key for key in artifact_schema["definitions"] if key not in old]
     for key in kept:
         assert key in hoisted["definitions"], key
     assert (
         hoisted["definitions"]["TokenDatatype"]
-        == vendored["definitions"]["TokenDatatype"]
+        == artifact_schema["definitions"]["TokenDatatype"]
     )
 
 
@@ -244,10 +246,10 @@ def test_single_or_many_is_hoisted(hoisted: dict[str, Any]) -> None:
 
 
 def test_closed_enum_replaces_the_all_of(
-    hoisted: dict[str, Any], vendored: dict[str, Any]
+    hoisted: dict[str, Any], artifact_schema: dict[str, Any]
 ) -> None:
     """D6: the closed enum becomes a ``$ref`` with the property docs beside it."""
-    original = vendored["definitions"][HOW_MANY.rsplit("/", maxsplit=1)[-1]][
+    original = artifact_schema["definitions"][HOW_MANY.rsplit("/", maxsplit=1)[-1]][
         "properties"
     ]["how-many"]
     prop = hoisted["definitions"]["ParameterSelection"]["properties"]["how-many"]
@@ -275,12 +277,12 @@ def test_open_enum_keeps_its_base(hoisted: dict[str, Any]) -> None:
 
 
 def test_property_site_keeps_its_docs_beside_the_ref(
-    hoisted: dict[str, Any], vendored: dict[str, Any]
+    hoisted: dict[str, Any], artifact_schema: dict[str, Any]
 ) -> None:
     """An inline object property keeps its ``title`` and ``description``."""
-    original = vendored["definitions"]["oscal-complete-oscal-ap:assessment-plan"][
-        "properties"
-    ]["local-definitions"]
+    original = artifact_schema["definitions"][
+        "oscal-complete-oscal-ap:assessment-plan"
+    ]["properties"]["local-definitions"]
     prop = hoisted["definitions"]["AssessmentPlan"]["properties"]["local-definitions"]
     assert prop == {
         "$ref": "#/definitions/AssessmentPlanLocalDefinitions",
@@ -292,9 +294,9 @@ def test_property_site_keeps_its_docs_beside_the_ref(
 
 
 def test_union_variant_takes_the_union_description(
-    hoisted: dict[str, Any], vendored: dict[str, Any]
+    hoisted: dict[str, Any], artifact_schema: dict[str, Any]
 ) -> None:
-    original = vendored["definitions"]["oscal-complete-oscal-catalog:group"]
+    original = artifact_schema["definitions"]["oscal-complete-oscal-catalog:group"]
     assert "description" not in original["anyOf"][0]
     for variant in ("CatalogGroupWithControls", "CatalogGroupWithGroups"):
         definition = hoisted["definitions"][variant]
@@ -303,12 +305,12 @@ def test_union_variant_takes_the_union_description(
 
 
 def test_document_wrapper_takes_no_root_docs(
-    hoisted: dict[str, Any], vendored: dict[str, Any]
+    hoisted: dict[str, Any], artifact_schema: dict[str, Any]
 ) -> None:
     """A branch of the root ``oneOf`` keeps only its own annotations."""
     for i, branch in enumerate(hoisted["oneOf"]):
         name = branch["$ref"].rsplit("/", maxsplit=1)[-1]
-        original = vendored["oneOf"][i]
+        original = artifact_schema["oneOf"][i]
         definition = hoisted["definitions"][name]
         assert definition.get("description") == original.get("description"), name
 
@@ -324,10 +326,14 @@ def test_hoist_does_not_change_its_inputs(
 
 
 def test_two_hoists_are_identical(
-    vendored: dict[str, Any], released_manifest: dict[str, Any]
+    artifact_schema: dict[str, Any], released_manifest: dict[str, Any]
 ) -> None:
-    first = hoist_mod.hoist(copy.deepcopy(vendored), copy.deepcopy(released_manifest))
-    second = hoist_mod.hoist(copy.deepcopy(vendored), copy.deepcopy(released_manifest))
+    first = hoist_mod.hoist(
+        copy.deepcopy(artifact_schema), copy.deepcopy(released_manifest)
+    )
+    second = hoist_mod.hoist(
+        copy.deepcopy(artifact_schema), copy.deepcopy(released_manifest)
+    )
     assert hoist_mod.dumps(first) == hoist_mod.dumps(second)
     assert hoist_mod.dumps(first).endswith("}\n")
 
@@ -342,6 +348,124 @@ def test_main_writes_byte_identical_files(
     assert hoist_mod.main(["--output", str(output)]) == 0
     assert output.read_bytes() == first
     assert "hoisted definitions" in capsys.readouterr().out
+
+
+def _copy_artifact(paths: Any, root: Path, schema_bytes: bytes) -> None:
+    """Write the manifest files of ``paths`` and ``schema_bytes`` under ``root``."""
+    copied = pin.artifact_paths(root)
+    for source, target in (
+        (paths.names, copied.names),
+        (paths.names_schema, copied.names_schema),
+    ):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+    copied.schema.parent.mkdir(parents=True)
+    copied.schema.write_bytes(schema_bytes)
+
+
+def test_main_reads_the_artifact_schema_one_time(
+    paths: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The manifest check hashes the bytes that the hoist parses: one read."""
+    reads: list[Path] = []
+    read = hoist_mod.read_schema_bytes
+
+    def counting_read(path: Path) -> bytes:
+        reads.append(path)
+        data: bytes = read(path)
+        return data
+
+    parsed: list[object] = []
+    hoist = hoist_mod.hoist
+
+    def recording_hoist(schema: dict[str, Any], manifest: dict[str, Any]) -> Any:
+        parsed.append(copy.deepcopy(schema))
+        return hoist(schema, manifest)
+
+    monkeypatch.setattr(hoist_mod, "ensure_spec_artifact", ensure_spec_artifact)
+    monkeypatch.setattr(hoist_mod, "read_schema_bytes", counting_read)
+    monkeypatch.setattr(hoist_mod, "hoist", recording_hoist)
+    assert hoist_mod.main(["--output", str(tmp_path / "out.json")]) == 0
+    assert reads == [paths.schema]
+    assert parsed == [json.loads(paths.schema.read_bytes())]
+
+
+def test_main_checks_the_bytes_that_it_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D1 item 2: the manifest check gets the one bytes object that main read."""
+    read_bytes: list[bytes] = []
+    read = hoist_mod.read_schema_bytes
+
+    def recording_read(path: Path) -> bytes:
+        data: bytes = read(path)
+        read_bytes.append(data)
+        return data
+
+    checked: list[object] = []
+    load = hoist_mod.load_validated_manifest
+
+    def recording_load(paths: Any, **kwargs: Any) -> Any:
+        checked.append(kwargs.get("schema_bytes"))
+        return load(paths, **kwargs)
+
+    monkeypatch.setattr(hoist_mod, "ensure_spec_artifact", ensure_spec_artifact)
+    monkeypatch.setattr(hoist_mod, "read_schema_bytes", recording_read)
+    monkeypatch.setattr(hoist_mod, "load_validated_manifest", recording_load)
+    assert hoist_mod.main(["--output", str(tmp_path / "out.json")]) == 0
+    assert len(read_bytes) == 1
+    assert len(checked) == 1
+    assert checked[0] is read_bytes[0]
+
+
+def test_main_rejects_an_artifact_schema_with_another_hash(
+    paths: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """NAM-002.03: a schema whose sha256 differs from ``schema.sha256`` fails."""
+    root = tmp_path / "artifact"
+    _copy_artifact(paths, root, paths.schema.read_bytes() + b"\n")
+    monkeypatch.setattr(hoist_mod, "ensure_spec_artifact", lambda: root)
+    output = tmp_path / "out.json"
+    assert hoist_mod.main(["--output", str(output)]) == 1
+    assert not output.exists()
+    assert "schema.sha256" in capsys.readouterr().out
+
+
+def test_main_rejects_a_missing_artifact_schema(
+    paths: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = tmp_path / "artifact"
+    _copy_artifact(paths, root, b"{}")
+    pin.artifact_paths(root).schema.unlink()
+    monkeypatch.setattr(hoist_mod, "ensure_spec_artifact", lambda: root)
+    output = tmp_path / "out.json"
+    assert hoist_mod.main(["--output", str(output)]) == 1
+    assert not output.exists()
+    assert "cannot read the schema" in capsys.readouterr().out
+
+
+def test_main_reports_an_artifact_failure_and_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    corpus_error = load_script("pinned_archive").CorpusError
+
+    def fail() -> None:
+        msg = "Example: the artifact could not be fetched"
+        raise corpus_error(msg)
+
+    monkeypatch.setattr(hoist_mod, "ensure_spec_artifact", fail)
+    output = tmp_path / "out.json"
+    assert hoist_mod.main(["--output", str(output)]) == 1
+    assert not output.exists()
+    assert "could not be fetched" in capsys.readouterr().out
 
 
 def test_main_reports_a_failure_and_writes_nothing(
@@ -492,10 +616,10 @@ def test_schema_without_definitions_fails(manifest: dict[str, Any]) -> None:
 
 
 def _validators(
-    vendored: dict[str, Any], hoisted: dict[str, Any], *, formats: bool
+    artifact_schema: dict[str, Any], hoisted: dict[str, Any], *, formats: bool
 ) -> tuple[Any, Any]:
     return (
-        jsonschema_rs.Draft7Validator(vendored, validate_formats=formats),
+        jsonschema_rs.Draft7Validator(artifact_schema, validate_formats=formats),
         jsonschema_rs.Draft7Validator(hoisted, validate_formats=formats),
     )
 
@@ -516,12 +640,16 @@ def _artifact_documents(paths: Any) -> tuple[dict[str, object], list[str]]:
 
 @pytest.mark.parametrize("formats", [False, True], ids=["no-formats", "formats"])
 def test_artifact_corpus_validates_the_same(
-    paths: Any, vendored: dict[str, Any], hoisted: dict[str, Any], *, formats: bool
+    paths: Any,
+    artifact_schema: dict[str, Any],
+    hoisted: dict[str, Any],
+    *,
+    formats: bool,
 ) -> None:
     documents, skipped = _artifact_documents(paths)
     # The two files that a JSON Schema cannot read.
     assert sorted(skipped) == ["invalid/invalid-utf8.json", "invalid/not-json.json"]
-    before, after = _validators(vendored, hoisted, formats=formats)
+    before, after = _validators(artifact_schema, hoisted, formats=formats)
     results = {name: before.is_valid(doc) for name, doc in documents.items()}
     differ = [
         name for name, doc in documents.items() if after.is_valid(doc) != results[name]
@@ -532,12 +660,12 @@ def test_artifact_corpus_validates_the_same(
 
 
 def test_remote_corpora_validate_the_same(
-    vendored: dict[str, Any], hoisted: dict[str, Any]
+    artifact_schema: dict[str, Any], hoisted: dict[str, Any]
 ) -> None:
     """Every NIST and AWS corpus document gets the same result from both schemas."""
     docs = [*load_corpus_docs(NIST_CORPUS), *load_corpus_docs(AWS_CORPUS)]
     assert docs
-    before, after = _validators(vendored, hoisted, formats=False)
+    before, after = _validators(artifact_schema, hoisted, formats=False)
     differ = []
     for doc in docs:
         instance = json.loads(doc.raw_bytes)
@@ -572,7 +700,7 @@ def _mutations(node: object) -> Iterator[None]:
 
 
 def test_mutated_documents_validate_the_same(
-    paths: Any, vendored: dict[str, Any], hoisted: dict[str, Any]
+    paths: Any, artifact_schema: dict[str, Any], hoisted: dict[str, Any]
 ) -> None:
     """Each one-place change of each valid document gets the same result.
 
@@ -585,7 +713,7 @@ def test_mutated_documents_validate_the_same(
     for doc in [*load_corpus_docs(NIST_CORPUS), *load_corpus_docs(AWS_CORPUS)]:
         if len(doc.raw_bytes) <= MUTATED_REMOTE_MAX_BYTES:
             documents[f"{doc.corpus_name}:{doc.rel_path}"] = json.loads(doc.raw_bytes)
-    before, after = _validators(vendored, hoisted, formats=False)
+    before, after = _validators(artifact_schema, hoisted, formats=False)
     checked = rejected = 0
     differ: list[str] = []
     for name, doc in documents.items():
@@ -606,7 +734,7 @@ def test_mutated_documents_validate_the_same(
 )
 def test_closed_enum_values_validate_the_same(
     paths: Any,
-    vendored: dict[str, Any],
+    artifact_schema: dict[str, Any],
     hoisted: dict[str, Any],
     how_many: str,
     *,
@@ -620,6 +748,6 @@ def test_closed_enum_values_validate_the_same(
             "select": {"how-many": how_many, "choice": ["a", "b"]},
         }
     ]
-    before, after = _validators(vendored, hoisted, formats=False)
+    before, after = _validators(artifact_schema, hoisted, formats=False)
     assert before.is_valid(catalog) is valid
     assert after.is_valid(catalog) is valid

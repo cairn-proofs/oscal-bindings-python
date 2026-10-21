@@ -52,7 +52,7 @@ class ArtifactPaths:
 
     root: Path
     schema: Path
-    """``schemas/<release>/oscal_complete_schema.json``: the vendored schema."""
+    """``schemas/<release>/oscal_complete_schema.json``: the complete schema."""
     names: Path
     """``manifest/<release>/names.json``: the naming manifest."""
     names_schema: Path

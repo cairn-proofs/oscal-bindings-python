@@ -1,7 +1,7 @@
 """Tests for ``scripts/manifest.py``: validation of the naming manifest.
 
 The released manifest of the pinned spec artifact must pass against the
-vendored schema. Each changed copy must fail with a failure that names the
+artifact schema. Each changed copy must fail with a failure that names the
 problem. Test names carry the scenario id of the naming-manifest capability
 where one exists.
 """
@@ -29,12 +29,12 @@ RELEASE: str = pin.OSCAL_RELEASE
 
 @pytest.fixture(scope="module")
 def released() -> dict[str, Any]:
-    """The parsed names.json, names.schema.json, and the vendored schema bytes."""
+    """The parsed names.json, names.schema.json, and the artifact schema bytes."""
     paths = pin.artifact_paths(ensure_spec_artifact())
     return {
         "manifest": json.loads(paths.names.read_bytes()),
         "names_schema": json.loads(paths.names_schema.read_bytes()),
-        "schema_bytes": manifest_mod.VENDORED_SCHEMA.read_bytes(),
+        "schema_bytes": paths.schema.read_bytes(),
     }
 
 
@@ -505,7 +505,9 @@ def test_load_validated_manifest_raises_with_every_failure(
     manifest["types"][0]["sites"] = ["#/definitions/missing"]
     paths = _write_artifact(tmp_path, manifest, released["names_schema"])
     with pytest.raises(manifest_mod.ManifestError) as info:
-        manifest_mod.load_validated_manifest(paths)
+        manifest_mod.load_validated_manifest(
+            paths, schema_bytes=released["schema_bytes"]
+        )
     assert len(info.value.failures) == 2
     message = str(info.value)
     assert str(paths.names) in message
@@ -532,6 +534,77 @@ def test_load_validated_manifest_rejects_missing_schema(
         manifest_mod.load_validated_manifest(
             paths, schema_path=tmp_path / "missing.json"
         )
+
+
+def test_load_validated_manifest_reads_the_artifact_schema_by_default(
+    tmp_path: Path, released: dict[str, Any], manifest: dict[str, Any]
+) -> None:
+    """With no schema argument, the check hashes ``paths.schema`` of the artifact."""
+    paths = _write_artifact(tmp_path, manifest, released["names_schema"])
+    paths.schema.parent.mkdir(parents=True)
+    paths.schema.write_bytes(released["schema_bytes"])
+    assert manifest_mod.load_validated_manifest(paths) == manifest
+    paths.schema.write_bytes(released["schema_bytes"] + b"\n")
+    with pytest.raises(manifest_mod.ManifestError, match=r"schema\.sha256"):
+        manifest_mod.load_validated_manifest(paths)
+
+
+def test_load_validated_manifest_rejects_missing_artifact_schema(
+    tmp_path: Path, released: dict[str, Any], manifest: dict[str, Any]
+) -> None:
+    paths = _write_artifact(tmp_path, manifest, released["names_schema"])
+    with pytest.raises(manifest_mod.ManifestError, match="cannot read the schema"):
+        manifest_mod.load_validated_manifest(paths)
+
+
+def test_load_validated_manifest_hashes_the_given_bytes(
+    released: dict[str, Any],
+) -> None:
+    """NAM-002.03: bytes whose sha256 differs from ``schema.sha256`` fail."""
+    paths = pin.artifact_paths(ensure_spec_artifact())
+    with pytest.raises(manifest_mod.ManifestError, match=r"schema\.sha256"):
+        manifest_mod.load_validated_manifest(
+            paths, schema_bytes=released["schema_bytes"] + b"\n"
+        )
+    loaded = manifest_mod.load_validated_manifest(
+        paths, schema_bytes=released["schema_bytes"]
+    )
+    assert loaded == released["manifest"]
+
+
+def test_load_validated_manifest_hashes_an_explicit_schema_path(
+    tmp_path: Path, released: dict[str, Any]
+) -> None:
+    """NAM-002.03: an explicit schema file whose sha256 differs fails."""
+    other = tmp_path / "schema.json"
+    other.write_bytes(released["schema_bytes"] + b"\n")
+    paths = pin.artifact_paths(ensure_spec_artifact())
+    with pytest.raises(manifest_mod.ManifestError, match=r"schema\.sha256"):
+        manifest_mod.load_validated_manifest(paths, schema_path=other)
+
+
+def test_load_validated_manifest_rejects_both_schema_arguments(
+    tmp_path: Path, released: dict[str, Any]
+) -> None:
+    paths = pin.artifact_paths(ensure_spec_artifact())
+    with pytest.raises(TypeError, match="not both"):
+        manifest_mod.load_validated_manifest(
+            paths,
+            schema_bytes=released["schema_bytes"],
+            schema_path=tmp_path / "schema.json",
+        )
+
+
+def test_read_schema_bytes_returns_the_file_bytes(tmp_path: Path) -> None:
+    path = tmp_path / "schema.json"
+    path.write_bytes(b"{}")
+    assert manifest_mod.read_schema_bytes(path) == b"{}"
+
+
+def test_read_schema_bytes_rejects_missing_file(tmp_path: Path) -> None:
+    missing = tmp_path / "missing.json"
+    with pytest.raises(manifest_mod.ManifestError, match="cannot read the schema"):
+        manifest_mod.read_schema_bytes(missing)
 
 
 def test_load_validated_manifest_rejects_non_object_names_schema(

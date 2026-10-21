@@ -11,7 +11,7 @@ There is no network server, no persistence layer, and no long-running process. T
 ```mermaid
 graph TB
     subgraph L0["Layer 0 — Schema (input)"]
-        S["schemas/1.2.3/oscal_complete_schema.json<br/>+ names.json (pinned spec artifact)"]
+        S["oscal_complete_schema.json + names.json<br/>(pinned spec artifact 0.2.0+oscal.1.2.3)"]
     end
     subgraph L1["Layer 1 — Generated models"]
         BASE["v1/_base.py<br/>OscalBaseModel (hand-written)"]
@@ -82,10 +82,11 @@ The top-level submodule paths get real files — `oscal_bindings/models.py`, `os
 ```mermaid
 flowchart LR
     N["spec artifact 0.2.0+oscal.1.2.3<br/>names.json (sha256-pinned)"] -->|"manifest.py<br/>validate"| H
-    A["schemas/&lt;release&gt;/oscal_complete_schema.json"] --> H["hoist_names.py"]
+    A["spec artifact 0.2.0+oscal.1.2.3<br/>oscal_complete_schema.json"] --> H["hoist_names.py"]
+    A --> C
     H --> HS["build/codegen/oscal_complete_schema.json<br/>(each manifest site = definitions/&lt;Name&gt;)"]
     HS -->|"datamodel-codegen"| B["build/codegen/models.py<br/>(raw: manifest-named classes,<br/>RootModel scalars)"]
-    B -->|"postprocess_models.py<br/>--schema / --models / --output"| C["v1/models.py<br/>(final: + union TypeAliases,<br/>MappingCollectionMappings, OscalDocument,<br/>scalar aliases; guards passed)"]
+    B -->|"postprocess_models.py<br/>--models / --output"| C["v1/models.py<br/>(final: + union TypeAliases,<br/>MappingCollectionMappings, OscalDocument,<br/>scalar aliases; guards passed)"]
     N --> C
 ```
 
@@ -95,11 +96,11 @@ Guards:
 
 | Step | Guard | Behavior |
 |------|-------|----------|
-| `manifest.py` | `names.json` fails its JSON Schema, format/release, vendored-schema sha256, uniqueness, keyword/builtin, or pointer checks | `ManifestError` with every failure; nothing generated |
+| `manifest.py` | `names.json` fails its JSON Schema, format/release, artifact-schema sha256, uniqueness, keyword/builtin, or pointer checks | `ManifestError` with every failure; nothing generated |
 | `hoist_names.py` | Merged sites with different bodies; closed-enum value that its base datatype rejects | `HoistError` naming the sites |
 | `postprocess_models.py` | Manifest name missing or in the wrong form; a name outside the manifest that is not a scalar alias of a scalar definition of the schema; a name defined twice, a scalar alias with a manifest name, or a manifest name or scalar alias bound by an import | `PostprocessError` with every offender; `v1/models.py` not written |
 
-The post-processor's schema, models, and output paths are passed explicitly, and each argument carries its own default (`--output` defaults to `--models`). `generate` has codegen write `build/codegen/models.py`, and the post-processor writes `v1/models.py` atomically (temp file + `os.replace`), so a failed run leaves the committed module untouched. The active bundle is selected **by explicit path and pin alone** — no directory scan, no glob, no "newest release wins" — so adding a schema bundle directory changes nothing until the pin and paths change.
+`generate` passes the post-processor `--models` and `--output` and no `--schema`. Each argument carries its own default: an omitted `--schema` resolves at call time to the schema of the pinned spec artifact, and `--output` defaults to `--models`. `generate` has codegen write `build/codegen/models.py`, and the post-processor writes `v1/models.py` atomically (temp file + `os.replace`), so a failed run leaves the committed module untouched. The repo holds no copy of the schema. The pin in `scripts/spec_artifact.py` is the only selector of the schema and its release. CI fails the `build` job when `git diff --exit-code -- src/oscal_bindings/v1/models.py` finds a difference after `hatch run release`.
 
 ## Key Architectural Decisions
 
@@ -113,8 +114,8 @@ The post-processor's schema, models, and output paths are passed explicitly, and
 | Closed enums as `Enum` classes | A value outside a closed enum fails validation, as the schema requires |
 | Major-version namespace (`oscal_bindings.v1`) | The compatibility boundary is the major version, matching NIST's `$id` split; minor-version namespacing rejected as it would force import churn on every routine refresh — see `DEVELOPING.md` Key Design Decisions |
 | Top level as a pure re-export of `v1` | Short import paths for callers who don't need to name the major version; both paths resolve to the identical objects |
-| Release-versioned schema bundles (`schemas/<release>/`) | The schema a binding set came from is unambiguous, and a refresh is a visible, reviewable change |
-| `__oscal_schema_version__` constant, written as a literal | The package name carries only the major version; a literal avoids parsing a multi-megabyte schema at import time (and the bundle is not guaranteed to ship in the wheel). A test asserts it against the real `$id` |
+| Schema from the sha256-pinned spec artifact, not a repo copy | The pin is the one selector of the schema and its release. A move of the pin is a reviewed change, and the committed `models.py` diff (checked by the CI drift check) is its reviewable record |
+| `__oscal_schema_version__` constant, written as a literal | The package name carries only the major version. A literal avoids parsing a multi-megabyte schema at import time, and the package cannot import from `scripts/`. Tests assert that it equals the release of the pin, and that the release of the pin equals the release in the schema `$id` |
 | `bytes`-accepting parsers | Skip a UTF-8 decode + one document-size allocation for byte-sources (HTTP/S3/file) |
 
 See `dependencies.md` for the external toolchain and `workflows.md` for the end-to-end generation and consumption flows.

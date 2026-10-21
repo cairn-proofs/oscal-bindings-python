@@ -36,6 +36,16 @@ def test_script_and_test_support_share_one_pin_and_one_cache() -> None:
     assert REPO_ROOT.resolve() / "tests" / ".corpus_cache" == pin.CACHE_ROOT
 
 
+def test_pin_url_is_a_release_asset_of_the_spec_store() -> None:
+    """The pin keeps the owner and the repository of the spec store."""
+    prefix = "https://github.com/cairn-proofs/oscal-bindings-specs/releases/download/"
+    assert pin.SPEC_ARTIFACT.url.startswith(prefix)
+    # The path after the prefix names this release, with no traversal.
+    rest = pin.SPEC_ARTIFACT.url.removeprefix(prefix)
+    version = pin.SPEC_ARTIFACT_VERSION.replace("+", "%2B")
+    assert rest.split("/") == [f"v{version}", f"oscal-bindings-specs-{version}.tar.gz"]
+
+
 def test_support_reexports_the_script_classes() -> None:
     assert corpus.CorpusError is pinned.CorpusError
     assert corpus.PinnedArchive is pinned.PinnedArchive

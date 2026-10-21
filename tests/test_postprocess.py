@@ -21,6 +21,7 @@ import pytest
 from pydantic import RootModel, TypeAdapter, ValidationError
 from support.scripts import load_script
 from support.spec_artifact import ensure_spec_artifact
+from support.spec_artifact import schema_path as _artifact_schema_path
 
 from oscal_bindings.v1 import models
 
@@ -130,9 +131,9 @@ def _manifest(*extra: dict[str, Any]) -> dict[str, Any]:
 
 
 @functools.cache
-def _vendored() -> dict[str, Any]:
-    """The vendored schema that the committed ``models.py`` was generated from."""
-    schema: dict[str, Any] = json.loads(pp.DEFAULT_SCHEMA_PATH.read_bytes())
+def _artifact_schema() -> dict[str, Any]:
+    """The artifact schema that the committed ``models.py`` was generated from."""
+    schema: dict[str, Any] = json.loads(_artifact_schema_path().read_bytes())
     return schema
 
 
@@ -508,30 +509,64 @@ class TestCli:
         args = pp.parse_args(["--models", str(models_path)])
         assert args.models == models_path
         assert args.output == models_path
-        assert args.schema == pp.DEFAULT_SCHEMA_PATH
+        assert args.schema is None
         args = pp.parse_args([])
         assert args.models == pp.DEFAULT_MODELS_PATH
         assert args.output == pp.DEFAULT_MODELS_PATH
-        assert args.schema == pp.DEFAULT_SCHEMA_PATH
+        assert args.schema is None
+        schema_path = tmp_path / "schema.json"
+        args = pp.parse_args(["--schema", str(schema_path)])
+        assert args.schema == schema_path
         output = tmp_path / "out.py"
         args = pp.parse_args(["--models", str(models_path), "--output", str(output)])
         assert args.output == output
 
     def test_defaults_point_at_existing_files(self) -> None:
         assert pp.DEFAULT_MODELS_PATH.exists()
-        assert pp.DEFAULT_SCHEMA_PATH.exists()
 
-    def test_active_schema_release_is_the_release_of_the_pin(self) -> None:
-        assert load_script("spec_artifact").OSCAL_RELEASE == pp.ACTIVE_SCHEMA_RELEASE
+    def test_artifact_schema_path_is_the_schema_of_the_pin(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pin = load_script("spec_artifact")
+        monkeypatch.setattr(pin, "ensure_spec_artifact", ensure_spec_artifact)
+        assert pp.artifact_schema_path() == _artifact_schema_path()
+        assert pp.artifact_schema_path().is_file()
 
-    def test_load_manifest_checks_the_schema_hash(self, tmp_path: Path) -> None:
-        """The manifest must record the sha256 of the ``--schema`` file."""
-        other = tmp_path / "schema.json"
-        other.write_text(json.dumps(SCHEMA))
+    def test_import_does_not_fetch_the_artifact(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """D1: an import resolves no artifact. Only a call fetches it."""
+        pin = load_script("spec_artifact")
+        root = ensure_spec_artifact()
+        calls: list[dict[str, object]] = []
+
+        def recording_ensure(**kwargs: object) -> Path:
+            calls.append(kwargs)
+            return root
+
+        monkeypatch.setattr(pin, "ensure_spec_artifact", recording_ensure)
+        name = "postprocess_models_import_probe"
+        spec = importlib.util.spec_from_file_location(name, pp.__file__)
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        # dataclasses look up the module of each class in sys.modules.
+        monkeypatch.setitem(sys.modules, name, module)
+        spec.loader.exec_module(module)
+        assert calls == []
+        # The probe is live: a call goes through the patched fetch.
+        assert module.artifact_schema_path() == pin.artifact_paths(root).schema
+        assert calls == [{}]
+
+    def test_load_manifest_checks_the_schema_hash(self) -> None:
+        """The manifest must record the sha256 of the given schema bytes."""
         manifest_error = load_script("manifest").ManifestError
         with pytest.raises(manifest_error, match=r"schema\.sha256"):
-            pp.load_manifest(other)
-        assert pp.load_manifest(pp.DEFAULT_SCHEMA_PATH)["types"]
+            pp.load_manifest(json.dumps(SCHEMA).encode())
+        schema_bytes = _artifact_schema_path().read_bytes()
+        with pytest.raises(manifest_error, match=r"schema\.sha256"):
+            pp.load_manifest(schema_bytes + b"\n")
+        assert pp.load_manifest(schema_bytes)["types"]
 
     @pytest.fixture
     def files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -631,6 +666,57 @@ class TestCli:
         assert str(files / absent) in capsys.readouterr().err
         assert {p.name: p.read_text() for p in files.iterdir()} == before
 
+    @pytest.fixture
+    def checked(
+        self,
+        files: Path,  # noqa: ARG002 - its load_manifest patch must come first
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> list[bytes]:
+        """The schema bytes that each ``load_manifest`` call gets."""
+        checked: list[bytes] = []
+
+        def recording_load(schema_bytes: bytes) -> dict[str, Any]:
+            checked.append(schema_bytes)
+            return _manifest()
+
+        monkeypatch.setattr(pp, "load_manifest", recording_load)
+        return checked
+
+    def test_main_checks_the_bytes_that_it_parses(
+        self, files: Path, checked: list[bytes]
+    ) -> None:
+        """One read: ``load_manifest`` gets the bytes of the ``--schema`` file."""
+        assert self._run(files) == 0
+        assert checked == [(files / "schema.json").read_bytes()]
+
+    def test_main_resolves_the_default_schema_from_the_artifact(
+        self, files: Path, checked: list[bytes], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        schema_path = files / "schema.json"
+        monkeypatch.setattr(pp, "artifact_schema_path", lambda: schema_path)
+        assert pp.main(["--models", str(files / "models.py")]) == 0
+        assert checked == [schema_path.read_bytes()]
+
+    def test_main_reports_an_artifact_failure_and_writes_nothing(
+        self,
+        files: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        corpus_error = load_script("pinned_archive").CorpusError
+
+        def fail() -> Path:
+            msg = "cannot fetch the spec artifact"
+            raise corpus_error(msg)
+
+        monkeypatch.setattr(pp, "artifact_schema_path", fail)
+        before = (files / "models.py").read_text()
+        assert pp.main(["--models", str(files / "models.py")]) == 1
+        assert (files / "models.py").read_text() == before
+        err = capsys.readouterr().err
+        assert "cannot fetch the spec artifact" in err
+        assert "was not written" in err
+
 
 # ---------------------------------------------------------------------------
 # The committed models.py
@@ -650,7 +736,7 @@ def released_manifest() -> dict[str, Any]:
 class TestCommittedModels:
     def test_passes_the_guards(self, released_manifest: dict[str, Any]) -> None:
         content = pp.DEFAULT_MODELS_PATH.read_text()
-        assert pp.guard_failures(content, released_manifest, _vendored()) == []
+        assert pp.guard_failures(content, released_manifest, _artifact_schema()) == []
 
     def test_each_union_alias_is_the_union_of_its_variants(
         self, released_manifest: dict[str, Any]
@@ -724,7 +810,7 @@ class TestRealDrift:
         self, committed: str, released_manifest: dict[str, Any], name: str, form: str
     ) -> None:
         failures = pp.guard_failures(
-            committed, _without(released_manifest, name), _vendored()
+            committed, _without(released_manifest, name), _artifact_schema()
         )
         assert len(failures) == 1, failures
         assert failures[0].startswith(f"[guard 2] {name} (line ")
@@ -736,7 +822,7 @@ class TestRealDrift:
         renamed = pp.rename_names(
             committed, {"CatalogGroupWithControls": "CatalogGroupWithControls1"}
         )
-        failures = pp.guard_failures(renamed, released_manifest, _vendored())
+        failures = pp.guard_failures(renamed, released_manifest, _artifact_schema())
         assert len(failures) == 2, failures
         assert failures[0] == (
             "[guard 1] the manifest name CatalogGroupWithControls (object) is missing"
@@ -755,7 +841,7 @@ class TestRealDrift:
                 for t in released_manifest["types"]
             ],
         }
-        assert pp.guard_failures(committed, manifest, _vendored()) == [
+        assert pp.guard_failures(committed, manifest, _artifact_schema()) == [
             "[guard 1] HashAlgorithm (union) is defined as enum, not as type alias"
         ]
 
@@ -763,7 +849,7 @@ class TestRealDrift:
         self, committed: str, released_manifest: dict[str, Any]
     ) -> None:
         content = committed + _object("HashAlgorithm", "x: str")
-        failures = pp.guard_failures(content, released_manifest, _vendored())
+        failures = pp.guard_failures(content, released_manifest, _artifact_schema())
         assert len(failures) == 1, failures
         assert failures[0].startswith("[guard 3] HashAlgorithm is defined 2 times")
 
@@ -791,7 +877,7 @@ class TestRerun:
     def test_postprocess_of_its_own_output_raises(
         self, released_manifest: dict[str, Any]
     ) -> None:
-        schema = json.loads(pp.DEFAULT_SCHEMA_PATH.read_bytes())
+        schema = _artifact_schema()
         with pytest.raises(PostprocessError) as info:
             pp.postprocess(
                 pp.DEFAULT_MODELS_PATH.read_text(), released_manifest, schema
@@ -806,12 +892,14 @@ class TestRerun:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setattr(pp, "load_manifest", lambda _schema: released_manifest)
+        monkeypatch.setattr(
+            load_script("spec_artifact"), "ensure_spec_artifact", ensure_spec_artifact
+        )
         models_path = tmp_path / "models.py"
         before = pp.DEFAULT_MODELS_PATH.read_bytes()
         models_path.write_bytes(before)
-        status = pp.main(
-            ["--models", str(models_path), "--schema", str(pp.DEFAULT_SCHEMA_PATH)]
-        )
+        # No --schema: main resolves the schema of the pinned spec artifact.
+        status = pp.main(["--models", str(models_path)])
         assert status == 1
         assert models_path.read_bytes() == before
         err = capsys.readouterr().err

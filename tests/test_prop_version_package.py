@@ -12,14 +12,14 @@ numbered per that document:
 
 None of the four uses `@given`, and that is the design's call rather than an
 omission. Each quantifies over a space that is either a single fixed input (the
-committed pre-move `__all__` snapshot; the one real Active_Schema_Bundle) or
+committed pre-move `__all__` snapshot; the one pinned artifact schema) or
 finitely enumerable (the Public_Surface, 34 names). Hypothesis adds nothing to
 an input space you can write down, and a strategy that draws from
 `oscal_bindings.__all__` would only re-derive the expectation from the code
 under test. The enumerable case is `parametrize`d so each name fails
 individually; the fixed-input cases are plain assertions.
 
-The pre-move snapshot and the Active_Schema_Bundle lookup are imported from
+The pre-move snapshot and the artifact schema lookup are imported from
 `support.version_package` — shared with the example-based suite so there is one
 snapshot of record, not two that can drift apart.
 """
@@ -29,6 +29,7 @@ from __future__ import annotations
 import importlib
 
 import pytest
+from support.spec_artifact import OSCAL_RELEASE
 from support.version_package import (
     PRE_MOVE_ALL,
     SEMVER_RE,
@@ -128,24 +129,30 @@ class TestProperty4TypeIdentityAcrossTheShim:
 # ---------------------------------------------------------------------------
 # Property 5 — version-constant consistency
 #
-# Example-based on purpose: there is exactly one Active_Schema_Bundle. The
-# release is parsed out of the real bundle's `$id` at test time rather than
-# restated, so a schema refresh that forgets to bump the constant fails here.
+# Example-based on purpose: there is exactly one spec artifact pin. The
+# constant must equal the OSCAL release of the pin, and that release must equal
+# the release parsed out of the `$id` of the artifact schema at test time. A pin
+# move that forgets to bump the constant fails here.
 # ---------------------------------------------------------------------------
 
 
 class TestProperty5VersionConstantConsistency:
-    """Feature: major-version-namespace, Property 5: For any Active_Schema_Bundle, the
-    Schema_Version_Constant equals the release version parsed out of that bundle's
-    schema $id.
+    """Feature: major-version-namespace, Property 5: The Schema_Version_Constant
+    equals the OSCAL release of the spec artifact pin, which equals the release
+    version parsed out of the $id of the artifact schema.
 
     **Validates: Requirements 6.3**
     """
 
-    def test_constant_equals_the_release_parsed_from_the_active_bundle(self) -> None:
+    def test_constant_equals_the_release_of_the_pin(self) -> None:
+        assert oscal_bindings.v1.__oscal_schema_version__ == OSCAL_RELEASE
+
+    def test_release_of_the_pin_equals_the_release_parsed_from_the_schema(
+        self,
+    ) -> None:
         schema_path = active_schema_path()
-        assert schema_path.exists(), f"Active_Schema_Bundle missing: {schema_path}"
-        assert schema_release(schema_path) == oscal_bindings.v1.__oscal_schema_version__
+        assert schema_path.exists(), f"artifact schema missing: {schema_path}"
+        assert schema_release(schema_path) == OSCAL_RELEASE
 
     def test_constant_is_semver_shaped(self) -> None:
         """Req 6.2 — major.minor.patch, so `major()` below is well defined."""

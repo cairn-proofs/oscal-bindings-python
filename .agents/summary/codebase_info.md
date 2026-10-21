@@ -8,7 +8,7 @@ The implementation lives in a **major-version package**, `oscal_bindings.v1`. Th
 
 - **Package name:** `oscal-bindings` (import as `oscal_bindings`, or `oscal_bindings.v1`)
 - **Repository:** `cairn-proofs/oscal-bindings-python`. The `-python` suffix is for the repo only: sibling bindings in other languages live in `oscal-bindings-<lang>` repos, while each registry package uses that ecosystem's native name.
-- **License:** Apache-2.0 (`LICENSE`); NIST attribution for the vendored schemas is in `NOTICE`.
+- **License:** Apache-2.0 (`LICENSE`); NIST attribution for the OSCAL JSON Schema, which the models are generated from, is in `NOTICE`.
 - **Version:** 0.3.0
 - **Language:** Python 3.11+ (test matrix: 3.11, 3.12, 3.13, 3.14)
 - **Core runtime dependency:** Pydantic v2 (with `email` extra)
@@ -20,7 +20,7 @@ The implementation lives in a **major-version package**, `oscal_bindings.v1`. Th
 | Language | Role | Analysis Coverage |
 |----------|------|-------------------|
 | Python | Entire library, tooling, tests | Full |
-| JSON (schema) | Code-generation input (`schemas/<release>/*.json`) | Structural only — treated as input artifacts, not analyzed line-by-line |
+| JSON (schema) | Code-generation input, supplied by the pinned spec artifact (not in this repo) | Structural only — treated as input artifacts, not analyzed line-by-line |
 
 No other programming languages are present. There are no compiled extensions, no C/Cython, and no frontend code.
 
@@ -60,15 +60,13 @@ oscal-bindings-python/
 │           └── validate_element.py  # Element-level schema validation
 ├── scripts/                     # Not a package; tests load scripts via tests/support/scripts.py
 │   ├── spec_artifact.py         # Pin (version + sha256) of the spec artifact; shared by generate + tests
+│   │                            # (the artifact supplies the OSCAL schema, names.json, and the corpus)
 │   ├── pinned_archive.py        # Locked, sha256-checked fetch + safe extraction
 │   ├── manifest.py              # Validates names.json of the pinned artifact
 │   ├── hoist_names.py           # Writes build/codegen/oscal_complete_schema.json (manifest-named definitions)
 │   └── postprocess_models.py    # Structure fixes, added manifest types, guards against the manifest
-│                                # (takes --schema / --models / --output; --output defaults to --models)
-├── schemas/                     # OSCAL JSON Schema bundles, one dir per release
-│   ├── 1.2.2/                   # Prior release, retained for reference
-│   └── 1.2.3/                   # Active_Schema_Bundle
-│       └── oscal_complete_schema.json   # The schema the hoist reads (codegen reads the hoisted copy)
+│                                # (takes --schema / --models / --output; --schema defaults to the
+│                                # artifact schema, --output defaults to --models)
 ├── tests/                       # pytest suite (one file per source module)
 │   └── support/                 # Importable test helpers (not collected)
 │       ├── version_package.py   # Public-surface snapshot + schema $id helpers
@@ -88,13 +86,13 @@ oscal-bindings-python/
 ```mermaid
 graph TD
     subgraph Input
-        SCHEMA["schemas/1.2.3/oscal_complete_schema.json"]
+        SCHEMA["oscal_complete_schema.json (pinned spec artifact)"]
         NAMES["names.json (pinned spec artifact)"]
     end
     subgraph Codegen["Code generation (dev-time)"]
         HOIST["scripts/hoist_names.py<br/>→ build/codegen/oscal_complete_schema.json"]
         DCG["datamodel-code-generator"]
-        PP["scripts/postprocess_models.py<br/>--schema / --models / --output"]
+        PP["scripts/postprocess_models.py<br/>--models / --output"]
     end
     subgraph V1["src/oscal_bindings/v1 (implementation)"]
         MODELS["models.py (GENERATED)"]
@@ -140,12 +138,12 @@ graph TD
 ## Key Interfaces & Integration Points
 
 - **Public API surface** — the entire public API is enumerated in `src/oscal_bindings/v1/__init__.py` `__all__`; the top-level `__init__.py` takes its `__all__` from that list rather than restating it, so the two cannot drift. Callers do `from oscal_bindings.v1 import <symbol>` (or the flat `from oscal_bindings import <symbol>`) without knowing the submodule.
-- **Schema version introspection** — `__oscal_schema_version__` (`"1.2.3"`) on `oscal_bindings.v1`, re-exported at the top level. Matches the release element of the bundle's schema `$id` (`.../ns/oscal/1.0/1.2.3/oscal-complete-schema.json`).
+- **Schema version introspection** — `__oscal_schema_version__` (`"1.2.3"`) on `oscal_bindings.v1`, re-exported at the top level. Tests check that it equals the release of the pin, and that the release of the pin matches the release element of the artifact schema `$id` (`.../ns/oscal/1.0/1.2.3/oscal-complete-schema.json`).
 - **Parsing entry points** — `parse_oscal`, `parse_oscal_file`, and 8 typed parsers; all accept `str | bytes`.
 - **Facade** — `OscalDoc` (uniform `metadata` / `uuid` / `oscal_version` / `body` / `assessment_period()` over all 8 document types).
 - **Builders** — `make_hash`, `make_rlink`, `make_resource` for `back-matter` resource elements.
 - **Element validation** — `validate_element`, `get_supported_element_types`.
-- **Code-generation contract** — `schemas/1.2.3/oscal_complete_schema.json` + `names.json` → `src/oscal_bindings/v1/models.py` via `hatch run generate` (hoist + codegen + post-process). A cold cache needs network access.
+- **Code-generation contract** — `oscal_complete_schema.json` + `names.json` of the pinned spec artifact → `src/oscal_bindings/v1/models.py` via `hatch run generate` (hoist + codegen + post-process). A cold cache needs network access, also in an sdist checkout. CI fails when the committed `models.py` differs from the generated one.
 
 ## Design Principles
 
