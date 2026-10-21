@@ -9,7 +9,7 @@ The implementation lives in a **major-version package**, `oscal_bindings.v1`. Th
 - **Package name:** `oscal-bindings` (import as `oscal_bindings`, or `oscal_bindings.v1`)
 - **Repository:** `cairn-proofs/oscal-bindings-python`. The `-python` suffix is for the repo only: sibling bindings in other languages live in `oscal-bindings-<lang>` repos, while each registry package uses that ecosystem's native name.
 - **License:** Apache-2.0 (`LICENSE`); NIST attribution for the OSCAL JSON Schema, which the models are generated from, is in `NOTICE`.
-- **Version:** 0.3.0
+- **Version:** 0.3.1
 - **Language:** Python 3.11+ (test matrix: 3.11, 3.12, 3.13, 3.14)
 - **Core runtime dependency:** Pydantic v2 (with `email` extra)
 - **Build backend:** Hatchling
