@@ -46,14 +46,14 @@ The implementation lives in the major-version package **`oscal_bindings.v1`**; t
 
 - **8 OSCAL document types:** Catalog, Profile, Component Definition, System Security Plan, Assessment Plan, Assessment Results, Plan of Action and Milestones, Mapping Collection.
 - **Layout:** implementation under `src/oscal_bindings/v1/`; top-level package re-exports it through explicit alias modules at `oscal_bindings/models.py`, `oscal_bindings/parser.py`, `oscal_bindings/extensions/__init__.py`.
-- **Active schema:** `oscal_complete_schema.json` of the spec artifact pinned in `scripts/spec_artifact.py` (`0.2.0+oscal.1.2.3`, by sha256). The repo holds no copy of the schema. The pin is the only selector of the schema and its release.
+- **Active schema:** `oscal_complete_schema.json` of the spec artifact pinned in `scripts/spec_artifact.py` (`0.3.0+oscal.1.2.3`, by sha256). The repo holds no copy of the schema. The pin is the only selector of the schema and its release.
 - **`__oscal_schema_version__`** (`"1.2.3"`) on `oscal_bindings.v1`, re-exported at the top level, records the exact release the models came from.
 - **Entry points:** `parse_oscal`, `parse_oscal_file`, 8 typed `parse_*` functions, `serialize_oscal`, `validate_oscal`, `OscalDoc`, `make_hash`/`make_rlink`/`make_resource`, `validate_element`/`get_supported_element_types`.
 - **Parsers accept `str | bytes`;** bytes skips a UTF-8 decode (useful for HTTP/S3/file byte-sources).
 - **`v1/models.py` is GENERATED** by `scripts/hoist_names.py` + `datamodel-codegen` + `scripts/postprocess_models.py`. Change the hoist/post-processor (or the store manifest for names) and run `hatch run generate` — never hand-edit. A cold cache needs network access. (`oscal_bindings/models.py` at the top level is a hand-written alias module, not generated.)
 - **`v1/__init__.py` only re-exports** — the entire public API is visible there; the top level derives its `__all__` from it.
 - **Extensions pattern:** new helpers go in `src/oscal_bindings/v1/extensions/`, re-exported up through `v1/extensions/__init__.py` then `v1/__init__.py`.
-- **Names come only from `names.json`** of the spec artifact pinned in `scripts/spec_artifact.py` (`0.2.0+oscal.1.2.3`). The hoist makes each manifest site a named definition; post-processor guards fail on any name outside the manifest. Never rename in the post-processor.
+- **Names come only from `names.json`** of the spec artifact pinned in `scripts/spec_artifact.py` (`0.3.0+oscal.1.2.3`). The hoist makes each manifest site a named definition; post-processor guards fail on any name outside the manifest. Never rename in the post-processor.
 - **Namespaces are major-scoped** (`v1`); minor-version namespacing was considered and rejected on compatibility-boundary grounds. OSCAL 2.0 is the trigger for a second version package (see `DEVELOPING.md` Key Design Decisions).
 - **Exceptions:** `OscalParseError` (has `.errors`), `OscalAccessError`.
 

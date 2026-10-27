@@ -7,7 +7,7 @@ the naming manifest (`names.json`) of the pinned spec artifact. The binding hold
 
 ```mermaid
 flowchart TD
-    A["hatch run generate"] --> P["scripts/spec_artifact.py pin<br/>0.2.0+oscal.1.2.3 (sha256)<br/>cache: tests/.corpus_cache/"]
+    A["hatch run generate"] --> P["scripts/spec_artifact.py pin<br/>0.3.0+oscal.1.2.3 (sha256)<br/>cache: tests/.corpus_cache/"]
     P --> M["scripts/manifest.py<br/>validate names.json"]
     M -->|"invalid"| X["non-zero exit,<br/>nothing written"]
     M --> H["python scripts/hoist_names.py<br/>artifact oscal_complete_schema.json<br/>→ build/codegen/oscal_complete_schema.json"]
