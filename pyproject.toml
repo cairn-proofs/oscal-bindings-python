@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 # the language suffix (oscal-bindings-python) because sibling bindings in other
 # languages share the cairn-proofs org; package registries don't need it.
 name = "oscal-bindings"
-version = "0.3.1"
+version = "0.3.2"
 description = "Typed Python data bindings for OSCAL, generated from the NIST JSON Schema"
 readme = "README.md"
 # PEP 639 license expression; no License :: classifier alongside it.
@@ -33,7 +33,12 @@ classifiers = [
   "Typing :: Typed",
 ]
 requires-python = ">=3.11"
-dependencies = ["pydantic[email]>=2.11"]
+# Upper bound is deliberate: the generated models break on pydantic 2.14+ (its
+# parametrized RootModel classes leak into the models namespace on 3.11, which
+# the model tripwire tests reject). Lift the bound only after the models support
+# 2.14; that work and the removal are tracked in issue #11. tests/test_pydantic_version.py
+# fails first with a pointer here if an install slips past the bound.
+dependencies = ["pydantic[email]>=2.11,<2.14"]
 
 [project.urls]
 Homepage = "https://github.com/cairn-proofs/oscal-bindings-python"
