@@ -6,7 +6,7 @@
 # - pdoc
 # - ruff==0.16.8
 # - jsonschema-rs==0.58.6
-# - pydantic[email]>=2.11
+# - pydantic[email]<2.14,>=2.11
 #
 
 annotated-types==0.8.0 \

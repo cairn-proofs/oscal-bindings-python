@@ -33,7 +33,12 @@ classifiers = [
   "Typing :: Typed",
 ]
 requires-python = ">=3.11"
-dependencies = ["pydantic[email]>=2.11"]
+# Upper bound is deliberate: the generated models break on pydantic 2.14+ (its
+# parametrized RootModel classes leak into the models namespace on 3.11, which
+# the model tripwire tests reject). Lift the bound only after the models support
+# 2.14; that work and the removal are tracked in issue #11. tests/test_pydantic_version.py
+# fails first with a pointer here if an install slips past the bound.
+dependencies = ["pydantic[email]>=2.11,<2.14"]
 
 [project.urls]
 Homepage = "https://github.com/cairn-proofs/oscal-bindings-python"
