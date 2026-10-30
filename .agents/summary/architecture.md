@@ -11,7 +11,7 @@ There is no network server, no persistence layer, and no long-running process. T
 ```mermaid
 graph TB
     subgraph L0["Layer 0 — Schema (input)"]
-        S["oscal_complete_schema.json + names.json<br/>(pinned spec artifact 0.2.0+oscal.1.2.3)"]
+        S["oscal_complete_schema.json + names.json<br/>(pinned spec artifact 0.3.0+oscal.1.2.3)"]
     end
     subgraph L1["Layer 1 — Generated models"]
         BASE["v1/_base.py<br/>OscalBaseModel (hand-written)"]
@@ -81,8 +81,8 @@ The top-level submodule paths get real files — `oscal_bindings/models.py`, `os
 
 ```mermaid
 flowchart LR
-    N["spec artifact 0.2.0+oscal.1.2.3<br/>names.json (sha256-pinned)"] -->|"manifest.py<br/>validate"| H
-    A["spec artifact 0.2.0+oscal.1.2.3<br/>oscal_complete_schema.json"] --> H["hoist_names.py"]
+    N["spec artifact 0.3.0+oscal.1.2.3<br/>names.json (sha256-pinned)"] -->|"manifest.py<br/>validate"| H
+    A["spec artifact 0.3.0+oscal.1.2.3<br/>oscal_complete_schema.json"] --> H["hoist_names.py"]
     A --> C
     H --> HS["build/codegen/oscal_complete_schema.json<br/>(each manifest site = definitions/&lt;Name&gt;)"]
     HS -->|"datamodel-codegen"| B["build/codegen/models.py<br/>(raw: manifest-named classes,<br/>RootModel scalars)"]

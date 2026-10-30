@@ -95,7 +95,7 @@ Every type name comes from the naming manifest, `names.json`, of the pinned spec
 rule for a manifest type. `hatch run generate` runs three steps:
 
 1. `scripts/hoist_names.py` writes `build/codegen/oscal_complete_schema.json` (git-ignored).
-   1. It fetches the spec artifact that `scripts/spec_artifact.py` pins (`0.2.0+oscal.1.2.3`, by sha256) through
+   1. It fetches the spec artifact that `scripts/spec_artifact.py` pins (`0.3.0+oscal.1.2.3`, by sha256) through
       `scripts/pinned_archive.py`.
    2. `scripts/manifest.py` validates `names.json`: its JSON Schema from the same artifact (with `jsonschema-rs`), the
       format version and OSCAL release, the sha256 of the artifact schema, unique names, and pointers that resolve.

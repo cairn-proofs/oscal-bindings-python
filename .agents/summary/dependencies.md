@@ -64,7 +64,7 @@ The pin is the only selector of the schema and its release. Codegen reads the ho
 
 ## Spec Artifact (not a package dependency)
 
-`scripts/spec_artifact.py` pins the spec artifact of [cairn-proofs/oscal-bindings-specs](https://github.com/cairn-proofs/oscal-bindings-specs) (`0.2.0+oscal.1.2.3`) by sha256. It holds the complete OSCAL JSON Schema, the naming manifest (`names.json` and its JSON Schema), and the conformance corpus. `hatch run generate` and `hatch test` share the pin and the cache `tests/.corpus_cache/`, so a cold cache needs network access once. An sdist checkout needs network access too, to run `generate`.
+`scripts/spec_artifact.py` pins the spec artifact of [cairn-proofs/oscal-bindings-specs](https://github.com/cairn-proofs/oscal-bindings-specs) (`0.3.0+oscal.1.2.3`) by sha256. It holds the complete OSCAL JSON Schema, the naming manifest (`names.json` and its JSON Schema), and the conformance corpus. `hatch run generate` and `hatch test` share the pin and the cache `tests/.corpus_cache/`, so a cold cache needs network access once. An sdist checkout needs network access too, to run `generate`.
 
 ## Dependency Risk Notes
 

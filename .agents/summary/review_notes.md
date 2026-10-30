@@ -33,7 +33,7 @@ No contradictions found across the document set.
 | `OscalDoc` facade incl. `assessment_period()` | Complete | Including nested-task walking and AP/AR-only constraint |
 | Builders | Complete | Including `document_ids` validation at construction and the `media-type` alias |
 | Element validation | Complete | `_ELEMENT_MAP` derivation explained |
-| Code generation + post-processing | Complete | Manifest validation, the hoist and its guards, the post-processor steps and its three guards against the manifest, and the CLI contracts. The pipeline takes every name from the naming manifest (spec artifact `0.2.0+oscal.1.2.3`, package version 0.3.1); these docs describe that pipeline only |
+| Code generation + post-processing | Complete | Manifest validation, the hoist and its guards, the post-processor steps and its three guards against the manifest, and the CLI contracts. The pipeline takes every name from the naming manifest (spec artifact `0.3.0+oscal.1.2.3`, package version 0.3.1); these docs describe that pipeline only |
 | Version layout + import paths | Complete | Version package, top-level re-exports, alias modules, and the import-path guidance are covered in architecture.md, components.md, and interfaces.md |
 | Schema refresh procedure | Complete | workflows.md §1c documents how to move the spec artifact pin and what a reviewer checks |
 | Dependencies / toolchain / Python versions | Complete | Runtime, codegen, dev, build tooling all covered |
