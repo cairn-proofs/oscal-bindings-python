@@ -13,7 +13,7 @@ numbered per that document:
 None of the four uses `@given`, and that is the design's call rather than an
 omission. Each quantifies over a space that is either a single fixed input (the
 committed pre-move `__all__` snapshot; the one pinned artifact schema) or
-finitely enumerable (the Public_Surface, 34 names). Hypothesis adds nothing to
+finitely enumerable (the Public_Surface, 37 names). Hypothesis adds nothing to
 an input space you can write down, and a strategy that draws from
 `oscal_bindings.__all__` would only re-derive the expectation from the code
 under test. The enumerable case is `parametrize`d so each name fails
@@ -93,7 +93,7 @@ class TestProperty3PublishedSurfacePreserved:
 # Property 4 — type identity across the Compat_Shim
 #
 # Enumerable, so parametrized rather than generated: the quantifier runs over
-# the 34 names in the Public_Surface, and naming each one gives a per-name
+# the 37 names in the Public_Surface, and naming each one gives a per-name
 # failure instead of a single opaque one.
 # ---------------------------------------------------------------------------
 

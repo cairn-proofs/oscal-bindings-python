@@ -91,7 +91,7 @@
 
 ## 7. Full gate
 
-- [ ] 7.1 Run the full gate with `hatch run release`. Verify it passes:
+- [x] 7.1 Run the full gate with `hatch run release`. Verify it passes:
   generation with no `models.py` drift, lint, typing, security, the whole Python matrix with the YAML corpus cases, and
   docs.
 

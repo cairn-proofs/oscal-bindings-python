@@ -19,10 +19,18 @@ from support.spec_artifact import schema_path
 if TYPE_CHECKING:
     from pathlib import Path
 
-#: The top-level ``__all__`` as it stood immediately before the ``v1`` move,
-#: transcribed from the pre-move ``src/oscal_bindings/__init__.py``. Deliberately
-#: a literal rather than something derived at runtime: derived expectations drift
-#: with the code they are meant to pin, and the whole point is to detect drift.
+#: The canonical published top-level ``__all__``. It began as the snapshot taken
+#: immediately before the ``v1`` move, transcribed from the pre-move
+#: ``src/oscal_bindings/__init__.py``, and the move properties (Property 3/4)
+#: assert the shim and the version package both expose exactly this set.
+#: Deliberately a literal rather than something derived at runtime: derived
+#: expectations drift with the code they are meant to pin, and the whole point is
+#: to detect drift. An intentional surface change updates this snapshot in the
+#: same commit, so an *unintentional* addition still fails loudly.
+#:
+#: The ``add-yaml-io`` change (#7) added the three optional YAML operations
+#: ``parse_oscal_yaml``, ``parse_oscal_yaml_file``, and ``serialize_oscal_yaml``;
+#: they are part of the published surface and so belong in this snapshot.
 PRE_MOVE_ALL = frozenset(
     {
         "AssessmentPlanDocument",
@@ -53,10 +61,13 @@ PRE_MOVE_ALL = frozenset(
         "parse_mapping_collection",
         "parse_oscal",
         "parse_oscal_file",
+        "parse_oscal_yaml",
+        "parse_oscal_yaml_file",
         "parse_plan_of_action_and_milestones",
         "parse_profile",
         "parse_system_security_plan",
         "serialize_oscal",
+        "serialize_oscal_yaml",
         "validate_element",
         "validate_oscal",
     }
