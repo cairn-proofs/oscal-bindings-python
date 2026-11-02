@@ -47,6 +47,12 @@ Issues = "https://github.com/cairn-proofs/oscal-bindings-python/issues"
 
 [project.optional-dependencies]
 codegen = ["datamodel-code-generator[http,black,isort]==0.83.0"]
+# Optional YAML parse/serialize surface (v1/extensions/yaml_io.py). The base
+# install keeps pydantic[email] as its one runtime dependency; `pip install
+# oscal-bindings[yaml]` adds PyYAML. Pinned exactly: the YAML path depends on
+# PyYAML's node API (compose, ScalarNode, MappingNode, SequenceNode), so an
+# upgrade is a deliberate, re-locked change (design Decision 2).
+yaml = ["pyyaml==6.0.3"]
 
 # Every Hatch env installs from a hatch-pip-compile lockfile (requirements.txt for
 # default, requirements/requirements-<env>.txt otherwise). Hatch re-locks when an
@@ -69,6 +75,11 @@ dependencies = [
     "ruff==0.16.8",
     # `generate` validates names.json against its JSON Schema before codegen.
     "jsonschema-rs==0.58.6",
+    # YAML optional-extra library, present in default so `hatch run typing`
+    # resolves v1/extensions/yaml_io.py and its type stubs. Pinned in step with
+    # the `yaml` extra above; types-PyYAML is stubs-only (dev/typing use).
+    "pyyaml==6.0.3",
+    "types-PyYAML",
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -112,7 +123,9 @@ pip-compile-hashes = true
 # Resolve shared deps (pydantic, pytest, ...) to the same versions as default.
 pip-compile-constraint = "default"
 parallel = true
-extra-dependencies = ["hypothesis", "jsonschema-rs"]
+# pyyaml: the YAML corpus cases and the yaml_io unit tests import it. Constrained
+# to default's pin (6.0.3). types-PyYAML is not here; stubs are a typing concern.
+extra-dependencies = ["hypothesis", "jsonschema-rs", "pyyaml"]
 
 # Hatch runs cov-combine and then cov-report once after `hatch test --cover`.
 # cov-report adds the HTML report ([tool.coverage.html] sets the directory)

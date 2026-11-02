@@ -2,11 +2,11 @@
 
 ## 1. Move the pin and add the dependency
 
-- [ ] 1.1 Move the pin in `scripts/spec_artifact.py` to `0.5.0+oscal.1.2.3` with sha256
+- [x] 1.1 Move the pin in `scripts/spec_artifact.py` to `0.5.0+oscal.1.2.3` with sha256
   `921cee0ee949915edb42fc1a574fe12830f2eecadba5c0c8e22b382c0f7c22cc`. The OSCAL release stays `1.2.3`, so
   `__oscal_schema_version__` needs no edit. Verify with `hatch run generate` and
   `git diff --exit-code -- src/oscal_bindings/v1/models.py`: the artifact re-fetches and `models.py` shows no drift.
-- [ ] 1.2 Add the `yaml` optional extra in `pyproject.toml` with `pyyaml` pinned exactly. Add `pyyaml` and
+- [x] 1.2 Add the `yaml` optional extra in `pyproject.toml` with `pyyaml` pinned exactly. Add `pyyaml` and
   `types-PyYAML` to the dev and test environments. Re-lock with `hatch run lock`. Verify the committed lockfiles change
   and `hatch test` collects in the `hatch-test` env.
 
