@@ -30,6 +30,8 @@ Example:
     >>> json_str = serialize_oscal(doc)
 """
 
+from typing import TYPE_CHECKING, Any
+
 from .extensions import (
     DocumentId,
     ElementValidationError,
@@ -44,6 +46,13 @@ from .extensions import (
     make_rlink,
     validate_element,
 )
+
+if TYPE_CHECKING:
+    from .extensions import (
+        parse_oscal_yaml,
+        parse_oscal_yaml_file,
+        serialize_oscal_yaml,
+    )
 from .models import *  # noqa: F403
 from .parser import (
     AssessmentPlanDocument,
@@ -109,10 +118,31 @@ __all__ = [
     "parse_mapping_collection",
     "parse_oscal",
     "parse_oscal_file",
+    "parse_oscal_yaml",
+    "parse_oscal_yaml_file",
     "parse_plan_of_action_and_milestones",
     "parse_profile",
     "parse_system_security_plan",
     "serialize_oscal",
+    "serialize_oscal_yaml",
     "validate_element",
     "validate_oscal",
 ]
+
+# The optional YAML operations are re-exported lazily from `.extensions`, which
+# imports them from the PyYAML-backed `yaml_io` module only on first access.
+# This keeps `import oscal_bindings.v1` working without the `yaml` extra; the
+# install-hint ImportError surfaces when a caller first touches one of these
+# names (design Decision 5).
+_YAML_NAMES = frozenset(
+    {"parse_oscal_yaml", "parse_oscal_yaml_file", "serialize_oscal_yaml"}
+)
+
+
+def __getattr__(name: str) -> Any:
+    if name in _YAML_NAMES:
+        from oscal_bindings.v1 import extensions  # noqa: PLC0415 - lazy by design
+
+        return getattr(extensions, name)
+    message = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(message)
