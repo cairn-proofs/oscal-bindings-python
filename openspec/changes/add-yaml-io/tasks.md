@@ -2,8 +2,8 @@
 
 ## 1. Move the pin and add the dependency
 
-- [x] 1.1 Move the pin in `scripts/spec_artifact.py` to `0.5.0+oscal.1.2.3` with sha256
-  `921cee0ee949915edb42fc1a574fe12830f2eecadba5c0c8e22b382c0f7c22cc`. The OSCAL release stays `1.2.3`, so
+- [x] 1.1 Move the pin in `scripts/spec_artifact.py` to `0.5.1+oscal.1.2.3` with sha256
+  `33a14ab00fcbc049934ad217989452896b74a1bb215bbd4f132ca3b81c8dfd8f`. The OSCAL release stays `1.2.3`, so
   `__oscal_schema_version__` needs no edit. Verify with `hatch run generate` and
   `git diff --exit-code -- src/oscal_bindings/v1/models.py`: the artifact re-fetches and `models.py` shows no drift.
 - [x] 1.2 Add the `yaml` optional extra in `pyproject.toml` with `pyyaml` pinned exactly. Add `pyyaml` and
@@ -55,45 +55,73 @@
   block style and keeps a string-shaped scalar quoted (design Decision 4, YML-008). Verify with unit tests that:
   1. A document whose metadata `version` is `"1.0"` serializes and parses back to the string `"1.0"` (YML-008.02).
   2. The output holds no null (YML-008.03).
-- [x] 3.4 Re-export the three functions from `v1/extensions/__init__.py` and `v1/__init__.py`. Raise an `ImportError`
-  with an install hint when the module imports without the `yaml` extra (design Decision 5). Verify with a unit test
-  that the names import from `oscal_bindings`. Verify that `oscal_bindings.v1.__all__` carries them.
+- [x] 3.4 Bind the three YAML names at call time, not at attribute access (design Decision 5). Each public name is a
+  thin typed wrapper in `v1/__init__.py` (re-exported at the top level and the compatibility module) that imports
+  `yaml_io` inside its body. Remove the module `__getattr__` and `globals()` loop. A base install without the `yaml`
+  extra keeps `import oscal_bindings`, `from oscal_bindings import *`, and `import oscal_bindings.extensions` working,
+  and a type checker resolves each wrapper's real signature. Only a call raises `ImportError` with the install hint.
+  Verify with the base-install and type tests of task 8.2.
 
 ## 4. Resource limit
 
-- [x] 4.1 Add the alias-expansion limit to the walk (spec `yaml-resource-limit`, design Decision 3). It counts one
-  resolution per traversal edge into a shared mapping or sequence node. It accumulates the count across the document. It
-  does not count a scalar alias. It raises `OscalParseError` once the cumulative count passes 100. Verify with unit
-  tests that:
-  1. An input over the limit is a parse error.
-  2. A document with a small fixed number of collection aliases parses.
-  3. A document with many scalar aliases parses.
+- [x] 4.1 Replace the alias-resolution counter with the expansion budget and depth limit of design Decision 3 (spec
+  `yaml-resource-limit`). During the walk:
+  1. Count every emitted JSON node (each scalar, array, and object), so an expanded alias of any kind adds its whole
+     subtree. Raise `OscalParseError` once the count passes 5,000,000.
+  2. Track recursion depth and raise `OscalParseError` once the document nests past 500 levels.
+  Remove the scalar-alias exemption and the collection-only edge count. Verify with the adversarial and accept-side
+  tests of task 8.1.
 
 ## 5. Traceability record
 
 - [x] 5.1 Add the traceability record that holds one entry for every public operation in `v1/__all__`, each citing the
   contract requirement that defines it. The three YAML functions cite YML-005, YML-006, and YML-008 (proposal item 7,
   `binding-surface` SRF-003). Verify the record validates against `openspec/traceability.schema.json` of the pinned
-  0.5.0 artifact, and that each cited identifier resolves in that artifact's `openspec/requirements.json` (SRF-004).
+  0.5.1 artifact, and that each cited identifier resolves in that artifact's `openspec/requirements.json` (SRF-004).
 - [x] 5.2 Add a test that fails on either condition (SRF-003.04, SRF-004):
   1. A name in `v1/__all__` has no entry in the record.
   2. A cited identifier does not resolve in the pinned requirement index.
   Verify the test passes for the current surface and fails when an entry is removed.
 
-## 6. Conformance and documentation
+## 6. Error boundary, conformance, and documentation
 
-- [x] 6.1 Add `yaml-round-trip` and `yaml-parse` handlers to the `OPERATIONS` map in `tests/test_conformance.py`,
+- [x] 6.1 Map three failures to `OscalParseError` (design Decision 2):
+  1. A `RecursionError` from `yaml.compose_all`.
+  2. A `RecursionError` from the walk.
+  3. A `ValueError` from `json.loads` on an oversized numeric token.
+  Do not raise the recursion limit. Verify with the error-boundary tests of task 8.1 that each surfaces as
+  `OscalParseError`, not a bare `RecursionError` or `ValueError`.
+- [x] 6.2 Add `yaml-round-trip` and `yaml-parse` handlers to the `OPERATIONS` map in `tests/test_conformance.py`,
   reading the input as the corpus manifest defines. Verify all 23 YAML corpus cases pass with
   `hatch test -- -k conformance`.
-- [x] 6.2 Document the YAML usage in the README. Add a DEVELOPING.md note on the scalar-typing rule (YML-004) and the
-  documented alias-expansion limit of 100 (YML-011). Verify the documented usage example runs as written with
-  `hatch run python`.
+- [x] 6.3 Document the YAML usage in the README. Add a DEVELOPING.md note on the scalar-typing rule (YML-004), the
+  expansion budget of 5,000,000 emitted nodes, and the nesting-depth limit of 500 levels (YML-011). Narrow the
+  conformance claim to exclude YML-008 and SER-005 until issue #19 closes. Verify the documented usage example runs as
+  written with `hatch run python`.
 
 ## 7. Full gate
 
-- [x] 7.1 Run the full gate with `hatch run release`. Verify it passes:
-  generation with no `models.py` drift, lint, typing, security, the whole Python matrix with the YAML corpus cases, and
-  docs.
+- [x] 7.1 Run the full gate with `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` and read the log. Verify
+  it passes end to end: generate with no `models.py` drift, then lint, typing (including the top-level YAML surface),
+  security, the whole Python matrix with the YAML corpus cases, and docs.
+
+## 8. Adversarial resource tests and base-install tests
+
+- [x] 8.1 Write the adversarial and accept-side resource tests first, so they fail against the old limit and pass
+  against tasks 4.1 and 6.1. Each over-limit case asserts `OscalParseError`, not a crash, a hang, or a success:
+  1. A scalar-alias bomb: a small input whose scalar aliases expand past the budget.
+  2. A collection-alias bomb: a small input whose collection aliases expand past the budget.
+  3. A deep-nesting input past 500 levels.
+  4. An oversized numeric token past CPython's integer-string digit limit.
+  5. Accept side: a conformant OSCAL document with modest aliasing, and an alias to a collection of about 100 entries.
+     Both parse and return the typed value.
+- [x] 8.2 Write the base-install import tests and the type-surface test, with PyYAML unavailable via a `sys.modules`
+  shim. Assert that each of these succeeds and binds the non-YAML names:
+  1. `import oscal_bindings`.
+  2. `from oscal_bindings import *`.
+  3. `import oscal_bindings.extensions`, and a star import of it.
+  Assert that only calling a YAML operation raises the install hint. Assert with a type-checker check that
+  `from oscal_bindings import parse_oscal_yaml` resolves to its real signature, not `Any`.
 
 ## Workflow follow-up
 

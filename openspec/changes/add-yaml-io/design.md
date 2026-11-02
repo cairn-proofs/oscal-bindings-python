@@ -7,7 +7,7 @@ See [proposal.md](proposal.md#why) for motivation and
 three YAML operations and the resource limit, and how to move the pin.
 
 The contract fixes the observable behavior of YAML input. The governing capability is `yaml-documents`
-(YML-001 to YML-011) in the store `oscal-bindings-specs`, pinned at `0.5.0+oscal.1.2.3`. The binding-owned behavior is
+(YML-001 to YML-011) in the store `oscal-bindings-specs`, pinned at `0.5.1+oscal.1.2.3`. The binding-owned behavior is
 the resource limit, specified in [specs/yaml-resource-limit/spec.md](specs/yaml-resource-limit/spec.md).
 
 Three contract rules shape every loader decision below:
@@ -108,7 +108,7 @@ place that enforces four rules:
 1. The schema-driven scalar typing of Decision 1.
 2. The duplicate-key check.
 3. The `<<` rule.
-4. The alias-expansion limit of Decision 3.
+4. The expansion budget and the depth limit of Decision 3.
 
 An alias is a shared node reference in the composed graph, not an expanded copy, and `compose` does not raise on a
 cycle. So the walk carries the set of nodes on its current ancestor path. A node that re-enters its own ancestor path
@@ -119,6 +119,15 @@ The walk ignores a node's tag. A tag does not change a value (YML-009 item 2). S
 the text `"7"` (YML-004.05), and a sequence tagged `!!omap` reads as an array (YML-009.03). The walk reads a scalar
 node's text, not its resolved tag. It builds an array from any sequence node and an object from any mapping node,
 whatever the tag.
+
+Both the composer and the walk recurse, and an oversized numeric scalar reaches `json.loads`. The binding maps three
+failures that would otherwise escape the parse-error contract to `OscalParseError`:
+
+1. A `RecursionError` from `yaml.compose_all`, from deep nesting, before the depth limit of Decision 3 catches it.
+2. A `RecursionError` from the walk, for the same reason.
+3. A `ValueError` from `json.loads` on a numeric token past CPython's integer-string digit limit.
+
+The binding does not raise the recursion limit, which would turn a catchable error into a C-stack crash.
 
 **Alternatives considered.** (1) `ruamel.yaml` follows YAML 1.2 and raises on a duplicate key, so it meets two of the
 three rules out of the box. The two libraries weigh almost the same at the level that matters here. PyYAML 6.0.3
@@ -132,30 +141,36 @@ round-trip types add surface the binding does not need, while PyYAML's node API 
 default `safe_load` with a post-parse pass to re-type scalars and find duplicate keys. The duplicate keys are already
 lost once `safe_load` returns, so this cannot meet YML-003. Rejected.
 
-### Decision 3: Count collection-alias resolutions against a fixed limit of 100
+### Decision 3: Cap total expansion and nesting depth, both documented
 
-A collection-alias resolution is one traversal edge that the walk follows into a shared mapping node or sequence node.
-The limit counts these edges. The count accumulates across the whole document, because a billion-laughs expansion grows
-multiplicatively, so a per-branch count would not catch it. A scalar alias does not count, because an edge into a shared
-scalar node cannot expand exponentially. The binding reports a parse error once the cumulative count passes the limit.
-An honest OSCAL document with a small, fixed number of collection aliases stays far under the limit and is not rejected,
-as the spec requires.
+The binding enforces two documented limits during the walk, not a count of alias resolutions:
 
-The limit is a fixed constant of 100, not configurable. The contract names no number, and the corpus has no
-resource-limit case, so the number is a free choice. The bound is only "small enough to stop a billion-laughs
-expansion, large enough not to reject an honest document." Comparable parsers cluster in this range. SnakeYAML and
-Symfony use 128, Apple pkl uses 50, and js-yaml uses 100. A value of 100 sits in the middle and matches a widely used
-default.
+1. **A total-expansion budget.** The walk counts the materialized JSON nodes it emits: every scalar, and every array
+   and object container. The walk expands an alias, so the alias contributes its whole expanded subtree to the count,
+   whether that subtree is a scalar or a collection. The walk raises `OscalParseError` once the count passes the
+   budget. This bounds the memory the intermediate JSON value and its text reach, which is the billion-laughs exposure.
+   One rule covers a scalar-alias bomb and a collection-alias bomb. The budget is **5,000,000 emitted nodes**.
+2. **A nesting-depth limit.** The walk tracks its recursion depth and raises `OscalParseError` once a document nests
+   past the limit. This fires before Python's own recursion limit turns deep input into an uncaught `RecursionError`.
+   The limit is **500 levels**.
 
-The limit is not configurable in this change. A configurable limit is a public option that needs its own binding-local
-requirement and its own traceability entry. OSCAL documents do not use collection aliases in normal authoring, so the
-need is unproven. A later change can add an option if a real document needs one.
+A scalar alias is not exempt. The materialized value, not the kind of alias, is what exhausts memory. A scalar alias
+repeated many times expands the value linearly in anchor length times alias count, with no collection alias involved.
+The pipeline holds every copy of the text, and the expanded-node budget counts that expansion directly.
 
-**Alternatives considered.** (1) A limit that scales with input size, as Hugo does (100 for small files, more for
-large). This is more forgiving for large honest documents. But the scaling rule is itself a design surface to specify
-and test, and OSCAL documents rarely use collection aliases at all. Rejected as unneeded complexity. (2) No limit, with
-documentation that none applies. YML-011 permits this. But it leaves the billion-laughs exposure open, and the proposal
-already decided to impose a limit. Rejected.
+**Why these numbers.** 5,000,000 nodes is far above an honest OSCAL document. The largest NIST catalog in the corpus is
+on the order of tens of thousands of nodes. It is far below the millions-fold amplification an alias bomb reaches. So
+the budget rejects the attack and accepts ordinary aliasing, as the spec's accepted-input floor requires. 500 levels
+sits below CPython's default recursion limit of 1000, with headroom for the composer's frames and the walk's frames. So
+an over-depth input becomes a parse error, not a stack overflow. Both limits are fixed in this release, not
+configurable, and both are published in the README and DEVELOPING (YML-011).
+
+**Alternatives considered.** (1) Count alias resolutions or alias edges, as js-yaml and SnakeYAML do. An edge count does
+not bound the size an alias to a large collection expands to, and it misses a scalar-alias bomb entirely. The
+expanded-node budget bounds the materialized size, the quantity that matters. Rejected. (2) Bound the input
+byte length instead. That is coarser, and a small input can still expand to a large value, which is the whole attack.
+Rejected. (3) A configurable limit. It is a public option that needs its own binding-local requirement and traceability
+entry, and the need is unproven. A later change can add one.
 
 ### Decision 4: Serialize through the JSON value, then dump to YAML
 
@@ -173,11 +188,23 @@ is verified rather than assumed.
 duplicates the no-null and key rules that the JSON path already enforces, and risks a YAML path that disagrees with the
 JSON path. Rejected for the same reason as Decision 1.
 
-### Decision 5: The optional extra and the import guard
+### Decision 5: The optional extra, bound at call time
 
-The extra `oscal-bindings[yaml]` adds the YAML library. `v1/extensions/yaml_io.py` imports the library at module import
-time. An import without the extra installed raises `ImportError` with a message that names the extra to install. The
-base install keeps `pydantic[email]` as its one runtime dependency.
+The extra `oscal-bindings[yaml]` adds the YAML library. The three public names bind, in `v1/__init__.py` and the
+re-exports above it, to thin typed wrappers that import `yaml_io` inside their own bodies. So a base install without the
+extra keeps every non-YAML import path working: `import oscal_bindings`, `from oscal_bindings import *`, and
+`import oscal_bindings.extensions` all succeed. Only a call to a YAML operation raises `ImportError` with a message that
+names the extra to install. The base install keeps `pydantic[email]` as its one runtime dependency.
+
+The wrappers carry the real type signatures, so a type checker resolves `parse_oscal_yaml` and the other two through the
+documented import path. The binding does not re-export the YAML names through a module `__getattr__` or a `globals()`
+loop. Either one erases the static types and forces a star import to resolve every name, which imports the YAML library
+on a base install.
+
+**Alternatives considered.** Resolve the YAML names lazily through a module `__getattr__`, importing the library on
+first attribute access. This keeps the library off a plain `import oscal_bindings`. But a star import resolves every
+name in `__all__`, so `from oscal_bindings import *` and the compatibility module's `from oscal_bindings.v1.extensions
+import *` both import the library on a base install. A type checker also sees the names as `Any`. Rejected.
 
 ### Decision 6: One UTF-8 document, decoded by the binding
 
@@ -209,14 +236,15 @@ from the parse error (YML-006, PRS-002, ERR-001.03). The file parser does not co
 3. A fixed limit of 100 could reject an honest document that uses many collection aliases. → OSCAL authoring does not
    use collection aliases this way, the number matches common parsers, and a later change can add an option. The limit
    is documented, so a caller that hits it can see why.
-4. The pin moves two minor versions (0.3.0 to 0.5.0), which also brings the `binding-surface` obligation from 0.4.0. →
-   The traceability record is part of this change (proposal item 7). CI checks `models.py` for drift, so a model change
-   from the new release cannot land silently.
+4. The pin moves from 0.3.0 to 0.5.1, which also brings the `binding-surface` obligation from 0.4.0. → The traceability
+   record is part of this change (proposal item 7). CI checks `models.py` for drift, so a model change from the new
+   release cannot land silently. The 0.5.1 patch over 0.5.0 carries only a corpus known-defect fix, so it adds no
+   model drift.
 
 ## Migration Plan
 
-1. Move the pin in `scripts/spec_artifact.py` to `0.5.0+oscal.1.2.3` with its sha256. Run generation. Check for no
-   `models.py` drift.
+1. Move the pin in `scripts/spec_artifact.py` to `0.5.1+oscal.1.2.3` with sha256
+   `33a14ab00fcbc049934ad217989452896b74a1bb215bbd4f132ca3b81c8dfd8f`. Run generation. Check for no `models.py` drift.
 2. Add the `yaml` extra and the dev and test dependencies. Re-lock and commit the lockfiles.
 3. Add `v1/extensions/yaml_io.py` and re-export per the standard extension pattern.
 4. Add the traceability record for the whole public surface, and validate it against the store schema.

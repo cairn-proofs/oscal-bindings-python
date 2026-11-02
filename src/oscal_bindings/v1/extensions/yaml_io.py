@@ -1,11 +1,15 @@
 """Optional YAML parse and serialize for OSCAL documents.
 
 This module implements the store's ``yaml-documents`` capability (YML-001 to
-YML-011). It reads one YAML 1.2 document in UTF-8, converts it to the JSON value
-that the existing JSON parser accepts, and reuses :func:`parse_oscal`. So the
-YAML parse result equals the JSON parse result for the JSON text of the input
-(YML-005), and the YAML path inherits the JSON path's Pydantic validation and
-error detail.
+YML-011), with one documented exception: the serializer inherits the JSON
+path's datetime defect, so a seven-fraction-digit datetime loses its seventh
+digit on a round trip. That narrows YML-008 and SER-005 until issue #19 closes;
+the corpus marks ``yaml-round-trip/string-scalars`` as a known defect, and the
+conformance run xfails it. Otherwise the module reads one YAML 1.2 document in
+UTF-8, converts it to the JSON value that the existing JSON parser accepts, and
+reuses :func:`parse_oscal`. So the YAML parse result equals the JSON parse
+result for the JSON text of the input (YML-005), and the YAML path inherits the
+JSON path's Pydantic validation and error detail.
 
 YAML is an optional feature. It is available only when the ``yaml`` extra is
 installed (``pip install oscal-bindings[yaml]``). Importing this module without
@@ -58,12 +62,19 @@ __all__ = [
     "serialize_oscal_yaml",
 ]
 
-#: The maximum number of collection-alias resolutions the walk follows across a
-#: whole document. An input whose collection aliases expand past this limit is a
-#: parse error (spec ``yaml-resource-limit``, design Decision 3). The value sits
-#: with the defaults of comparable parsers (js-yaml 100, SnakeYAML 128, Symfony
-#: 128, Apple pkl 50). It is not configurable in this release.
-COLLECTION_ALIAS_LIMIT = 100
+#: The maximum number of JSON nodes the walk emits for one document: every
+#: scalar, array, and object. An expanded alias of any kind adds its whole
+#: subtree, so this bounds the materialized size the intermediate JSON value and
+#: text reach, which is the billion-laughs exposure (spec ``yaml-resource-limit``,
+#: design Decision 3). Far above an honest OSCAL document, far below an alias
+#: bomb. Not configurable in this release.
+EXPANSION_BUDGET = 5_000_000
+
+#: The maximum nesting depth the walk descends. A document nested past this is a
+#: parse error, raised before CPython's own recursion limit turns deep input
+#: into an uncaught ``RecursionError`` (design Decision 3). 500 sits below the
+#: default recursion limit of 1000 with headroom for the composer and the walk.
+DEPTH_LIMIT = 500
 
 
 # --- Schema model of scalar locations -------------------------------------
@@ -215,12 +226,14 @@ class _Walk:
     """
 
     def __init__(self) -> None:
-        self._alias_resolutions = 0
-        # Collection nodes seen at least once, by id. A second visit to one of
-        # these is a collection-alias resolution (the node was reached again
-        # through an alias), which counts against the limit. A node's first
-        # visit is ordinary structure and does not count.
-        self._seen: set[int] = set()
+        # Count of JSON nodes emitted so far: every scalar, array, and object.
+        # An expanded alias of any kind adds its whole subtree here, so this
+        # bounds the materialized size (design Decision 3). No alias kind is
+        # exempt.
+        self._emitted = 0
+        # Current nesting depth, bounded by DEPTH_LIMIT so deep input becomes a
+        # parse error before CPython's recursion limit raises RecursionError.
+        self._depth = 0
         # Nodes on the current ancestor path, by id, to catch a self-referential
         # alias (YML-009.02). `compose` does not raise on a cycle.
         self._ancestors: set[int] = set()
@@ -238,39 +251,41 @@ class _Walk:
         message = f"Unsupported YAML node: {kind}"  # pragma: no cover
         raise _located_error(message, node)  # pragma: no cover
 
+    def _count(self, node: Node) -> None:
+        """Charge one emitted node against the expansion budget."""
+        self._emitted += 1
+        if self._emitted > EXPANSION_BUDGET:
+            message = f"YAML expansion exceeds the budget of {EXPANSION_BUDGET} nodes"
+            raise _located_error(message, node)
+
     def _enter_collection(self, node: Node) -> None:
-        """Guard a collection-node visit: the cycle check and the alias limit.
+        """Guard a collection-node visit: the cycle check and the depth limit.
 
         A node already on the ancestor path is an alias inside its own anchored
-        node (YML-009.02). A revisit to a collection node the walk has seen
-        before is a collection-alias resolution: the same shared node was reached
-        again through an alias. Each such resolution counts against the limit, so
-        a billion-laughs expansion, which revisits shared collection nodes
-        multiplicatively, trips the limit. A node's first visit is ordinary
-        structure and does not count.
+        node (YML-009.02). Nesting past the depth limit is a parse error, raised
+        before CPython's recursion limit turns deep input into an uncaught
+        ``RecursionError``.
         """
         if id(node) in self._ancestors:
             message = "YAML alias refers to a node inside its own anchored node"
             raise _located_error(message, node)
-        if id(node) in self._seen:
-            self._alias_resolutions += 1
-            if self._alias_resolutions > COLLECTION_ALIAS_LIMIT:
-                message = (
-                    "YAML collection-alias expansion exceeds the limit of "
-                    f"{COLLECTION_ALIAS_LIMIT}"
-                )
-                raise _located_error(message, node)
-        self._seen.add(id(node))
+        self._depth += 1
+        if self._depth > DEPTH_LIMIT:
+            message = f"YAML nesting exceeds the depth limit of {DEPTH_LIMIT}"
+            raise _located_error(message, node)
         self._ancestors.add(id(node))
 
     def _sequence(self, node: SequenceNode, schema: Any) -> list[Any]:
+        self._count(node)
         self._enter_collection(node)
         item_schema = _SCHEMA.items(schema)
         result = [self.convert(child, item_schema) for child in node.value]
         self._ancestors.discard(id(node))
+        self._depth -= 1
         return result
 
     def _mapping(self, node: MappingNode, schema: Any) -> dict[str, Any]:
+        self._count(node)
         self._enter_collection(node)
         result: dict[str, Any] = {}
         for key_node, value_node in node.value:
@@ -284,6 +299,7 @@ class _Walk:
             field_schema = _SCHEMA.field(schema, key)
             result[key] = self.convert(value_node, field_schema)
         self._ancestors.discard(id(node))
+        self._depth -= 1
         return result
 
     def _scalar(self, node: ScalarNode, schema: Any) -> Any:
@@ -291,6 +307,7 @@ class _Walk:
 
         The node's tag is ignored: a tag does not change a value (YML-009).
         """
+        self._count(node)
         text = node.value
         base = _SCHEMA.base_type(schema) if schema is not None else None
         if base is None or base == "string":
@@ -303,7 +320,14 @@ class _Walk:
             # A non-matching text (`+443`, `007`, `0x1BB`) is a located grammar
             # error (YML-004.07, YML-004.10, YML-010).
             if _JSON_NUMBER.match(text):
-                return json.loads(text)
+                try:
+                    return json.loads(text)
+                except ValueError as exc:
+                    # An oversized numeric token (past CPython's integer-string
+                    # digit limit) raises ValueError. Map it to the parse-error
+                    # contract rather than let it escape (design Decision 2).
+                    message = f"YAML numeric scalar cannot be parsed: {exc}"
+                    raise _located_error(message, node) from exc
             message = (
                 f"YAML scalar {text!r} does not match the JSON number grammar "
                 "at this location"
@@ -335,6 +359,11 @@ def _compose_single(text: str) -> Node:
         nodes = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
     except yaml.YAMLError as exc:
         message = f"Invalid YAML: {exc}"
+        raise OscalParseError(message) from exc
+    except RecursionError as exc:
+        # PyYAML's parser is recursive descent, so deeply nested input overflows
+        # the stack. Map it to the parse-error contract (design Decision 2).
+        message = "YAML input is nested too deeply to parse"
         raise OscalParseError(message) from exc
     if not nodes:
         message = "YAML input holds no document"
@@ -382,12 +411,20 @@ def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
     Raises:
         OscalParseError: The input is not one well-formed YAML 1.2 document in
             UTF-8, holds a duplicate key, carries a scalar whose text does not
-            match the type at its location, expands collection aliases past the
-            documented limit, or does not conform to the OSCAL schema.
+            match the type at its location, expands past the documented budget,
+            nests past the documented depth limit, or does not conform to the
+            OSCAL schema.
     """
     text = _decode(data)
     node = _compose_single(text)
-    json_value = _Walk().convert(node, _SCHEMA.root)
+    try:
+        json_value = _Walk().convert(node, _SCHEMA.root)
+    except RecursionError as exc:
+        # The depth limit of Decision 3 normally catches deep nesting first.
+        # This maps any residual walk overflow to the parse-error contract
+        # rather than let it escape (design Decision 2).
+        message = "YAML input is nested too deeply to convert"
+        raise OscalParseError(message) from exc
     return parse_oscal(json.dumps(json_value))
 
 

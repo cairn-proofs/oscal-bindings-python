@@ -287,7 +287,7 @@ The input is one YAML 1.2 document in UTF-8. A stream with no document or more t
 
 The OSCAL schema, not the YAML reader, decides the type of each scalar at its location. A value keeps its text unless the location is a number or a boolean, so `version: 1.0` at a string location stays the string `"1.0"`, and `yes` stays `"yes"`. A number location takes only the JSON number grammar (no leading `+`, no leading zero, no hexadecimal), and a boolean location takes only `true` or `false`; any other text is a parse error that names the scalar's location. A YAML tag does not change a value, and the key `<<` is an ordinary field, so a merge key is rejected as an unknown field.
 
-The parser limits collection-alias expansion to 100 resolutions across a document, so a small untrusted file cannot exhaust memory through alias expansion. Ordinary documents stay far under this limit; a document that exceeds it is a parse error.
+The YAML parser applies two documented limits, so a small untrusted file cannot exhaust memory or the call stack. It caps total expansion at 5,000,000 emitted nodes (an alias of any kind, scalar or collection, counts its expanded size toward this), and it caps nesting depth at 500 levels. A document that exceeds either is a parse error. Ordinary documents stay far under both.
 
 ### Field names vs. OSCAL names
 

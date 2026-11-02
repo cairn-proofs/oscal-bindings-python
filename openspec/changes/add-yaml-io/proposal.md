@@ -14,10 +14,11 @@ capability (YML-001 to YML-011) and a YAML corpus, from
 
 ## What Changes
 
-1. Move the spec artifact pin in `scripts/spec_artifact.py` from `0.3.0+oscal.1.2.3` to `0.5.0+oscal.1.2.3`
-   (sha256 `921cee0ee949915edb42fc1a574fe12830f2eecadba5c0c8e22b382c0f7c22cc`). The pin is the one selector of the
-   contract, so the jump to YAML is a jump of the whole pin. The move crosses two minor versions. Both are additive,
-   and the OSCAL release stays 1.2.3, so no `models.py` drift is expected. CI checks the drift either way.
+1. Move the spec artifact pin in `scripts/spec_artifact.py` from `0.3.0+oscal.1.2.3` to `0.5.1+oscal.1.2.3`
+   (sha256 `33a14ab00fcbc049934ad217989452896b74a1bb215bbd4f132ca3b81c8dfd8f`). The pin is the one selector of the
+   contract, so the jump to YAML is a jump of the whole pin. The `yaml-documents` capability lands in 0.5.0, and the
+   0.5.1 patch adds the YAML corpus known-defect entry that this binding needs for its datetime serializer defect
+   (issue #19). The OSCAL release stays 1.2.3, so no `models.py` drift is expected. CI checks the drift either way.
 
 2. Add YAML parse and serialize to the public API, as an optional feature. These three operations are defined by the
    store's `yaml-documents` capability, so the binding implements contract behavior, not a binding-local wrapper:
@@ -68,7 +69,7 @@ capability (YML-001 to YML-011) and a YAML corpus, from
    6. The exported types and exceptions, such as `DocumentId`, `OscalBody`, `OscalWrapper`, `OscalAccessError`,
       `ElementValidationError`, and `ElementValidationResult`.
    Each entry cites the contract requirement that defines the operation. Each cited identifier resolves in
-   `openspec/requirements.json` of the pinned 0.5.0 artifact (SRF-004). The three YAML operations cite YML-005,
+   `openspec/requirements.json` of the pinned 0.5.1 artifact (SRF-004). The three YAML operations cite YML-005,
    YML-006, and YML-008 (SRF-003.01).
 
 8. Wire the two new corpus operations, `yaml-round-trip` and `yaml-parse`, into the conformance runner. The maintainer

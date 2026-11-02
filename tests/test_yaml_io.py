@@ -9,6 +9,7 @@ does not exercise in isolation.
 
 import builtins
 import json
+import subprocess
 import sys
 import textwrap
 
@@ -19,7 +20,7 @@ from oscal_bindings import OscalParseError
 from oscal_bindings.v1.extensions import yaml_io
 from oscal_bindings.v1.extensions.yaml_io import (
     _SCHEMA,
-    COLLECTION_ALIAS_LIMIT,
+    DEPTH_LIMIT,
     parse_oscal_yaml,
     parse_oscal_yaml_file,
     serialize_oscal_yaml,
@@ -494,8 +495,10 @@ class TestPublicSurface:
         ):
             assert name in v1.__all__
 
-    def test_import_without_extra_raises_install_hint(self, monkeypatch) -> None:
-        # Design Decision 5: a missing PyYAML raises ImportError with a hint.
+    def test_yaml_io_import_without_extra_raises_install_hint(
+        self, monkeypatch
+    ) -> None:
+        # Importing the yaml_io submodule directly still fails fast with a hint.
         real_import = builtins.__import__
 
         def fake_import(name, *args, **kwargs):
@@ -512,87 +515,244 @@ class TestPublicSurface:
             import oscal_bindings.v1.extensions.yaml_io  # noqa: F401
 
 
-# --- Task 4.1: the collection-alias resource limit -------------------------
+# --- Task 8.2: the base install (no `yaml` extra) works for non-YAML paths -
+
+
+def _run_without_yaml(body: str) -> subprocess.CompletedProcess[str]:
+    """Run ``body`` in a fresh interpreter where importing `yaml` fails.
+
+    A `sys.meta_path` finder blocks `yaml` (and submodules), simulating a base
+    install without the extra. The body runs after the block is in place.
+    """
+    prelude = textwrap.dedent(
+        """\
+        import sys, importlib.abc, importlib.machinery
+
+        class _BlockYaml(importlib.abc.MetaPathFinder):
+            def find_spec(self, name, path, target=None):
+                if name == "yaml" or name.startswith("yaml."):
+                    raise ImportError("No module named 'yaml'")
+                return None
+
+        sys.meta_path.insert(0, _BlockYaml())
+        for _m in list(sys.modules):
+            if _m == "yaml" or _m.startswith("yaml."):
+                del sys.modules[_m]
+        """
+    )
+    return subprocess.run(  # noqa: S603 - fixed interpreter, no shell
+        [sys.executable, "-c", prelude + textwrap.dedent(body)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+class TestBaseInstallWithoutYaml:
+    @pytest.mark.parametrize(
+        "stmt",
+        [
+            "import oscal_bindings",
+            "from oscal_bindings import *",
+            "import oscal_bindings.extensions",
+            "from oscal_bindings.extensions import *",
+            "import oscal_bindings.v1",
+            "from oscal_bindings.v1 import *",
+            "from oscal_bindings import parse_oscal, OscalDoc, make_hash",
+        ],
+    )
+    def test_import_path_works_without_yaml(self, stmt: str) -> None:
+        # Review finding #1: no import path may require PyYAML on a base install.
+        proc = _run_without_yaml(f"{stmt}\nprint('ok')\n")
+        assert proc.returncode == 0, proc.stderr
+        assert "ok" in proc.stdout
+
+    def test_calling_a_yaml_op_raises_the_install_hint(self) -> None:
+        # Only a call touches PyYAML, and then it raises the hint.
+        proc = _run_without_yaml(
+            """
+            from oscal_bindings import parse_oscal_yaml
+            try:
+                parse_oscal_yaml("catalog: {}")
+            except ImportError as exc:
+                print("HINT" if "oscal-bindings[yaml]" in str(exc) else "NO-HINT")
+            else:
+                print("NO-RAISE")
+            """
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert "HINT" in proc.stdout
+
+    def test_top_level_yaml_name_is_not_any_at_runtime(self) -> None:
+        # Review finding #5: the top-level name resolves to the real function,
+        # not a dynamic `__getattr__` fallback. The static-type guarantee is
+        # verified by mypy over the top-level surface (tests/typing/, checked by
+        # `hatch run typing`); this runtime check pins that the name is the same
+        # object as the v1 wrapper, i.e. a genuine re-export, not a shim.
+        import oscal_bindings
+        import oscal_bindings.v1
+
+        assert oscal_bindings.parse_oscal_yaml is oscal_bindings.v1.parse_oscal_yaml
+        assert type(oscal_bindings.parse_oscal_yaml).__name__ == "function"
+
+
+# --- Tasks 4.1, 6.1, 8.1: resource limits, adversarial and accept-side -----
+
+
+def _catalog_with_props(props_yaml: str) -> str:
+    """A minimal valid catalog whose metadata props block is ``props_yaml``."""
+    return (
+        "catalog:\n"
+        "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
+        "  metadata:\n"
+        "    title: T\n"
+        "    last-modified: 2024-01-02T03:04:05Z\n"
+        '    version: "1.0"\n'
+        "    oscal-version: 1.2.3\n"
+        "    props:\n" + props_yaml
+    )
 
 
 class TestResourceLimit:
-    def _nested_aliases(self, depth: int) -> str:
-        """A billion-laughs-style document: each level aliases the one below.
-
-        The back-matter resource holds nested props that fan out through
-        aliases, so the collection-alias resolutions grow multiplicatively and
-        pass the limit well before ``depth`` is large.
-        """
+    def test_collection_alias_bomb_is_parse_error(self) -> None:
+        # A billion-laughs expansion: each level references the one below twice,
+        # so the materialized value grows multiplicatively past the budget. A
+        # small input that must NOT be accepted (review finding #3).
         lines = [
-            "catalog:",
-            "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41",
-            "  metadata:",
-            "    title: T",
-            "    last-modified: 2024-01-02T03:04:05Z",
-            '    version: "1.0"',
-            "    oscal-version: 1.2.3",
-            "    props:",
-            "      - name: a0",
-            "        value: v",
-            "        props: &a0",
-            "          - {name: x, value: y}",
+            (
+                "      - name: a0\n"
+                "        value: v\n"
+                "        props: &a0\n"
+                "          - {name: x, value: y}\n"
+            )
         ]
-        for i in range(1, depth):
+        for i in range(1, 24):
             prev = f"a{i - 1}"
-            lines += [
-                f"      - name: a{i}",
-                "        value: v",
-                f"        props: &a{i}",
-                f"          - {{name: x, value: y, props: *{prev}}}",
-                f"          - {{name: x, value: y, props: *{prev}}}",
-            ]
-        return "\n".join(lines) + "\n"
+            lines.append(
+                f"      - name: a{i}\n        value: v\n        props: &a{i}\n"
+                f"          - {{name: x, value: y, props: *{prev}}}\n"
+                f"          - {{name: x, value: y, props: *{prev}}}\n"
+            )
+        y = _catalog_with_props("".join(lines))
+        with pytest.raises(OscalParseError, match="budget"):
+            parse_oscal_yaml(y)
 
-    def test_input_over_limit_is_parse_error(self) -> None:
-        with pytest.raises(OscalParseError, match="exceeds the limit"):
-            parse_oscal_yaml(self._nested_aliases(12))
+    def test_alias_bomb_over_sequences_is_parse_error(self) -> None:
+        # A billion-laughs over sequences: a small input whose nested aliased
+        # sequences expand past the node budget. The old design exempted scalar
+        # aliases and under-counted this class (review finding #4). It must be a
+        # parse error, not a success or a hang.
+        with pytest.raises(OscalParseError, match="budget"):
+            parse_oscal_yaml(_scalar_sequence_bomb())
 
-    def test_small_fixed_collection_aliasing_parses(self) -> None:
-        # A handful of collection aliases stays far under the limit.
-        y = textwrap.dedent(
-            """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-                props: &p
-                  - {name: a, value: v}
-              back-matter:
-                resources:
-                  - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42
-                    props: *p
-            """
-        )
-        doc = parse_oscal_yaml(y)
-        assert _json_value(doc)["catalog"]["back-matter"]["resources"]
+    def test_deep_nesting_is_parse_error(self) -> None:
+        # Deep nesting must be a parse error, not an uncaught RecursionError
+        # (review finding #2).
+        depth = DEPTH_LIMIT + 50
+        inner = "[" * depth + "]" * depth
+        y = _catalog_with_props(f"      - {{name: a, value: v, props: {inner}}}\n")
+        with pytest.raises(OscalParseError):
+            parse_oscal_yaml(y)
 
-    def test_many_scalar_aliases_parse(self) -> None:
-        # A scalar alias is not counted against the limit, so far more than the
-        # limit of scalar aliases still parses.
-        count = COLLECTION_ALIAS_LIMIT * 3
-        props = "\n".join(f"      - {{name: n{i}, value: *v}}" for i in range(count))
+    def test_oversized_number_is_parse_error(self) -> None:
+        # A numeric token past CPython's integer-string digit limit must surface
+        # as OscalParseError, not a bare ValueError (review finding #7).
+        digits = "9" * 5000
+        with pytest.raises(OscalParseError):
+            parse_oscal_yaml(_component_with_port(digits))
+
+    def test_bounded_collection_aliasing_parses(self) -> None:
+        # Accept side: an alias to a ~100-entry collection parses. The old design
+        # rejected this (review finding #3); it must now be accepted. The props
+        # block is anchored under metadata (a valid props location) and the
+        # back-matter resource references it.
+        items = "\n".join(f"      - {{name: n{i}, value: v}}" for i in range(100))
         y = (
             "catalog:\n"
             "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
             "  metadata:\n"
             "    title: T\n"
             "    last-modified: 2024-01-02T03:04:05Z\n"
-            '    version: &v "1.0"\n'
+            '    version: "1.0"\n'
             "    oscal-version: 1.2.3\n"
-            "    props:\n" + props + "\n"
+            "    props: &p\n" + items + "\n"
+            "  back-matter:\n"
+            "    resources:\n"
+            "      - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42\n"
+            "        props: *p\n"
         )
         doc = parse_oscal_yaml(y)
-        md = _json_value(doc)["catalog"]["metadata"]
-        assert len(md["props"]) == count
-        assert all(p["value"] == "1.0" for p in md["props"])
+        resources = _json_value(doc)["catalog"]["back-matter"]["resources"]
+        assert len(resources[0]["props"]) == 100
+
+    def test_ordinary_document_with_aliases_parses(self) -> None:
+        # Accept side: modest aliasing in an otherwise ordinary document parses.
+        y = (
+            "catalog:\n"
+            "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
+            "  metadata:\n"
+            "    title: T\n"
+            "    last-modified: 2024-01-02T03:04:05Z\n"
+            '    version: "1.0"\n'
+            "    oscal-version: 1.2.3\n"
+            "    props: &p\n"
+            "      - {name: a, value: v}\n"
+            "  back-matter:\n"
+            "    resources:\n"
+            "      - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42\n"
+            "        props: *p\n"
+        )
+        doc = parse_oscal_yaml(y)
+        assert _json_value(doc)["catalog"]["back-matter"]["resources"]
+
+
+def _scalar_sequence_bomb() -> str:
+    """A small input whose aliased sequences expand past the node budget.
+
+    Classic billion-laughs over sequences of scalars: each anchor is a sequence
+    that references the previous anchor several times, so the emitted-node count
+    grows multiplicatively well past the budget from a small input.
+    """
+    lines = [
+        "catalog:",
+        "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41",
+        "  metadata:",
+        "    title: T",
+        "    last-modified: 2024-01-02T03:04:05Z",
+        '    version: "1.0"',
+        "    oscal-version: 1.2.3",
+        "    props: &a0",
+        "      - {name: x, value: y}",
+    ]
+    for i in range(1, 20):
+        prev = f"*a{i - 1}"
+        lines.append(f"    props{i}: &a{i}")
+        lines.append(f"      - {{name: x, value: y, props: {prev}}}")
+        lines.append(f"      - {{name: x, value: y, props: {prev}}}")
+        lines.append(f"      - {{name: x, value: y, props: {prev}}}")
+    return "\n".join(lines) + "\n"
+
+
+def _component_with_port(start_token: str) -> str:
+    """A component-definition YAML whose port-range start is ``start_token``."""
+    return (
+        "component-definition:\n"
+        "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
+        "  metadata:\n"
+        "    title: T\n"
+        "    last-modified: 2024-01-02T03:04:05Z\n"
+        '    version: "1.0"\n'
+        "    oscal-version: 1.2.3\n"
+        "  components:\n"
+        "    - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42\n"
+        "      type: service\n"
+        "      title: C\n"
+        "      description: d\n"
+        "      protocols:\n"
+        "        - name: p\n"
+        "          port-ranges:\n"
+        f"            - start: {start_token}\n"
+    )
 
 
 def test_module_all_matches_public_functions() -> None:

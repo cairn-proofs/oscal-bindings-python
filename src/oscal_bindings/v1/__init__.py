@@ -30,7 +30,7 @@ Example:
     >>> json_str = serialize_oscal(doc)
 """
 
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
 
 from .extensions import (
     DocumentId,
@@ -46,13 +46,6 @@ from .extensions import (
     make_rlink,
     validate_element,
 )
-
-if TYPE_CHECKING:
-    from .extensions import (
-        parse_oscal_yaml,
-        parse_oscal_yaml_file,
-        serialize_oscal_yaml,
-    )
 from .models import *  # noqa: F403
 from .parser import (
     AssessmentPlanDocument,
@@ -129,20 +122,30 @@ __all__ = [
     "validate_oscal",
 ]
 
-# The optional YAML operations are re-exported lazily from `.extensions`, which
-# imports them from the PyYAML-backed `yaml_io` module only on first access.
-# This keeps `import oscal_bindings.v1` working without the `yaml` extra; the
-# install-hint ImportError surfaces when a caller first touches one of these
-# names (design Decision 5).
-_YAML_NAMES = frozenset(
-    {"parse_oscal_yaml", "parse_oscal_yaml_file", "serialize_oscal_yaml"}
-)
+# The optional YAML operations bind at call time, not at attribute access
+# (design Decision 5). Each wrapper imports the PyYAML-backed `yaml_io` module
+# inside its body, so a base install without the `yaml` extra keeps every
+# non-YAML import path working (including `from oscal_bindings.v1 import *`);
+# only a call raises the install-hint ImportError. The wrappers carry the real
+# signatures, so a type checker resolves them through this import path.
 
 
-def __getattr__(name: str) -> Any:
-    if name in _YAML_NAMES:
-        from oscal_bindings.v1 import extensions  # noqa: PLC0415 - lazy by design
+def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
+    """Parse an OSCAL YAML document into a typed model (requires the `yaml` extra)."""
+    from .extensions import yaml_io  # noqa: PLC0415 - imported at call time by design
 
-        return getattr(extensions, name)
-    message = f"module {__name__!r} has no attribute {name!r}"
-    raise AttributeError(message)
+    return yaml_io.parse_oscal_yaml(data)
+
+
+def parse_oscal_yaml_file(path: Path | str) -> OscalDocument:
+    """Parse an OSCAL YAML file into a typed model (requires the `yaml` extra)."""
+    from .extensions import yaml_io  # noqa: PLC0415 - imported at call time by design
+
+    return yaml_io.parse_oscal_yaml_file(path)
+
+
+def serialize_oscal_yaml(model: OscalDocument) -> str:
+    """Serialize an OSCAL model to a YAML string (requires the `yaml` extra)."""
+    from .extensions import yaml_io  # noqa: PLC0415 - imported at call time by design
+
+    return yaml_io.serialize_oscal_yaml(model)

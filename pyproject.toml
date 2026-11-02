@@ -87,7 +87,7 @@ generate = "python scripts/hoist_names.py && datamodel-codegen --input ./build/c
 docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
 # No --install-types: it would pip-install stubs at run time, outside the lockfile.
 # Add any stub packages mypy needs to `dependencies` above instead.
-typing = "mypy src/oscal_bindings"
+typing = "mypy src/oscal_bindings tests/typing"
 lint = [
     "ruff check .",
     "ruff format --check .",

@@ -28,9 +28,14 @@ See :mod:`oscal_bindings.v1` for the documented API surface and
 generated from.
 """
 
-from typing import Any
-
 from oscal_bindings import v1 as _v1
+
+# The curated public surface, bounded by ``oscal_bindings.v1.__all__``. A plain
+# star import is safe: the YAML names in ``v1.__all__`` are call-time wrappers
+# (design Decision 5), so resolving them here does not import PyYAML, and a base
+# install without the ``yaml`` extra imports fine. A star import also keeps the
+# names statically typed, which a module ``__getattr__`` would erase.
+from oscal_bindings.v1 import *  # noqa: F403
 
 # Not in ``v1.__all__`` (it is metadata, not API), so re-exported explicitly.
 from oscal_bindings.v1 import __oscal_schema_version__ as __oscal_schema_version__
@@ -42,30 +47,4 @@ from oscal_bindings.v1 import __oscal_schema_version__ as __oscal_schema_version
 # the ~180 model names this line exists to carry.
 from oscal_bindings.v1.models import *  # noqa: F403
 
-# The curated public surface, bounded by ``oscal_bindings.v1.__all__``.
-#
-# Not a plain ``from oscal_bindings.v1 import *``: that forces every name in
-# ``v1.__all__`` at import time, which would eagerly resolve the lazy YAML
-# re-exports and so require PyYAML just to ``import oscal_bindings``. The YAML
-# names are re-exported lazily through ``__getattr__`` instead, so the base
-# install imports without the ``yaml`` extra (design Decision 5).
-_LAZY_YAML = frozenset(
-    {"parse_oscal_yaml", "parse_oscal_yaml_file", "serialize_oscal_yaml"}
-)
-for _name in _v1.__all__:
-    if _name not in _LAZY_YAML:
-        globals()[_name] = getattr(_v1, _name)
-
 __all__ = list(_v1.__all__)
-
-
-def __getattr__(name: str) -> Any:
-    """Lazily re-export the optional YAML operations from :mod:`oscal_bindings.v1`.
-
-    Accessing one triggers the PyYAML import in ``yaml_io``; without the ``yaml``
-    extra that raises :class:`ImportError` with an install hint.
-    """
-    if name in _LAZY_YAML:
-        return getattr(_v1, name)
-    message = f"module {__name__!r} has no attribute {name!r}"
-    raise AttributeError(message)
