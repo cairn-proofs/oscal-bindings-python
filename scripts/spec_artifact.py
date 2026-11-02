@@ -21,9 +21,9 @@ from pinned_archive import PinnedArchive, ensure_pinned_archive, http_get
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SPEC_ARTIFACT_VERSION = "0.5.0+oscal.1.2.3"
+SPEC_ARTIFACT_VERSION = "0.5.1+oscal.1.2.3"
 SPEC_ARTIFACT_SHA256 = (
-    "921cee0ee949915edb42fc1a574fe12830f2eecadba5c0c8e22b382c0f7c22cc"
+    "33a14ab00fcbc049934ad217989452896b74a1bb215bbd4f132ca3b81c8dfd8f"
 )
 # The `+` of the version is written as %2B in the URL path.
 _URL_VERSION = SPEC_ARTIFACT_VERSION.replace("+", "%2B")
