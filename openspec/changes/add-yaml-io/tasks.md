@@ -71,11 +71,11 @@
 
 ## 5. Traceability record
 
-- [ ] 5.1 Add the traceability record that holds one entry for every public operation in `v1/__all__`, each citing the
+- [x] 5.1 Add the traceability record that holds one entry for every public operation in `v1/__all__`, each citing the
   contract requirement that defines it. The three YAML functions cite YML-005, YML-006, and YML-008 (proposal item 7,
   `binding-surface` SRF-003). Verify the record validates against `openspec/traceability.schema.json` of the pinned
   0.5.0 artifact, and that each cited identifier resolves in that artifact's `openspec/requirements.json` (SRF-004).
-- [ ] 5.2 Add a test that fails on either condition (SRF-003.04, SRF-004):
+- [x] 5.2 Add a test that fails on either condition (SRF-003.04, SRF-004):
   1. A name in `v1/__all__` has no entry in the record.
   2. A cited identifier does not resolve in the pinned requirement index.
   Verify the test passes for the current surface and fails when an entry is removed.
