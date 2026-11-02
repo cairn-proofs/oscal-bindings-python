@@ -109,6 +109,30 @@ def _parse(case: dict[str, Any], src: Path) -> None:
     assert ob.validate_oscal(data) is False
 
 
+def _yaml_round_trip(case: dict[str, Any], src: Path) -> None:
+    # Parse the YAML input, serialize to JSON, and compare its canonical form
+    # with `expected`. Then serialize to YAML, parse that, serialize to JSON,
+    # and compare again. The non-raising validity check does not apply to a
+    # yaml-round-trip input (corpus README).
+    data = src.read_bytes()
+    expected = (corpus_root() / case["expected"]).read_bytes()
+    doc = ob.parse_oscal_yaml(data)
+    assert canonicalize(ob.serialize_oscal(doc)) == expected
+    reparsed = ob.parse_oscal_yaml(ob.serialize_oscal_yaml(doc))
+    assert canonicalize(ob.serialize_oscal(reparsed)) == expected
+
+
+def _yaml_parse(case: dict[str, Any], src: Path) -> None:
+    data: str | bytes = src.read_bytes()
+    if case.get("input-form") != "bytes":
+        data = data.decode("utf-8")
+    error = _expect_error(case, lambda: ob.parse_oscal_yaml(data))
+    minimum = case.get("expected-min-failures")
+    if minimum is not None:
+        assert isinstance(error, OscalParseError)
+        assert len(error.errors) >= minimum, error.errors
+
+
 def _parse_typed(case: dict[str, Any], src: Path) -> None:
     parser = TYPED_PARSERS[case["document-type"]]
     _expect_error(case, lambda: parser(src.read_bytes()))
@@ -140,6 +164,8 @@ OPERATIONS: dict[str, Callable[[dict[str, Any], Path], None]] = {
     "parse-file": _parse_file,
     "assessment-period": _assessment_period,
     "validate-element": _validate_element,
+    "yaml-round-trip": _yaml_round_trip,
+    "yaml-parse": _yaml_parse,
 }
 
 

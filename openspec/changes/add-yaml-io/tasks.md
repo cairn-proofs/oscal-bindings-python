@@ -82,7 +82,7 @@
 
 ## 6. Conformance and documentation
 
-- [ ] 6.1 Add `yaml-round-trip` and `yaml-parse` handlers to the `OPERATIONS` map in `tests/test_conformance.py`,
+- [x] 6.1 Add `yaml-round-trip` and `yaml-parse` handlers to the `OPERATIONS` map in `tests/test_conformance.py`,
   reading the input as the corpus manifest defines. Verify all 23 YAML corpus cases pass with
   `hatch test -- -k conformance`.
 - [x] 6.2 Document the YAML usage in the README. Add a DEVELOPING.md note on the scalar-typing rule (YML-004) and the
