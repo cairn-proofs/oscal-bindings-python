@@ -614,6 +614,7 @@ def _catalog_with_props(props_yaml: str) -> str:
 
 
 class TestResourceLimit:
+    @pytest.mark.slow
     def test_collection_alias_bomb_is_parse_error(self) -> None:
         # A billion-laughs expansion: each level references the one below twice,
         # so the materialized value grows multiplicatively past the budget. A
@@ -637,6 +638,7 @@ class TestResourceLimit:
         with pytest.raises(OscalParseError, match="budget"):
             parse_oscal_yaml(y)
 
+    @pytest.mark.slow
     def test_alias_bomb_over_sequences_is_parse_error(self) -> None:
         # A billion-laughs over sequences: a small input whose nested aliased
         # sequences expand past the node budget. The old design exempted scalar

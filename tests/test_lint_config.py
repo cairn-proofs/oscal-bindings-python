@@ -171,8 +171,11 @@ def test_release_includes_lint_and_keeps_every_stage(
     default_env: dict[str, Any],
 ) -> None:
     release = default_env["scripts"]["release"]
-    for stage in ("generate", "lint", "typing", "hatch test --all --cover", "docs"):
+    for stage in ("generate", "lint", "typing", "docs"):
         assert stage in release, stage
+    # The test stage carries a `-- -m` marker selector (slow adversarial tests
+    # run in the gate, not the default run), so match its prefix.
+    assert any(cmd.startswith("hatch test --all --cover") for cmd in release), release
     assert release.index("generate") < release.index("lint")
 
 

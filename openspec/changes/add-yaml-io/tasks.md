@@ -108,7 +108,9 @@
 ## 8. Adversarial resource tests and base-install tests
 
 - [x] 8.1 Write the adversarial and accept-side resource tests first, so they fail against the old limit and pass
-  against tasks 4.1 and 6.1. Each over-limit case asserts `OscalParseError`, not a crash, a hang, or a success:
+  against tasks 4.1 and 6.1. Mark the two expensive alias-bomb tests `@pytest.mark.slow`, excluded from the default
+  `hatch test` run and included in the release gate. Each over-limit case asserts `OscalParseError`, not a crash, a
+  hang, or a success:
   1. A scalar-alias bomb: a small input whose scalar aliases expand past the budget.
   2. A collection-alias bomb: a small input whose collection aliases expand past the budget.
   3. A deep-nesting input past 500 levels.

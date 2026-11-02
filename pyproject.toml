@@ -113,7 +113,16 @@ lock = [
     "hatch env run --env security -- python --version",
 ]
 upgrade = "PIP_COMPILE_UPGRADE=1 hatch run lock"
-release = ["generate", "lint", "typing", "security", "hatch test --all --cover", "docs"]
+release = [
+    "generate",
+    "lint",
+    "typing",
+    "security",
+    # `-m "slow or not slow"` overrides the default `-m "not slow"`, so the gate
+    # runs every test including the slow adversarial resource bombs.
+    'hatch test --all --cover -- -m "slow or not slow"',
+    "docs",
+]
 
 [tool.hatch.envs.hatch-test]
 type = "pip-compile"
@@ -141,7 +150,15 @@ cov-report = ["coverage report", "coverage html"]
 python = ["3.11", "3.12", "3.13", "3.14"]
 
 [tool.pytest.ini_options]
-addopts = ["--durations=5", "--color=yes"]
+# `-m "not slow"` keeps the slow adversarial resource tests out of the default
+# run (`hatch test`). They build multi-million-node YAML expansions and take
+# tens of seconds each. Run them with `hatch test -- -m slow`, or all tests with
+# `hatch test -- -m "slow or not slow"`. The release gate runs them (see the
+# `release` script).
+addopts = ["--durations=5", "--color=yes", "-m", "not slow"]
+markers = [
+    "slow: a slow test, excluded from the default run (adversarial resource bombs)",
+]
 testpaths = ["tests"]
 
 [tool.coverage.run]
