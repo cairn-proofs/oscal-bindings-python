@@ -47,11 +47,13 @@ Issues = "https://github.com/cairn-proofs/oscal-bindings-python/issues"
 
 [project.optional-dependencies]
 codegen = ["datamodel-code-generator[http,black,isort]==0.83.0"]
-# Optional YAML parse/serialize surface (v1/extensions/yaml_io.py). The base
-# install keeps pydantic[email] as its one runtime dependency; `pip install
-# oscal-bindings[yaml]` adds PyYAML. Pinned exactly: the YAML path depends on
-# PyYAML's node API (compose, ScalarNode, MappingNode, SequenceNode), so an
-# upgrade is a deliberate, re-locked change (design Decision 2).
+# Optional YAML parse/serialize surface (v1/extensions/yaml_io.py). It imports
+# PyYAML, through v1/extensions/_yaml_loader.py, only when an operation is
+# called. The base install keeps pydantic[email] as its one runtime dependency;
+# `pip install oscal-bindings[yaml]` adds PyYAML. Pinned exactly: the YAML path
+# depends on PyYAML's event API (the event classes, get_event, check_event, and
+# source marks), so an upgrade is a deliberate, re-locked change (design
+# Decision 2).
 yaml = ["pyyaml==6.0.3"]
 
 # Every Hatch env installs from a hatch-pip-compile lockfile (requirements.txt for
@@ -76,10 +78,10 @@ dependencies = [
     # `generate` validates names.json against its JSON Schema before codegen.
     "jsonschema-rs==0.58.6",
     # YAML optional-extra library, present in default so `hatch run typing`
-    # resolves v1/extensions/yaml_io.py and its type stubs. Pinned in step with
-    # the `yaml` extra above; types-PyYAML is stubs-only (dev/typing use).
+    # resolves v1/extensions/_yaml_loader.py and its type stubs. Pinned in step
+    # with the `yaml` extra above; types-PyYAML is stubs-only (dev/typing use).
     "pyyaml==6.0.3",
-    "types-PyYAML",
+    "types-PyYAML==6.0.12.20261030",
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -118,9 +120,7 @@ release = [
     "lint",
     "typing",
     "security",
-    # `-m "slow or not slow"` overrides the default `-m "not slow"`, so the gate
-    # runs every test including the slow adversarial resource bombs.
-    'hatch test --all --cover -- -m "slow or not slow"',
+    "hatch test --all --cover",
     "docs",
 ]
 
@@ -150,15 +150,7 @@ cov-report = ["coverage report", "coverage html"]
 python = ["3.11", "3.12", "3.13", "3.14"]
 
 [tool.pytest.ini_options]
-# `-m "not slow"` keeps the slow adversarial resource tests out of the default
-# run (`hatch test`). They build multi-million-node YAML expansions and take
-# tens of seconds each. Run them with `hatch test -- -m slow`, or all tests with
-# `hatch test -- -m "slow or not slow"`. The release gate runs them (see the
-# `release` script).
-addopts = ["--durations=5", "--color=yes", "-m", "not slow"]
-markers = [
-    "slow: a slow test, excluded from the default run (adversarial resource bombs)",
-]
+addopts = ["--durations=5", "--color=yes"]
 testpaths = ["tests"]
 
 [tool.coverage.run]

@@ -171,11 +171,8 @@ def test_release_includes_lint_and_keeps_every_stage(
     default_env: dict[str, Any],
 ) -> None:
     release = default_env["scripts"]["release"]
-    for stage in ("generate", "lint", "typing", "docs"):
+    for stage in ("generate", "lint", "typing", "hatch test --all --cover", "docs"):
         assert stage in release, stage
-    # The test stage carries a `-- -m` marker selector (slow adversarial tests
-    # run in the gate, not the default run), so match its prefix.
-    assert any(cmd.startswith("hatch test --all --cover") for cmd in release), release
     assert release.index("generate") < release.index("lint")
 
 
@@ -205,3 +202,20 @@ def test_tests_is_not_a_package() -> None:
 
 def test_postprocess_script_still_prints() -> None:
     assert "print(" in (ROOT / POSTPROCESS).read_text(encoding="utf-8")
+
+
+# --- YAML resource limits: the documented values match the constants (YML-011) -
+
+
+@pytest.mark.parametrize("doc", ["README.md", "DEVELOPING.md"])
+def test_yaml_limit_values_are_documented(doc: str) -> None:
+    from oscal_bindings.v1.extensions.yaml_io import (
+        ALIAS_CHAR_LIMIT,
+        ALIAS_NODE_LIMIT,
+        DEPTH_LIMIT,
+    )
+
+    text = (PYPROJECT.parent / doc).read_text(encoding="utf-8")
+    assert f"{ALIAS_NODE_LIMIT:,} nodes" in text
+    assert f"{ALIAS_CHAR_LIMIT:,} characters" in text
+    assert f"{DEPTH_LIMIT} levels" in text

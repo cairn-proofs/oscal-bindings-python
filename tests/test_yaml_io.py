@@ -1,51 +1,74 @@
 """Tests for the optional YAML parse and serialize operations.
 
 Covers the ``yaml-documents`` contract behavior (YML-002 to YML-011) and the
-binding-local resource limit (spec ``yaml-resource-limit``). The YAML corpus
-cases run from :mod:`tests.test_conformance`; these tests check the individual
-scenarios at the unit level, including the schema-type resolver that the corpus
-does not exercise in isolation.
+binding-local resource limits (spec ``yaml-resource-limit``). The YAML corpus
+cases run from :mod:`tests.test_conformance`. These tests check the scenarios at
+the unit level, including the schema-type resolver that the corpus does not
+exercise in isolation.
+
+Every test in this module runs once with libyaml's parser and once with
+PyYAML's pure-Python parser (design Decision 2). The base-install and
+import-path tests are in :mod:`tests.test_yaml_base_install`.
 """
 
-import builtins
+from __future__ import annotations
+
 import json
-import subprocess
-import sys
+import re
 import textwrap
+import tracemalloc
+from typing import TYPE_CHECKING, Any
 
 import pytest
+import yaml
 
 import oscal_bindings as ob
 from oscal_bindings import OscalParseError
-from oscal_bindings.v1.extensions import yaml_io
+from oscal_bindings.v1.extensions import _yaml_loader
+from oscal_bindings.v1.extensions._yaml_loader import _SCHEMA, to_json_text
 from oscal_bindings.v1.extensions.yaml_io import (
-    _SCHEMA,
+    ALIAS_CHAR_LIMIT,
+    ALIAS_NODE_LIMIT,
     DEPTH_LIMIT,
     parse_oscal_yaml,
     parse_oscal_yaml_file,
     serialize_oscal_yaml,
 )
 
-# A minimal valid OSCAL catalog in YAML.
-MINIMAL_CATALOG_YAML = textwrap.dedent(
+if TYPE_CHECKING:
+    from support.corpus import CorpusDoc
+
+PARSERS = {"libyaml": yaml.CSafeLoader, "python": yaml.SafeLoader}
+
+
+@pytest.fixture(autouse=True, params=sorted(PARSERS))
+def yaml_parser(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Run each test with each event parser."""
+    monkeypatch.setattr(_yaml_loader, "_LOADER", PARSERS[request.param])
+    return str(request.param)
+
+
+HEAD = textwrap.dedent(
     """\
     catalog:
-      uuid: f47ac10b-58cc-4372-a567-0e02b2c3d479
+      uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
       metadata:
-        title: Test Catalog
-        last-modified: 2026-01-01T00:00:00Z
+        title: T
+        last-modified: 2024-01-02T03:04:05Z
         version: "1.0"
         oscal-version: 1.2.3
     """
 )
 
+MINIMAL_CATALOG_YAML = HEAD
+
 MINIMAL_CATALOG_JSON = json.dumps(
     {
         "catalog": {
-            "uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            "uuid": "7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41",
             "metadata": {
-                "title": "Test Catalog",
-                "last-modified": "2026-01-01T00:00:00Z",
+                "title": "T",
+                "last-modified": "2024-01-02T03:04:05Z",
                 "version": "1.0",
                 "oscal-version": "1.2.3",
             },
@@ -58,18 +81,32 @@ def _canon(obj: object) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"))
 
 
-def _json_value(doc: object) -> object:
+def _json_value(doc: Any) -> Any:
     return json.loads(doc.model_dump_json(by_alias=True, exclude_none=True))
 
 
-# --- Task 2.1: the schema-type resolver (design Decision 1) ----------------
+def _metadata(extra: str) -> Any:
+    """Parse the minimal catalog with ``extra`` lines appended to its metadata."""
+    doc = parse_oscal_yaml(HEAD + textwrap.indent(textwrap.dedent(extra), "    "))
+    return _json_value(doc)["catalog"]["metadata"]
+
+
+def _yaml_error(text: str | bytes) -> dict[str, Any]:
+    """Parse ``text``, require a YAML-layer parse error, and return its entry."""
+    with pytest.raises(OscalParseError) as info:
+        parse_oscal_yaml(text)
+    errors = info.value.errors
+    assert len(errors) == 1, errors
+    entry = errors[0]
+    assert str(entry["type"]).startswith("yaml_"), entry
+    return entry
+
+
+# --- Task 2.1, 2.8: the schema-type resolver (design Decision 1) -----------
 
 
 class TestSchemaResolver:
-    """``_SCHEMA`` maps a scalar location to its base JSON type."""
-
     def test_start_is_number_location(self) -> None:
-        # port-range start lives under component-definition.
         cd = _SCHEMA.field(_SCHEMA.root, "component-definition")
         components = _SCHEMA.items(_SCHEMA.field(cd, "components"))
         protocols = _SCHEMA.items(_SCHEMA.field(components, "protocols"))
@@ -80,289 +117,248 @@ class TestSchemaResolver:
     def test_last_modified_is_string_location(self) -> None:
         catalog = _SCHEMA.field(_SCHEMA.root, "catalog")
         metadata = _SCHEMA.field(catalog, "metadata")
-        last_modified = _SCHEMA.field(metadata, "last-modified")
-        assert _SCHEMA.base_type(last_modified) == "string"
+        assert _SCHEMA.base_type(_SCHEMA.field(metadata, "last-modified")) == "string"
 
     def test_hash_algorithm_is_string_location(self) -> None:
-        # back-matter resource -> rlinks -> hashes -> algorithm (open enum).
         catalog = _SCHEMA.field(_SCHEMA.root, "catalog")
         bm = _SCHEMA.field(catalog, "back-matter")
         resources = _SCHEMA.items(_SCHEMA.field(bm, "resources"))
         rlinks = _SCHEMA.items(_SCHEMA.field(resources, "rlinks"))
         hashes = _SCHEMA.items(_SCHEMA.field(rlinks, "hashes"))
-        algorithm = _SCHEMA.field(hashes, "algorithm")
-        assert _SCHEMA.base_type(algorithm) == "string"
+        assert _SCHEMA.base_type(_SCHEMA.field(hashes, "algorithm")) == "string"
 
     def test_as_is_is_boolean_location(self) -> None:
         profile = _SCHEMA.field(_SCHEMA.root, "profile")
         merge = _SCHEMA.field(profile, "merge")
-        as_is = _SCHEMA.field(merge, "as-is")
-        assert _SCHEMA.base_type(as_is) == "boolean"
+        assert _SCHEMA.base_type(_SCHEMA.field(merge, "as-is")) == "boolean"
+
+    def test_no_tie_break_decides_a_location(self) -> None:
+        # The resolver takes the first union branch that declares a key, and
+        # folds a multi-type location by priority. Against the pinned schema
+        # neither rule may decide a result, so a pin move that makes one decide
+        # fails here (design Decision 1).
+        multi_type: list[str] = []
+        split_key: list[str] = []
+        pending: list[Any] = [_SCHEMA.root, *_SCHEMA.defs.values()]
+        seen: set[int] = set()
+        while pending:
+            node = pending.pop()
+            if isinstance(node, list):
+                pending.extend(node)
+                continue
+            if not isinstance(node, dict) or id(node) in seen:
+                continue
+            seen.add(id(node))
+            pending.extend(node.values())
+            locations = list(node.get("properties", {}).items())
+            if "items" in node:
+                locations.append(("[]", node["items"]))
+            for key, sub in locations:
+                if len(_SCHEMA.scalar_types(sub)) > 1:
+                    multi_type.append(key)
+            if "anyOf" in node or "oneOf" in node:
+                by_key: dict[str, set[str]] = {}
+                for branch in _SCHEMA.branches(node):
+                    props = _SCHEMA.deref(branch).get("properties", {})
+                    for key, sub in props.items():
+                        base = _SCHEMA.base_type(sub)
+                        if base is not None:
+                            by_key.setdefault(key, set()).add(base)
+                split_key += [k for k, types in by_key.items() if len(types) > 1]
+        assert not multi_type, f"locations with more than one scalar type: {multi_type}"
+        assert not split_key, f"union keys with two scalar types: {split_key}"
 
 
 # --- Task 2.2: scalar typing (YML-004.01 .. YML-004.10) --------------------
 
-_SCALAR_YAML = textwrap.dedent(
-    """\
-    catalog:
-      uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-      metadata:
-        title: {title}
-        last-modified: 2024-01-02T03:04:05Z
-        version: {version}
-        oscal-version: 1.2.3
-    """
+
+def _component_with_start(start: str) -> str:
+    return textwrap.dedent(
+        f"""\
+        component-definition:
+          uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d43
+          metadata:
+            title: T
+            last-modified: 2024-01-02T03:04:05Z
+            version: "1.0"
+            oscal-version: 1.2.3
+          components:
+            - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d44
+              type: service
+              title: S
+              description: d
+              protocols:
+                - name: https
+                  port-ranges:
+                    - {{start: {start}, end: 443}}
+        """
+    )
+
+
+def _profile_with_as_is(value: str) -> str:
+    return textwrap.dedent(
+        f"""\
+        profile:
+          uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
+          metadata:
+            title: T
+            last-modified: 2024-01-02T03:04:05Z
+            version: "1.0"
+            oscal-version: 1.2.3
+          imports:
+            - href: https://example.com/c.json
+              include-all: {{}}
+          merge:
+            as-is: {value}
+        """
+    )
+
+
+START_LOC = (
+    "component-definition",
+    "components",
+    0,
+    "protocols",
+    0,
+    "port-ranges",
+    0,
+    "start",
 )
-
-
-def _parse_catalog_metadata(title: str = "T", version: str = '"1.0"') -> dict:
-    doc = parse_oscal_yaml(_SCALAR_YAML.format(title=title, version=version))
-    return _json_value(doc)["catalog"]["metadata"]
 
 
 class TestScalarTyping:
     def test_number_form_at_string_location_stays_string(self) -> None:
-        # YML-004.01: version 1.0 at a string location is the string "1.0".
-        md = _parse_catalog_metadata(version="1.0")
-        assert md["version"] == "1.0"
+        # YML-004.01.
+        assert _metadata("props: [{name: a, value: 1.0}]")["props"][0]["value"] == "1.0"
 
     def test_boolean_form_at_string_location_stays_string(self) -> None:
-        # YML-004.03: title yes is the string "yes".
-        md = _parse_catalog_metadata(title="yes")
-        assert md["title"] == "yes"
+        # YML-004.03.
+        assert _metadata("props: [{name: a, value: yes}]")["props"][0]["value"] == "yes"
 
     def test_null_forms_at_string_location(self) -> None:
-        # YML-004.04: plain null, ~, and empty keep their text at a string loc.
-        y = textwrap.dedent(
+        # YML-004.04: plain null, ~, and empty keep their text.
+        md = _metadata(
             """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-                props:
-                  - {name: a, value: x, remarks: null}
-                  - {name: b, value: y, remarks: ~}
-                  - {name: c, value: z, remarks: }
+            props:
+              - {name: a, value: x, remarks: null}
+              - {name: b, value: y, remarks: ~}
+              - {name: c, value: z, remarks: }
             """
         )
-        props = _json_value(parse_oscal_yaml(y))["catalog"]["metadata"]["props"]
-        assert [p["remarks"] for p in props] == ["null", "~", ""]
+        assert [p["remarks"] for p in md["props"]] == ["null", "~", ""]
 
     def test_scalar_tag_ignored_at_string_location(self) -> None:
         # YML-004.05: !!int 7 at a string location is the string "7".
-        y = textwrap.dedent(
-            """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-                props:
-                  - {name: a, value: !!int 7}
-            """
+        assert (
+            _metadata("props: [{name: a, value: !!int 7}]")["props"][0]["value"] == "7"
         )
-        props = _json_value(parse_oscal_yaml(y))["catalog"]["metadata"]["props"]
-        assert props[0]["value"] == "7"
-
-    def _component_definition_with_start(self, start: str) -> object:
-        y = textwrap.dedent(
-            f"""\
-            component-definition:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d43
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-              components:
-                - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d44
-                  type: service
-                  title: S
-                  description: d
-                  protocols:
-                    - name: https
-                      port-ranges:
-                        - {{start: {start}, end: 443}}
-            """
-        )
-        return parse_oscal_yaml(y)
 
     def test_quoted_scalar_at_number_location_is_number(self) -> None:
-        # YML-004.06: "443" at a number location is the number 443.
-        doc = self._component_definition_with_start('"443"')
+        # YML-004.06.
+        doc = parse_oscal_yaml(_component_with_start('"443"'))
         cd = _json_value(doc)["component-definition"]
-        pr = cd["components"][0]["protocols"][0]["port-ranges"][0]
-        assert pr["start"] == 443
+        assert cd["components"][0]["protocols"][0]["port-ranges"][0]["start"] == 443
 
-    @pytest.mark.parametrize("bad", ["0x1BB", "+443", "007"])
-    def test_bad_number_form_is_parse_error(self, bad: str) -> None:
-        # YML-004.07, YML-004.10: hex, plus sign, leading zero are grammar
-        # errors at a number location.
-        with pytest.raises(OscalParseError):
-            self._component_definition_with_start(bad)
-
-    def test_number_grammar_error_names_its_location(self) -> None:
-        # YML-010.01 / PRS-006: the parse error carries a structured entry whose
-        # location identifies the offending start scalar.
-        with pytest.raises(OscalParseError) as info:
-            self._component_definition_with_start("0x1BB")
-        error = info.value
-        assert error.errors, "the error carries no structured entry"
-        entry = error.errors[0]
-        assert "loc" in entry
-        assert "line" in entry["loc"]
-        assert "column" in entry["loc"]
+    @pytest.mark.parametrize("bad", ["0x1BB", "+443", "007", "1.", ".5", "1e"])
+    def test_bad_number_form_is_a_located_grammar_error(self, bad: str) -> None:
+        # YML-004.07, YML-004.10, YML-010.01.
+        entry = _yaml_error(_component_with_start(bad))
+        assert entry["type"] == "yaml_number_grammar"
+        assert entry["loc"] == START_LOC
+        assert entry["input"] == bad
 
     def test_boolean_location_rejects_non_boolean_text(self) -> None:
-        # YML-004.08: yes at a boolean location is a parse error.
-        y = textwrap.dedent(
-            """\
-            profile:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-              imports:
-                - href: https://example.com/c.json
-                  include-all: {}
-              merge:
-                as-is: yes
-            """
-        )
-        with pytest.raises(OscalParseError):
-            parse_oscal_yaml(y)
+        # YML-004.08.
+        entry = _yaml_error(_profile_with_as_is("yes"))
+        assert entry["type"] == "yaml_boolean_grammar"
+        assert entry["loc"] == ("profile", "merge", "as-is")
 
     def test_true_at_boolean_location_is_boolean(self) -> None:
-        y = textwrap.dedent(
-            """\
-            profile:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-              imports:
-                - href: https://example.com/c.json
-                  include-all: {}
-              merge:
-                as-is: true
-            """
-        )
-        merge = _json_value(parse_oscal_yaml(y))["profile"]["merge"]
+        merge = _json_value(parse_oscal_yaml(_profile_with_as_is("true")))["profile"][
+            "merge"
+        ]
         assert merge["as-is"] is True
 
+    def test_alias_is_read_at_its_own_location(self) -> None:
+        # YML-009.01: one anchored scalar is a number at `start` and a string at
+        # a property `value`.
+        text = _component_with_start("&n 443") + "      props: [{name: p, value: *n}]\n"
+        cd = _json_value(parse_oscal_yaml(text))["component-definition"]["components"][
+            0
+        ]
+        assert cd["protocols"][0]["port-ranges"][0]["start"] == 443
+        assert cd["props"][0]["value"] == "443"
 
-# --- Task 2.3: node-layer structure rules ----------------------------------
+
+class TestErrorEntryShape:
+    def test_yaml_and_pydantic_entries_share_keys(self) -> None:
+        # Task 2.7: one loop handles both kinds of entry.
+        grammar = _yaml_error(_component_with_start("0x1BB"))
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(HEAD + "    colour: blue\n")
+        pydantic_entry = info.value.errors[0]
+        for entry in (grammar, pydantic_entry):
+            assert isinstance(entry["type"], str)
+            assert isinstance(entry["loc"], tuple)
+            assert isinstance(entry["msg"], str)
+            assert "input" in entry
+        line = _component_with_start("0x1BB").splitlines()[15]
+        assert (grammar["line"], grammar["column"]) == (16, line.index("0x1BB") + 1)
+
+
+# --- Task 2.3: structure rules -----------------------------------------------
 
 
 class TestStructureRules:
     def test_duplicate_key_is_parse_error(self) -> None:
         # YML-003.
-        y = textwrap.dedent(
-            """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: A
-                title: B
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-            """
-        )
-        with pytest.raises(OscalParseError, match="duplicate key"):
-            parse_oscal_yaml(y)
+        entry = _yaml_error(HEAD + "    title: B\n")
+        assert entry["type"] == "yaml_duplicate_key"
+        assert entry["loc"] == ("catalog", "metadata", "title")
 
     def test_same_text_keys_are_parse_error(self) -> None:
         # YML-003.03: a plain key and its quoted form share the same text.
-        y = textwrap.dedent(
-            """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: A
-                "title": B
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-            """
-        )
-        with pytest.raises(OscalParseError, match="duplicate key"):
-            parse_oscal_yaml(y)
+        assert _yaml_error(HEAD + '    "title": B\n')["type"] == "yaml_duplicate_key"
+
+    def test_aliased_key_with_same_text_is_parse_error(self) -> None:
+        text = HEAD.replace("title: T", "title: &k title") + "    *k : B\n"
+        assert _yaml_error(text)["type"] == "yaml_duplicate_key"
 
     def test_non_scalar_key_is_parse_error(self) -> None:
-        # YML-003.02: a sequence used as a key.
-        y = textwrap.dedent(
-            """\
-            catalog:
-              ? [a, b]
-              : c
-            """
+        # YML-003.02.
+        assert (
+            _yaml_error("catalog:\n  ? [a, b]\n  : c\n")["type"]
+            == "yaml_key_not_scalar"
         )
-        with pytest.raises(OscalParseError, match="not a scalar"):
-            parse_oscal_yaml(y)
 
     def test_merge_key_is_unknown_field(self) -> None:
         # YML-009.04: << is an ordinary key, so Pydantic rejects it as unknown.
-        y = textwrap.dedent(
-            """\
-            catalog: &c
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-                <<:
-                  extra: value
-            """
-        )
-        with pytest.raises(OscalParseError):
-            parse_oscal_yaml(y)
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(HEAD + "    <<: {title: X}\n")
+        assert any(e["loc"][-1] == "<<" for e in info.value.errors), info.value.errors
 
     def test_omap_tag_reads_as_array(self) -> None:
-        # YML-009.03: a sequence tagged !!omap reads as an array.
-        y = textwrap.dedent(
-            """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-              back-matter:
-                resources: !!omap
-                  - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d43
-            """
+        # YML-009.03.
+        doc = parse_oscal_yaml(
+            HEAD + "  back-matter:\n    resources: !!omap\n"
+            "      - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d43\n"
         )
-        bm = _json_value(parse_oscal_yaml(y))["catalog"]["back-matter"]
-        assert isinstance(bm["resources"], list)
+        assert isinstance(_json_value(doc)["catalog"]["back-matter"]["resources"], list)
 
     def test_alias_inside_own_anchored_node_is_parse_error(self) -> None:
-        # YML-009.02: a mapping anchored as &a that holds the alias *a.
-        y = textwrap.dedent(
-            """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d44
-              metadata: &m
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-                extra: *m
-            """
+        # YML-009.02.
+        text = HEAD.replace("  metadata:", "  metadata: &m") + "    extra: *m\n"
+        assert _yaml_error(text)["type"] == "yaml_alias_cycle"
+
+    def test_undefined_alias_is_parse_error(self) -> None:
+        assert (
+            _yaml_error(HEAD + "    remarks: *nope\n")["type"] == "yaml_undefined_alias"
         )
-        with pytest.raises(OscalParseError, match="own anchored node"):
-            parse_oscal_yaml(y)
+
+    def test_later_anchor_redefines_an_earlier_one(self) -> None:
+        # YAML 1.2: an alias refers to the most recent node with its anchor.
+        md = _metadata("remarks: &r first\nprops: [{name: &r a, value: *r}]\n")
+        assert md["props"][0]["value"] == "a"
 
 
 # --- Task 2.4: input-stream rules (YML-002) --------------------------------
@@ -370,34 +366,85 @@ class TestStructureRules:
 
 class TestStreamRules:
     def test_invalid_utf8_is_parse_error(self) -> None:
-        # PRS-001.03: the binding decodes and maps the failure to OscalParseError.
-        with pytest.raises(OscalParseError, match="UTF-8"):
-            parse_oscal_yaml(b"\xff\xfe\x00catalog")
+        entry = _yaml_error(b"catalog:\n  \xff\xfe\n")
+        assert entry["type"] == "yaml_encoding"
+        assert (entry["line"], entry["column"]) == (2, 3)
 
     def test_utf16_bytes_are_rejected(self) -> None:
-        # YML-002.04: UTF-16 with a BOM must be rejected, not decoded by PyYAML.
-        data = MINIMAL_CATALOG_YAML.encode("utf-16")
-        with pytest.raises(OscalParseError):
-            parse_oscal_yaml(data)
+        # YML-002.04.
+        assert _yaml_error(HEAD.encode("utf-16"))["type"] == "yaml_encoding"
 
     def test_no_document_is_parse_error(self) -> None:
         # YML-002.03.
-        with pytest.raises(OscalParseError, match="no document"):
-            parse_oscal_yaml("# only a comment\n")
+        assert (
+            _yaml_error("# only a comment\n")["msg"] == "YAML input holds no document"
+        )
 
     def test_two_documents_is_parse_error(self) -> None:
         # YML-002.02.
-        y = MINIMAL_CATALOG_YAML + "---\n" + MINIMAL_CATALOG_YAML
-        with pytest.raises(OscalParseError, match="more than one document"):
-            parse_oscal_yaml(y)
+        entry = _yaml_error(HEAD + "---\n" + HEAD)
+        assert entry["msg"] == "YAML input holds more than one document"
 
     def test_syntax_error_is_parse_error(self) -> None:
-        # YML-002.01: a flow sequence with no closing bracket.
-        with pytest.raises(OscalParseError, match="Invalid YAML"):
-            parse_oscal_yaml("catalog: [a, b\n")
+        # YML-002.01.
+        assert _yaml_error("catalog: [a, b\n")["type"] == "yaml_syntax"
 
 
-# --- Task 3.1: parse_oscal_yaml --------------------------------------------
+# --- Task 2.6: YAML 1.1 line-break characters are content -----------------
+
+BREAKS = ["\x85", "\u2028", "\u2029"]
+
+
+class TestYaml11LineBreaks:
+    @pytest.mark.parametrize("ch", BREAKS)
+    @pytest.mark.parametrize(
+        "form",
+        ["plain", "single", "double", "literal", "key"],
+    )
+    def test_character_is_content(self, ch: str, form: str) -> None:
+        text = {
+            "plain": f"a: x{ch}y\n",
+            "single": f"a: 'x{ch}y'\n",
+            "double": f'a: "x{ch}y"\n',
+            "literal": f"a: |\n  x{ch}y\n",
+            "key": f"x{ch}y: a\n",
+        }[form]
+        expected = {"key": {f"x{ch}y": "a"}, "literal": {"a": f"x{ch}y\n"}}.get(
+            form, {"a": f"x{ch}y"}
+        )
+        assert json.loads(to_json_text(text)) == expected
+
+    @pytest.mark.parametrize("ch", BREAKS)
+    def test_parse_equals_the_json_path(self, ch: str) -> None:
+        # YML-005: the YAML result equals the JSON result for the same value.
+        text = HEAD.replace("title: T", f"title: 'a{ch}b'")
+        json_text = MINIMAL_CATALOG_JSON.replace('"T"', json.dumps(f"a{ch}b"))
+        assert _json_value(parse_oscal_yaml(text)) == _json_value(
+            ob.parse_oscal(json_text)
+        )
+
+    def test_escape_that_names_a_private_use_character_keeps_it(self) -> None:
+        text = 'a: "\\uE000"\nb: "x\x85y"\nc: "\\U0000E001"\n'
+        assert json.loads(to_json_text(text)) == {
+            "a": "\ue000",
+            "b": "x\x85y",
+            "c": "\ue001",
+        }
+
+    def test_raw_private_use_characters_survive(self) -> None:
+        text = "a: \ue000\ue001\ue002\nb: x\u2028y\n"
+        assert json.loads(to_json_text(text)) == {
+            "a": "\ue000\ue001\ue002",
+            "b": "x\u2028y",
+        }
+
+    def test_no_free_placeholder_is_parse_error(self) -> None:
+        every = "".join(chr(cp) for cp in range(0xE000, 0xF900))
+        entry = _yaml_error(f"a: {every}\nb: x\x85y\n")
+        assert entry["type"] == "yaml_line_break_placeholder"
+
+
+# --- Task 3.1, 3.2: parse operations ------------------------------------------
 
 
 class TestParseOscalYaml:
@@ -412,36 +459,24 @@ class TestParseOscalYaml:
     def test_same_result_as_json_parse(self) -> None:
         # YML-005.02.
         yaml_doc = parse_oscal_yaml(MINIMAL_CATALOG_YAML)
-        json_doc = ob.parse_oscal(MINIMAL_CATALOG_JSON)
-        assert _canon(_json_value(yaml_doc)) == _canon(_json_value(json_doc))
+        assert _json_value(yaml_doc) == _json_value(
+            ob.parse_oscal(MINIMAL_CATALOG_JSON)
+        )
 
     def test_unknown_field_is_parse_error(self) -> None:
         # YML-005.03 / PRS-004.
-        y = textwrap.dedent(
-            """\
-            catalog:
-              uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41
-              metadata:
-                title: T
-                last-modified: 2024-01-02T03:04:05Z
-                version: "1.0"
-                oscal-version: 1.2.3
-                colour: blue
-            """
-        )
         with pytest.raises(OscalParseError):
-            parse_oscal_yaml(y)
-
-
-# --- Task 3.2: parse_oscal_yaml_file ---------------------------------------
+            parse_oscal_yaml(HEAD + "    colour: blue\n")
 
 
 class TestParseOscalYamlFile:
     def test_parses_existing_file(self, tmp_path) -> None:
         path = tmp_path / "catalog.yaml"
         path.write_text(MINIMAL_CATALOG_YAML, encoding="utf-8")
-        doc = parse_oscal_yaml_file(path)
-        assert _canon(_json_value(doc)) == _canon(json.loads(MINIMAL_CATALOG_JSON))
+        assert _canon(_json_value(parse_oscal_yaml_file(path))) == _canon(
+            json.loads(MINIMAL_CATALOG_JSON)
+        )
+        assert _json_value(parse_oscal_yaml_file(str(path)))["catalog"]
 
     def test_missing_file_reports_not_found(self, tmp_path) -> None:
         # YML-006 / PRS-002: not-found is distinct from the parse error.
@@ -452,314 +487,251 @@ class TestParseOscalYamlFile:
         assert not isinstance(info.value, OscalParseError)
 
 
-# --- Task 3.3: serialize_oscal_yaml ----------------------------------------
+# --- Task 3.3: serialize_oscal_yaml -------------------------------------------
+
+
+def _values(value: Any) -> list[Any]:
+    pending, out = [value], []
+    while pending:
+        v = pending.pop()
+        out.append(v)
+        if isinstance(v, dict):
+            pending.extend(v.values())
+        elif isinstance(v, list):
+            pending.extend(v)
+    return out
 
 
 class TestSerializeOscalYaml:
     def test_version_string_survives_round_trip(self) -> None:
-        # YML-008.02: a string "1.0" stays a string after serialize and parse.
-        doc = parse_oscal_yaml(MINIMAL_CATALOG_YAML)
-        out = serialize_oscal_yaml(doc)
-        reparsed = parse_oscal_yaml(out)
-        assert _json_value(reparsed)["catalog"]["metadata"]["version"] == "1.0"
+        # YML-008.02.
+        out = serialize_oscal_yaml(
+            parse_oscal_yaml(MINIMAL_CATALOG_YAML.replace('"1.0"', "1.0"))
+        )
+        assert (
+            _json_value(parse_oscal_yaml(out))["catalog"]["metadata"]["version"]
+            == "1.0"
+        )
 
     def test_output_holds_no_null(self) -> None:
-        # YML-008.03.
-        doc = parse_oscal_yaml(MINIMAL_CATALOG_YAML)
+        # YML-008.03: the loaded output holds no None at any depth, including
+        # for a document whose string values spell `null`.
+        doc = parse_oscal_yaml(
+            HEAD + "    props: [{name: a, value: null, remarks: ~}]\n"
+        )
+        loaded = yaml.safe_load(serialize_oscal_yaml(doc))
+        assert None not in _values(loaded)
+
+    @pytest.mark.parametrize("ch", BREAKS)
+    def test_line_break_character_survives_round_trip(self, ch: str) -> None:
+        doc = parse_oscal_yaml(HEAD.replace("title: T", f"title: 'a{ch}b'"))
         out = serialize_oscal_yaml(doc)
-        assert "null" not in out
+        assert ch not in out, "the character must be written as an escape"
+        title = _json_value(parse_oscal_yaml(out))["catalog"]["metadata"]["title"]
+        assert title == f"a{ch}b"
+        assert yaml.safe_load(out)["catalog"]["metadata"]["title"] == f"a{ch}b"
 
 
-# --- Task 3.4: re-export and import guard -----------------------------------
+# --- Tasks 4.1, 6.1, 8.1: resource limits -------------------------------------
+
+NODE_LIMIT_MSG = re.escape(f"limit of {ALIAS_NODE_LIMIT:,} nodes")
+CHAR_LIMIT_MSG = re.escape(f"limit of {ALIAS_CHAR_LIMIT:,} characters")
+DEPTH_LIMIT_MSG = re.escape(f"depth limit of {DEPTH_LIMIT}")
 
 
-class TestPublicSurface:
-    def test_names_import_from_top_level(self) -> None:
-        from oscal_bindings import (
-            parse_oscal_yaml,
-            parse_oscal_yaml_file,
-            serialize_oscal_yaml,
-        )
+def _wide_alias(width: int, copies: int) -> str:
+    """Anchor a sequence of ``width`` scalars and repeat it ``copies`` times.
 
-        assert callable(parse_oscal_yaml)
-        assert callable(parse_oscal_yaml_file)
-        assert callable(serialize_oscal_yaml)
-
-    def test_v1_all_carries_them(self) -> None:
-        from oscal_bindings import v1
-
-        for name in (
-            "parse_oscal_yaml",
-            "parse_oscal_yaml_file",
-            "serialize_oscal_yaml",
-        ):
-            assert name in v1.__all__
-
-    def test_yaml_io_import_without_extra_raises_install_hint(
-        self, monkeypatch
-    ) -> None:
-        # Importing the yaml_io submodule directly still fails fast with a hint.
-        real_import = builtins.__import__
-
-        def fake_import(name, *args, **kwargs):
-            if name == "yaml" or name.startswith("yaml."):
-                message = "No module named 'yaml'"
-                raise ImportError(message)
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", fake_import)
-        monkeypatch.delitem(
-            sys.modules, "oscal_bindings.v1.extensions.yaml_io", raising=False
-        )
-        with pytest.raises(ImportError, match=r"oscal-bindings\[yaml\]"):
-            import oscal_bindings.v1.extensions.yaml_io  # noqa: F401
-
-
-# --- Task 8.2: the base install (no `yaml` extra) works for non-YAML paths -
-
-
-def _run_without_yaml(body: str) -> subprocess.CompletedProcess[str]:
-    """Run ``body`` in a fresh interpreter where importing `yaml` fails.
-
-    A `sys.meta_path` finder blocks `yaml` (and submodules), simulating a base
-    install without the extra. The body runs after the block is in place.
+    Each copy charges ``width + 1`` nodes. The copies sit at string locations,
+    so Pydantic reports one error per copy, not one per scalar.
     """
-    prelude = textwrap.dedent(
-        """\
-        import sys, importlib.abc, importlib.machinery
-
-        class _BlockYaml(importlib.abc.MetaPathFinder):
-            def find_spec(self, name, path, target=None):
-                if name == "yaml" or name.startswith("yaml."):
-                    raise ImportError("No module named 'yaml'")
-                return None
-
-        sys.meta_path.insert(0, _BlockYaml())
-        for _m in list(sys.modules):
-            if _m == "yaml" or _m.startswith("yaml."):
-                del sys.modules[_m]
-        """
-    )
-    return subprocess.run(  # noqa: S603 - fixed interpreter, no shell
-        [sys.executable, "-c", prelude + textwrap.dedent(body)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    items = ", ".join(["x"] * width)
+    lines = [HEAD, f"    remarks: &w [{items}]\n", "    props:\n"]
+    lines += ["      - {name: n, value: v, remarks: *w}\n" for _ in range(copies)]
+    return "".join(lines)
 
 
-class TestBaseInstallWithoutYaml:
+def _scalar_alias(size: int, copies: int) -> str:
+    """Anchor one scalar of ``size`` characters and repeat it ``copies`` times."""
+    lines = [HEAD, f"    remarks: &s {'x' * size}\n", "    props:\n"]
+    lines += ["      - {name: n, value: v, remarks: *s}\n" for _ in range(copies)]
+    return "".join(lines)
+
+
+def _nested_alias(levels: int, width: int = 10) -> str:
+    """A billion-laughs input: each level repeats the level below ``width`` times."""
+    lines = [HEAD, "    a0: &a0 [x]\n"]
+    for i in range(1, levels + 1):
+        refs = ", ".join([f"*a{i - 1}"] * width)
+        lines.append(f"    a{i}: &a{i} [{refs}]\n")
+    return "".join(lines)
+
+
+def _nested(depth: int) -> str:
+    """A catalog whose `remarks` holds sequences nested to node depth ``depth``.
+
+    Three mappings hold the value of `remarks`: the root, the `catalog` value,
+    and the `metadata` value. So the outermost sequence is at depth 3, and the
+    innermost one is at depth ``depth``.
+    """
+    n = depth - 2
+    return HEAD + "    remarks: " + "[" * n + "]" * n + "\n"
+
+
+def _not_a_limit(text: str) -> None:
+    """Parse ``text`` and require that no YAML-layer limit rejects it."""
+    errors: list[Any] = []
+    try:
+        parse_oscal_yaml(text)
+    except OscalParseError as exc:
+        errors = exc.errors
+    kinds = {e.get("type") for e in errors}
+    assert not kinds & {"yaml_alias_budget", "yaml_depth_limit"}, errors
+
+
+class TestAliasBudget:
+    def test_scalar_alias_bomb_is_rejected_by_the_character_limit(self) -> None:
+        # 14 KB of input repeats a 10,000-character scalar 101 times.
+        text = _scalar_alias(10_000, 101)
+        assert len(text) < 16_000
+        with pytest.raises(OscalParseError, match=CHAR_LIMIT_MSG):
+            parse_oscal_yaml(text)
+
+    def test_large_scalar_alias_bomb_is_rejected(self) -> None:
+        with pytest.raises(OscalParseError, match=CHAR_LIMIT_MSG):
+            parse_oscal_yaml(_scalar_alias(10_000, 5_000))
+
+    def test_scalar_aliases_within_the_character_limit_parse(self) -> None:
+        md = _json_value(parse_oscal_yaml(_scalar_alias(10_000, 99)))["catalog"][
+            "metadata"
+        ]
+        assert len(md["props"]) == 99
+        assert md["props"][0]["remarks"] == "x" * 10_000
+
+    def test_nested_collection_alias_bomb_is_rejected_by_the_node_limit(self) -> None:
+        # 30 levels of 10 copies each: about 10**30 nodes from 3 KB of input.
+        text = _nested_alias(30)
+        assert len(text) < 4_000
+        with pytest.raises(OscalParseError, match=NODE_LIMIT_MSG):
+            parse_oscal_yaml(text)
+
+    def test_collection_aliases_past_the_node_limit_are_rejected(self) -> None:
+        # 101 copies of a 1,000-node sequence charge 101,000 nodes.
+        with pytest.raises(OscalParseError, match=NODE_LIMIT_MSG) as info:
+            parse_oscal_yaml(_wide_alias(999, 101))
+        assert info.value.errors[0]["type"] == "yaml_alias_budget"
+
+    def test_collection_aliases_within_the_node_limit_are_not_rejected(self) -> None:
+        # 99 copies of a 1,000-node sequence charge 99,000 nodes.
+        _not_a_limit(_wide_alias(999, 99))
+
+    def test_alias_to_a_collection_of_about_one_hundred_entries_parses(self) -> None:
+        items = "".join(f"      - {{name: n{i}, value: v}}\n" for i in range(100))
+        resources = "".join(
+            f"    - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d5{i}\n      props: *p\n"
+            for i in range(3)
+        )
+        text = (
+            HEAD
+            + "    props: &p\n"
+            + items
+            + "  back-matter:\n    resources:\n"
+            + resources
+        )
+        bm = _json_value(parse_oscal_yaml(text))["catalog"]["back-matter"]
+        assert [len(r["props"]) for r in bm["resources"]] == [100, 100, 100]
+
+    def test_content_without_aliases_does_not_charge_the_budget(self) -> None:
+        # 2,000 written props hold more nodes and characters than the alias
+        # limits would admit through aliases, and they parse.
+        filler = "y" * 600
+        items = "".join(
+            f"      - {{name: n{i}, value: '{filler}'}}\n" for i in range(2_000)
+        )
+        assert len(items) > ALIAS_CHAR_LIMIT
+        md = _json_value(parse_oscal_yaml(HEAD + "    props:\n" + items))["catalog"][
+            "metadata"
+        ]
+        assert len(md["props"]) == 2_000
+
+
+class TestDepthLimit:
+    def test_input_at_the_depth_limit_is_not_rejected_for_depth(self) -> None:
+        assert json.loads(to_json_text(_nested(DEPTH_LIMIT)))
+        _not_a_limit(_nested(DEPTH_LIMIT))
+
+    def test_input_past_the_depth_limit_is_rejected(self) -> None:
+        with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG) as info:
+            parse_oscal_yaml(_nested(DEPTH_LIMIT + 1))
+        assert info.value.errors[0]["type"] == "yaml_depth_limit"
+
+    def test_very_deep_input_is_rejected_by_the_documented_limit(self) -> None:
+        # No stack limit of the runtime rejects it first (YML-011).
+        with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG):
+            parse_oscal_yaml(_nested(100_000))
+
+    def test_block_style_deep_input_is_rejected_by_the_documented_limit(self) -> None:
+        text = "".join(f"{' ' * i}k:\n" for i in range(2_000)) + " " * 2_000 + "k: v\n"
+        with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG):
+            parse_oscal_yaml(text)
+
+    def test_aliases_that_nest_past_the_limit_are_rejected(self) -> None:
+        # The anchored value nests 100 levels, and the alias sits 100 levels
+        # deep. Each is within the limit, and the expanded value is not.
+        inner = "[" * 100 + "]" * 100
+        outer = "[" * 100 + "*d" + "]" * 100
+        text = HEAD + f"    remarks: &d {inner}\n    x: {outer}\n"
+        assert json.loads(to_json_text(HEAD + f"    remarks: &d {inner}\n"))
+        with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG):
+            parse_oscal_yaml(text)
+
+
+class TestNumberBoundary:
+    def test_oversized_number_is_a_parse_error_on_both_paths(self) -> None:
+        # Task 6.1: a token past CPython's integer-string digit limit.
+        digits = "9" * 5_000
+        with pytest.raises(OscalParseError):
+            parse_oscal_yaml(_component_with_start(digits))
+        json_text = to_json_text(_component_with_start("443"))
+        assert '"start":443' in json_text
+        json_text = json_text.replace('"start":443', f'"start":{digits}')
+        with pytest.raises(OscalParseError):
+            ob.parse_oscal(json_text)
+
+
+class TestMemory:
     @pytest.mark.parametrize(
-        "stmt",
+        "text",
         [
-            "import oscal_bindings",
-            "from oscal_bindings import *",
-            "import oscal_bindings.extensions",
-            "from oscal_bindings.extensions import *",
-            "import oscal_bindings.v1",
-            "from oscal_bindings.v1 import *",
-            "from oscal_bindings import parse_oscal, OscalDoc, make_hash",
+            pytest.param(_wide_alias(999, 99), id="node-limit"),
+            pytest.param(_scalar_alias(10_000, 99), id="character-limit"),
+            pytest.param(_nested_alias(4), id="nested"),
         ],
     )
-    def test_import_path_works_without_yaml(self, stmt: str) -> None:
-        # Review finding #1: no import path may require PyYAML on a base install.
-        proc = _run_without_yaml(f"{stmt}\nprint('ok')\n")
-        assert proc.returncode == 0, proc.stderr
-        assert "ok" in proc.stdout
-
-    def test_calling_a_yaml_op_raises_the_install_hint(self) -> None:
-        # Only a call touches PyYAML, and then it raises the hint.
-        proc = _run_without_yaml(
-            """
-            from oscal_bindings import parse_oscal_yaml
-            try:
-                parse_oscal_yaml("catalog: {}")
-            except ImportError as exc:
-                print("HINT" if "oscal-bindings[yaml]" in str(exc) else "NO-HINT")
-            else:
-                print("NO-RAISE")
-            """
-        )
-        assert proc.returncode == 0, proc.stderr
-        assert "HINT" in proc.stdout
-
-    def test_top_level_yaml_name_is_not_any_at_runtime(self) -> None:
-        # Review finding #5: the top-level name resolves to the real function,
-        # not a dynamic `__getattr__` fallback. The static-type guarantee is
-        # verified by mypy over the top-level surface (tests/typing/, checked by
-        # `hatch run typing`); this runtime check pins that the name is the same
-        # object as the v1 wrapper, i.e. a genuine re-export, not a shim.
-        import oscal_bindings
-        import oscal_bindings.v1
-
-        assert oscal_bindings.parse_oscal_yaml is oscal_bindings.v1.parse_oscal_yaml
-        assert type(oscal_bindings.parse_oscal_yaml).__name__ == "function"
+    def test_input_just_under_a_limit_stays_small(self, text: str) -> None:
+        # The design bound: below 100 MB of traced memory at a limit.
+        tracemalloc.start()
+        try:
+            _not_a_limit(text)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert peak < 100_000_000, peak
 
 
-# --- Tasks 4.1, 6.1, 8.1: resource limits, adversarial and accept-side -----
-
-
-def _catalog_with_props(props_yaml: str) -> str:
-    """A minimal valid catalog whose metadata props block is ``props_yaml``."""
-    return (
-        "catalog:\n"
-        "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
-        "  metadata:\n"
-        "    title: T\n"
-        "    last-modified: 2024-01-02T03:04:05Z\n"
-        '    version: "1.0"\n'
-        "    oscal-version: 1.2.3\n"
-        "    props:\n" + props_yaml
+def test_large_real_catalog_without_aliases_parses(
+    nist_docs: list[CorpusDoc], yaml_parser: str
+) -> None:
+    # SP 800-53 rev5 has 322,628 nodes and 3,963,105 characters, both past the
+    # alias limits, and holds no alias (design Decision 3).
+    if yaml_parser != "libyaml":
+        pytest.skip("one parser is enough for the size check")
+    raw = next(
+        d.raw_bytes
+        for d in nist_docs
+        if d.rel_path.endswith("NIST_SP-800-53_rev5_catalog.json")
     )
-
-
-class TestResourceLimit:
-    @pytest.mark.slow
-    def test_collection_alias_bomb_is_parse_error(self) -> None:
-        # A billion-laughs expansion: each level references the one below twice,
-        # so the materialized value grows multiplicatively past the budget. A
-        # small input that must NOT be accepted (review finding #3).
-        lines = [
-            (
-                "      - name: a0\n"
-                "        value: v\n"
-                "        props: &a0\n"
-                "          - {name: x, value: y}\n"
-            )
-        ]
-        for i in range(1, 24):
-            prev = f"a{i - 1}"
-            lines.append(
-                f"      - name: a{i}\n        value: v\n        props: &a{i}\n"
-                f"          - {{name: x, value: y, props: *{prev}}}\n"
-                f"          - {{name: x, value: y, props: *{prev}}}\n"
-            )
-        y = _catalog_with_props("".join(lines))
-        with pytest.raises(OscalParseError, match="budget"):
-            parse_oscal_yaml(y)
-
-    @pytest.mark.slow
-    def test_alias_bomb_over_sequences_is_parse_error(self) -> None:
-        # A billion-laughs over sequences: a small input whose nested aliased
-        # sequences expand past the node budget. The old design exempted scalar
-        # aliases and under-counted this class (review finding #4). It must be a
-        # parse error, not a success or a hang.
-        with pytest.raises(OscalParseError, match="budget"):
-            parse_oscal_yaml(_scalar_sequence_bomb())
-
-    def test_deep_nesting_is_parse_error(self) -> None:
-        # Deep nesting must be a parse error, not an uncaught RecursionError
-        # (review finding #2).
-        depth = DEPTH_LIMIT + 50
-        inner = "[" * depth + "]" * depth
-        y = _catalog_with_props(f"      - {{name: a, value: v, props: {inner}}}\n")
-        with pytest.raises(OscalParseError):
-            parse_oscal_yaml(y)
-
-    def test_oversized_number_is_parse_error(self) -> None:
-        # A numeric token past CPython's integer-string digit limit must surface
-        # as OscalParseError, not a bare ValueError (review finding #7).
-        digits = "9" * 5000
-        with pytest.raises(OscalParseError):
-            parse_oscal_yaml(_component_with_port(digits))
-
-    def test_bounded_collection_aliasing_parses(self) -> None:
-        # Accept side: an alias to a ~100-entry collection parses. The old design
-        # rejected this (review finding #3); it must now be accepted. The props
-        # block is anchored under metadata (a valid props location) and the
-        # back-matter resource references it.
-        items = "\n".join(f"      - {{name: n{i}, value: v}}" for i in range(100))
-        y = (
-            "catalog:\n"
-            "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
-            "  metadata:\n"
-            "    title: T\n"
-            "    last-modified: 2024-01-02T03:04:05Z\n"
-            '    version: "1.0"\n'
-            "    oscal-version: 1.2.3\n"
-            "    props: &p\n" + items + "\n"
-            "  back-matter:\n"
-            "    resources:\n"
-            "      - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42\n"
-            "        props: *p\n"
-        )
-        doc = parse_oscal_yaml(y)
-        resources = _json_value(doc)["catalog"]["back-matter"]["resources"]
-        assert len(resources[0]["props"]) == 100
-
-    def test_ordinary_document_with_aliases_parses(self) -> None:
-        # Accept side: modest aliasing in an otherwise ordinary document parses.
-        y = (
-            "catalog:\n"
-            "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
-            "  metadata:\n"
-            "    title: T\n"
-            "    last-modified: 2024-01-02T03:04:05Z\n"
-            '    version: "1.0"\n'
-            "    oscal-version: 1.2.3\n"
-            "    props: &p\n"
-            "      - {name: a, value: v}\n"
-            "  back-matter:\n"
-            "    resources:\n"
-            "      - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42\n"
-            "        props: *p\n"
-        )
-        doc = parse_oscal_yaml(y)
-        assert _json_value(doc)["catalog"]["back-matter"]["resources"]
-
-
-def _scalar_sequence_bomb() -> str:
-    """A small input whose aliased sequences expand past the node budget.
-
-    Classic billion-laughs over sequences of scalars: each anchor is a sequence
-    that references the previous anchor several times, so the emitted-node count
-    grows multiplicatively well past the budget from a small input.
-    """
-    lines = [
-        "catalog:",
-        "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41",
-        "  metadata:",
-        "    title: T",
-        "    last-modified: 2024-01-02T03:04:05Z",
-        '    version: "1.0"',
-        "    oscal-version: 1.2.3",
-        "    props: &a0",
-        "      - {name: x, value: y}",
-    ]
-    for i in range(1, 20):
-        prev = f"*a{i - 1}"
-        lines.append(f"    props{i}: &a{i}")
-        lines.append(f"      - {{name: x, value: y, props: {prev}}}")
-        lines.append(f"      - {{name: x, value: y, props: {prev}}}")
-        lines.append(f"      - {{name: x, value: y, props: {prev}}}")
-    return "\n".join(lines) + "\n"
-
-
-def _component_with_port(start_token: str) -> str:
-    """A component-definition YAML whose port-range start is ``start_token``."""
-    return (
-        "component-definition:\n"
-        "  uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d41\n"
-        "  metadata:\n"
-        "    title: T\n"
-        "    last-modified: 2024-01-02T03:04:05Z\n"
-        '    version: "1.0"\n'
-        "    oscal-version: 1.2.3\n"
-        "  components:\n"
-        "    - uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d42\n"
-        "      type: service\n"
-        "      title: C\n"
-        "      description: d\n"
-        "      protocols:\n"
-        "        - name: p\n"
-        "          port-ranges:\n"
-        f"            - start: {start_token}\n"
-    )
-
-
-def test_module_all_matches_public_functions() -> None:
-    assert set(yaml_io.__all__) == {
-        "parse_oscal_yaml",
-        "parse_oscal_yaml_file",
-        "serialize_oscal_yaml",
-    }
+    text = yaml.dump(json.loads(raw), Dumper=yaml.CSafeDumper, sort_keys=False)
+    events = yaml.parse(text, Loader=yaml.CSafeLoader)
+    assert not any(isinstance(e, yaml.AliasEvent) for e in events)
+    assert _json_value(parse_oscal_yaml(text)) == _json_value(ob.parse_oscal(raw))

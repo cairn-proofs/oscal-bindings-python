@@ -9,6 +9,8 @@
 - [x] 1.2 Add the `yaml` optional extra in `pyproject.toml` with `pyyaml` pinned exactly. Add `pyyaml` and
   `types-PyYAML` to the dev and test environments. Re-lock with `hatch run lock`. Verify the committed lockfiles change
   and `hatch test` collects in the `hatch-test` env.
+- [x] 1.3 Pin `types-PyYAML` exactly in the default env, as every other default-env dependency is. Re-lock with
+  `hatch run lock`. Verify the lockfile diff changes only the stubs line, and `hatch run typing` passes.
 
 ## 2. YAML-to-JSON converter
 
@@ -16,8 +18,8 @@
   It follows `$ref`, folds `allOf` to one base type, and treats a string open-enum `anyOf` as a string location (design
   Decision 1). Verify with a unit test that resolves `start` to a number location, `last-modified` to a string
   location, and a hash `algorithm` to a string location.
-- [x] 2.2 Implement the node walk over the PyYAML composed graph that builds a JSON value, with the scalar typing of
-  design Decision 1:
+- [x] 2.2 Implement the walk over the binding's composed node tree that writes the JSON text, with an explicit stack
+  and no recursion per nesting level, and with the scalar typing of design Decision 1:
   1. A string location emits a quoted string that keeps the scalar's text, including `null`, `~`, and an empty scalar
      as `"null"`, `"~"`, and `""`.
   2. A number or integer location emits a bare JSON number token when the text matches the RFC 8259 number grammar,
@@ -26,12 +28,14 @@
   Verify with unit tests for YML-004.01 through YML-004.10, including `1.0` at a string location, `"443"` at a number
   location, and `+443`, `007`, `0x1BB`, and `yes` at the locations the scenarios name. Verify that a `0x1BB` at a
   `start` location reports a parse error whose structured entry names that `start` location (YML-010.01, PRS-006).
-- [x] 2.3 Enforce the node-layer structure rules in the walk:
+- [x] 2.3 Enforce the node-layer structure rules in the composer and the walk:
   1. Reject a mapping with two keys of the same text, including a plain key and its quoted form (YML-003).
   2. Reject a mapping whose key node is not a scalar, such as a sequence used as a key (YML-003.02).
   3. Key a mapping on the `<<` scalar value, so a merge key is an unknown field (YML-009.04).
   4. Ignore a node tag, so `!!int 7` keeps `"7"` and `!!omap` reads as an array (YML-004.05, YML-009.03).
-  5. Carry an ancestor set and reject an alias inside its own anchored node (YML-009.02).
+  5. Reject an alias to a node that is still open on the composer's stack, which is an alias inside its own anchored
+     node (YML-009.02). Reject an alias to an undefined anchor.
+  6. Let a later anchor with the name of an earlier anchor redefine it, as YAML 1.2 does.
   Verify with a unit test for each rule.
 - [x] 2.4 Enforce the input-stream rules:
   1. Decode bytes as UTF-8 in the binding and map a decode failure to `OscalParseError` without a lower-level decode
@@ -39,11 +43,25 @@
   2. Require exactly one document, and reject a no-document, a two-document, and a syntax-error stream
      (YML-002.01 to YML-002.03).
   Verify with a unit test for each case.
+- [x] 2.5 Compose the node tree from PyYAML's event stream with an explicit stack (design Decision 2). Use
+  `CSafeLoader` when PyYAML provides it, else `SafeLoader`. Verify that the YAML unit tests and the YAML corpus cases
+  pass with both parsers.
+- [x] 2.6 Give U+0085, U+2028, and U+2029 their YAML 1.2 meaning (design Decision 2). Replace each raw occurrence with a
+  free private-use placeholder before the parse, and restore it in scalar and key text. Exclude each code point that an
+  escape in the text names. Report a parse error when fewer than three placeholders are free. Verify with unit tests
+  that each character in a plain scalar, a quoted scalar, a block scalar, and a key gives the same value as the JSON
+  path, and that an escape which names a private-use character keeps that character.
+- [x] 2.7 Give each YAML-layer failure one `errors` entry with the keys `type`, `loc`, `msg`, `input`, `line`, and
+  `column` (design Decision 1). `loc` is the JSON path tuple. Verify with a test that a grammar error and a Pydantic
+  validation error both have `type`, `loc` as a tuple, and `msg`, and that the grammar error's `loc` names the `start`
+  of the first port range (YML-010.01).
+- [x] 2.8 Add a test that scans the pinned schema and fails when a resolver tie-break decides a result: a union that
+  declares one key with two different scalar base types, or a scalar location with more than one base type.
 
 ## 3. Public YAML operations
 
-- [x] 3.1 Implement `parse_oscal_yaml(data: str | bytes) -> OscalDocument`. It converts the YAML input to a JSON value,
-  serializes it to JSON text, and calls `parse_oscal` (design Decision 1). Verify with unit tests that:
+- [x] 3.1 Implement `parse_oscal_yaml(data: str | bytes) -> OscalDocument`. It converts the YAML input to JSON text and
+  calls `parse_oscal` (design Decision 1). Verify with unit tests that:
   1. A valid OSCAL YAML document parses to the same typed value as the equivalent JSON, from both `str` and `bytes`
      (YML-005).
   2. A YAML document carrying a field the schema does not define is a parse error (YML-005.03, PRS-004).
@@ -52,25 +70,30 @@
   (YML-006, PRS-002). Verify with unit tests that an existing file parses and a missing path reports not-found, distinct
   from the parse error.
 - [x] 3.3 Implement `serialize_oscal_yaml(model: OscalDocument) -> str`. It dumps the model through the JSON value in
-  block style and keeps a string-shaped scalar quoted (design Decision 4, YML-008). Verify with unit tests that:
+  block style and keeps a string-shaped scalar quoted (design Decision 4, YML-008). It writes a string that holds
+  U+0085, U+2028, or U+2029 in double-quoted style. Verify with unit tests that:
   1. A document whose metadata `version` is `"1.0"` serializes and parses back to the string `"1.0"` (YML-008.02).
-  2. The output holds no null (YML-008.03).
-- [x] 3.4 Bind the three YAML names at call time, not at attribute access (design Decision 5). Each public name is a
-  thin typed wrapper in `v1/__init__.py` (re-exported at the top level and the compatibility module) that imports
-  `yaml_io` inside its body. Remove the module `__getattr__` and `globals()` loop. A base install without the `yaml`
-  extra keeps `import oscal_bindings`, `from oscal_bindings import *`, and `import oscal_bindings.extensions` working,
-  and a type checker resolves each wrapper's real signature. Only a call raises `ImportError` with the install hint.
-  Verify with the base-install and type tests of task 8.2.
+  2. The output, loaded as YAML, holds no `None` value at any depth (YML-008.03).
+  3. A title that holds each of the three characters survives a round trip unchanged.
+- [x] 3.4 Bind the three YAML names at call time, not at attribute access (design Decision 5).
+  `v1/extensions/yaml_io.py` holds the three public functions with full docstrings and imports no PyYAML at module
+  level. Each function imports the private `v1/extensions/_yaml_loader.py` inside its body. `v1/extensions/__init__.py` re-exports the three names,
+  and `v1/__init__.py` re-exports them from `.extensions`. Remove the wrappers from `v1/__init__.py`. A base install
+  without the `yaml` extra keeps every import path working, and a type checker resolves each function's real signature
+  through every path. Only a call raises `ImportError` with the install hint. Verify with the base-install and type
+  tests of task 8.2, and with a test that each import path gives the same function object.
 
 ## 4. Resource limit
 
-- [x] 4.1 Replace the alias-resolution counter with the expansion budget and depth limit of design Decision 3 (spec
-  `yaml-resource-limit`). During the walk:
-  1. Count every emitted JSON node (each scalar, array, and object), so an expanded alias of any kind adds its whole
-     subtree. Raise `OscalParseError` once the count passes 5,000,000.
-  2. Track recursion depth and raise `OscalParseError` once the document nests past 500 levels.
-  Remove the scalar-alias exemption and the collection-only edge count. Verify with the adversarial and accept-side
-  tests of task 8.1.
+- [x] 4.1 Replace the emitted-node budget with the alias budget and depth limit of design Decision 3 (spec
+  `yaml-resource-limit`):
+  1. While the walk is inside an alias, charge each emitted node (scalar, sequence, mapping, and key) and the
+     characters of each scalar and key text. Raise `OscalParseError` once the nodes pass 100,000 or the characters pass
+     1,000,000. Content outside every alias charges nothing.
+  2. Check the written depth in the composer and the expanded depth in the walk. Raise `OscalParseError` once a node
+     sits deeper than 128 levels.
+  Remove the 5,000,000-node budget, the 500-level limit, and the `RecursionError` mappings. Verify with the adversarial
+  and accept-side tests of task 8.1.
 
 ## 5. Traceability record
 
@@ -85,19 +108,21 @@
 
 ## 6. Error boundary, conformance, and documentation
 
-- [x] 6.1 Map three failures to `OscalParseError` (design Decision 2):
-  1. A `RecursionError` from `yaml.compose_all`.
-  2. A `RecursionError` from the walk.
-  3. A `ValueError` from `json.loads` on an oversized numeric token.
-  Do not raise the recursion limit. Verify with the error-boundary tests of task 8.1 that each surfaces as
-  `OscalParseError`, not a bare `RecursionError` or `ValueError`.
+- [x] 6.1 Write each number token into the JSON text as the scalar's text, with no `json.loads` conversion (design
+  Decision 1, YML-005). So an oversized numeric token gives the JSON path's parse error, and no `ValueError` escapes.
+  Do not raise the recursion limit. Verify with the error-boundary test of task 8.1 that the YAML path and the JSON
+  path both report `OscalParseError` for the same token.
 - [x] 6.2 Add `yaml-round-trip` and `yaml-parse` handlers to the `OPERATIONS` map in `tests/test_conformance.py`,
   reading the input as the corpus manifest defines. Verify all 23 YAML corpus cases pass with
   `hatch test -- -k conformance`.
-- [x] 6.3 Document the YAML usage in the README. Add a DEVELOPING.md note on the scalar-typing rule (YML-004), the
-  expansion budget of 5,000,000 emitted nodes, and the nesting-depth limit of 500 levels (YML-011). Narrow the
+- [x] 6.3 Document the YAML usage in the README, with the correct import contract: every import works without the
+  extra, and only a call raises the install hint. Add a DEVELOPING.md note on the scalar-typing rule (YML-004), the
+  three YAML 1.1 line-break characters, the alias budget of 100,000 nodes and 1,000,000 characters, the nesting-depth
+  limit of 128 levels (YML-011), and the YAML parse speed. Correct the module docstrings to the same rules. Narrow the
   conformance claim to exclude YML-008 and SER-005 until issue #19 closes. Verify the documented usage example runs as
   written with `hatch run python`.
+- [x] 6.4 Add a drift guard in `tests/test_lint_config.py` that asserts the README and DEVELOPING.md state the values
+  of the node limit, the character limit, and the depth limit that the constants hold.
 
 ## 7. Full gate
 
@@ -107,23 +132,29 @@
 
 ## 8. Adversarial resource tests and base-install tests
 
-- [x] 8.1 Write the adversarial and accept-side resource tests first, so they fail against the old limit and pass
-  against tasks 4.1 and 6.1. Mark the two expensive alias-bomb tests `@pytest.mark.slow`, excluded from the default
-  `hatch test` run and included in the release gate. Each over-limit case asserts `OscalParseError`, not a crash, a
-  hang, or a success:
-  1. A scalar-alias bomb: a small input whose scalar aliases expand past the budget.
-  2. A collection-alias bomb: a small input whose collection aliases expand past the budget.
-  3. A deep-nesting input past 500 levels.
+- [x] 8.1 Write the adversarial and accept-side resource tests first, so they fail against the old limits and pass
+  against tasks 4.1 and 6.1. The tests run in the default `hatch test` run, so each bomb stays small and fast. Remove
+  the `slow` marker, the `-m "not slow"` default, and the release gate's `-m` override, because no test uses them.
+  Each over-limit case asserts `OscalParseError` and the message of the guard that rejected it, not only the error
+  type:
+  1. A scalar-alias bomb: a small input that anchors one long scalar and repeats it past the character limit.
+  2. A collection-alias bomb: a small input whose nested collection aliases expand past the node limit.
+  3. A deep-nesting input past 128 levels, a deep input of 100,000 levels, and an input whose aliases nest past 128
+     levels although its written depth is within the limit.
   4. An oversized numeric token past CPython's integer-string digit limit.
-  5. Accept side: a conformant OSCAL document with modest aliasing, and an alias to a collection of about 100 entries.
-     Both parse and return the typed value.
+  5. Accept side: a conformant OSCAL document with modest aliasing, an alias to a collection of about 100 entries
+     repeated a few times, an input nested to exactly 128 levels, and the SP 800-53 rev5 catalog written as YAML with no
+     alias. Each one is not rejected for a resource limit.
+  6. Memory: with `tracemalloc`, the peak traced memory of a bomb just under each budget limit stays below 100 MB.
 - [x] 8.2 Write the base-install import tests and the type-surface test, with PyYAML unavailable via a `sys.modules`
   shim. Assert that each of these succeeds and binds the non-YAML names:
   1. `import oscal_bindings`.
   2. `from oscal_bindings import *`.
   3. `import oscal_bindings.extensions`, and a star import of it.
+  4. `import oscal_bindings.v1.extensions.yaml_io`.
   Assert that only calling a YAML operation raises the install hint. Assert with a type-checker check that
-  `from oscal_bindings import parse_oscal_yaml` resolves to its real signature, not `Any`.
+  `parse_oscal_yaml` resolves to its real signature, not `Any`, through `oscal_bindings`, `oscal_bindings.v1`, and
+  `oscal_bindings.extensions`.
 
 ## Workflow follow-up
 

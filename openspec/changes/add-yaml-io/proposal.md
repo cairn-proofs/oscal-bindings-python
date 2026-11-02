@@ -46,16 +46,20 @@ capability (YML-001 to YML-011) and a YAML corpus, from
    A schema-conformance failure carries one structured entry per location (YML-010, PRS-006). No YAML-specific validity
    check is in scope. YML-001 names only the three operations, and the existing `validate_oscal` satisfies ERR-002.
 
-5. Apply and document a resource limit on YAML input (YML-011). PyYAML's default does not cap alias expansion, which is
-   a billion-laughs exposure. So the binding imposes a documented limit on the expansion of collection aliases and
-   reports a parse error past that limit. It counts collection-alias resolutions, because only a non-scalar alias
-   drives exponential growth. The binding must not reject an input for an undocumented limit. The contract names no
-   number, and the corpus has no resource-limit case, so the exact limit is a design choice. The design sets it from
-   the values that comparable YAML parsers use. This decision is the one behavior the binding itself owns, so it needs
-   a binding-local requirement (see Capabilities).
+5. Apply and document resource limits on YAML input (YML-011). PyYAML's default does not cap alias expansion, which is
+   a billion-laughs exposure. PyYAML's composer also recurses per nesting level, so deep input overflows the stack. So
+   the binding imposes two documented limits and reports a parse error past either one:
+   1. An alias budget. Each use of an alias, of any kind, charges the nodes and the characters of the value it expands
+      to. Content that no alias repeats does not charge the budget.
+   2. A nesting-depth limit on the value after alias expansion.
+   The binding must not reject an input for an undocumented limit, so no step of the YAML path recurses per nesting
+   level. The contract names no number, and the corpus has no resource-limit case, so the exact limits are a design
+   choice. The design sets them from measurements of the real documents in the corpus. These limits are the one
+   behavior the binding itself owns, so they need a binding-local requirement (see Capabilities).
 
 6. Add an install extra `oscal-bindings[yaml]`. The base install keeps `pydantic[email]` as its one runtime
-   dependency. An import of the YAML module without the extra installed reports an error with an install hint.
+   dependency. Every import path works without the extra. A call to a YAML operation without the extra installed
+   reports an error with an install hint.
 
 7. Add a traceability record for the whole public API. The pin at `0.4.0+oscal.1.2.3` and later requires the
    `binding-surface` capability (SRF-001 to SRF-007). The record holds one entry for every public operation, not only
@@ -84,12 +88,12 @@ makes them optional, and all-or-nothing: a binding offers one for each of the ei
 
 ### New Capabilities
 
-1. `yaml-resource-limit`: the binding's documented resource limit on YAML input. It holds the one binding-local
-   requirement this change adds: the posture the binding takes on alias expansion, under YML-011. This is the project's
-   first local spec. The three YAML parse and serialize operations are not here. The store's `yaml-documents` capability
-   defines them, not this project. A YAML parser decides that YAML input is accepted, which SRF-002.02 names as not
-   binding-local. So those operations are contract operations, and the traceability record maps them to YML-005,
-   YML-006, and YML-008. The `yaml-resource-limit` requirement documents a posture, not a public operation, so it earns
+1. `yaml-resource-limit`: the binding's documented resource limits on YAML input. It holds the binding-local
+   requirements this change adds: the posture the binding takes on alias expansion and nesting depth, under YML-011.
+   This is the project's first local spec. The three YAML parse and serialize operations are not here. The store's
+   `yaml-documents` capability defines them, not this project. A YAML parser decides that YAML input is accepted,
+   which SRF-002.02 names as not binding-local. So those operations are contract operations, and the traceability record maps them to YML-005,
+   YML-006, and YML-008. The `yaml-resource-limit` requirements document a posture, not a public operation, so they earn
    no traceability-record entry. SRF-007.01 forbids an entry that holds both a contract identifier and a binding-local
    identifier, so the `parse_oscal_yaml` entry cites YML-005 only.
 
@@ -97,13 +101,14 @@ makes them optional, and all-or-nothing: a binding offers one for each of the ei
 
 None. The store defines YAML parsing, serialization, and the traceability record. That behavior lives in the
 `yaml-documents` and `binding-surface` capabilities of the store, not in a spec of this project. This project has no
-local specs today, so there is no local requirement text to change. The one new local requirement is the
+local specs today, so there is no local requirement text to change. The new local requirements are in the
 `yaml-resource-limit` capability above.
 
 ## Impact
 
-1. Source: a new module `v1/extensions/yaml_io.py`, re-exported from `v1/extensions/__init__.py` and `v1/__init__.py`
-   per the standard extension pattern. No change to `models.py`, codegen, or `parser.py`.
+1. Source: a new public module `v1/extensions/yaml_io.py`, re-exported from `v1/extensions/__init__.py` and
+   `v1/__init__.py` per the standard extension pattern. It imports PyYAML only when an operation is called, through a
+   new private module `v1/extensions/_yaml_loader.py`. No change to `models.py`, codegen, or `parser.py`.
 2. Dependencies: a new `yaml` optional extra adds a YAML library and its type stubs to the dev and test environments.
    The lockfiles change and ship with it.
 3. Pin and generation: `scripts/spec_artifact.py` moves two minor versions. Generation re-fetches the artifact. CI
@@ -114,4 +119,4 @@ local specs today, so there is no local requirement text to change. The one new 
    pretty or compact option. YML-008 states that SER-003 does not apply to YAML. It lets the binding choose the style,
    quoting, indentation, and key order. SER-001, SER-002, SER-004, and SER-005 still apply to the YAML output.
 6. Docs: README usage for YAML, a DEVELOPING.md note on the YAML scalar-typing rule (YML-004) and the documented
-   resource limit (YML-011).
+   resource limits (YML-011).

@@ -58,10 +58,12 @@ def category(error: BaseException) -> str | None:
     return None
 
 
-def _load_cases() -> list[Any]:
+def _load_cases(operation_prefix: str = "") -> list[Any]:
     cases = json.loads((corpus_root() / "cases.json").read_text("utf-8"))["cases"]
     params = []
     for case in cases:
+        if not case["operation"].startswith(operation_prefix):
+            continue
         defects = [d for d in case.get("known-defects", []) if d["binding"] == BINDING]
         marks = [
             pytest.mark.xfail(strict=True, reason=f"known defect: {d['issue']}")
@@ -72,9 +74,14 @@ def _load_cases() -> list[Any]:
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    """Parametrize ``case`` with every corpus case. A fetch failure fails the run."""
+    """Parametrize ``case`` with every corpus case. A fetch failure fails the run.
+
+    ``yaml_case`` takes the YAML cases only.
+    """
     if "case" in metafunc.fixturenames:
         metafunc.parametrize("case", _load_cases())
+    if "yaml_case" in metafunc.fixturenames:
+        metafunc.parametrize("yaml_case", _load_cases("yaml-"))
 
 
 def _expect_error(case: dict[str, Any], run: Callable[[], object]) -> BaseException:
@@ -173,6 +180,23 @@ def test_case(case: dict[str, Any]) -> None:
     """Run one corpus case and compare its result with the expected result."""
     assert case["operation"] in OPERATIONS, f"unknown operation {case['operation']}"
     OPERATIONS[case["operation"]](case, corpus_root() / case["input"])
+
+
+def test_yaml_case_with_the_pure_python_parser(
+    yaml_case: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run one YAML corpus case with PyYAML's pure-Python event parser.
+
+    ``test_case`` runs each case with libyaml's parser when PyYAML has it. The
+    YAML path falls back to the pure-Python parser without libyaml, so both
+    parsers must conform (design Decision 2).
+    """
+    import yaml
+
+    from oscal_bindings.v1.extensions import _yaml_loader
+
+    monkeypatch.setattr(_yaml_loader, "_LOADER", yaml.SafeLoader)
+    test_case(yaml_case)
 
 
 def test_every_category_is_mapped() -> None:

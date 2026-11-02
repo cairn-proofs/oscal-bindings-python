@@ -20,7 +20,7 @@ pip install "oscal-bindings[yaml]"
 uv add "oscal-bindings[yaml]"
 ```
 
-The base install keeps a single runtime dependency (`pydantic[email]`). Importing a YAML operation without the extra raises `ImportError` with an install hint.
+The base install keeps a single runtime dependency (`pydantic[email]`). Every import works without the extra. A call to a YAML operation without the extra raises `ImportError` with an install hint.
 
 To install from a local checkout (e.g., as a `uv` workspace path dependency):
 
@@ -283,11 +283,17 @@ doc = parse_oscal_yaml_file("catalog.yaml")  # a missing path raises FileNotFoun
 yaml_string = serialize_oscal_yaml(doc)
 ```
 
-The input is one YAML 1.2 document in UTF-8. A stream with no document or more than one, a duplicate mapping key, or invalid UTF-8 is an `OscalParseError`, the same error the JSON functions raise.
+The input is one YAML 1.2 document in UTF-8. A stream with no document or more than one, a duplicate mapping key, or invalid UTF-8 is an `OscalParseError`, the same error the JSON functions raise. An error that the YAML layer finds has one entry in `errors`, with the same `type`, `loc`, `msg`, and `input` keys as a schema-validation entry. Its `loc` is the JSON path of the failing node, and its `line` and `column` give the position in the YAML text.
 
-The OSCAL schema, not the YAML reader, decides the type of each scalar at its location. A value keeps its text unless the location is a number or a boolean, so `version: 1.0` at a string location stays the string `"1.0"`, and `yes` stays `"yes"`. A number location takes only the JSON number grammar (no leading `+`, no leading zero, no hexadecimal), and a boolean location takes only `true` or `false`; any other text is a parse error that names the scalar's location. A YAML tag does not change a value, and the key `<<` is an ordinary field, so a merge key is rejected as an unknown field.
+The OSCAL schema, not the YAML reader, decides the type of each scalar at its location. A value keeps its text unless the location is a number or a boolean, so `version: 1.0` at a string location stays the string `"1.0"`, and `yes` stays `"yes"`. A number location takes only the JSON number grammar (no leading `+`, no leading zero, no hexadecimal), and a boolean location takes only `true` or `false`; any other text is a parse error that names the scalar's location. A YAML tag does not change a value, and the key `<<` is an ordinary field, so a merge key is rejected as an unknown field. The characters U+0085, U+2028, and U+2029 are content, as YAML 1.2 defines, not line breaks.
 
-The YAML parser applies two documented limits, so a small untrusted file cannot exhaust memory or the call stack. It caps total expansion at 5,000,000 emitted nodes (an alias of any kind, scalar or collection, counts its expanded size toward this), and it caps nesting depth at 500 levels. A document that exceeds either is a parse error. Ordinary documents stay far under both.
+The YAML parser applies three documented limits, so a small untrusted file cannot exhaust memory or the call stack. An input past any of them is an `OscalParseError`:
+
+- Aliases can add at most 100,000 nodes. Each use of an alias adds every scalar, sequence, mapping, and mapping key of the value it expands to.
+- Aliases can add at most 1,000,000 characters of scalar text and key text.
+- No node can sit deeper than 128 levels of sequences and mappings, counted after alias expansion.
+
+Content that the document writes out, and that no alias repeats, does not count against the two alias limits, so a large document without aliases parses. The SP 800-53 rev5 catalog has about 323,000 nodes and nests 21 levels.
 
 ### Field names vs. OSCAL names
 
