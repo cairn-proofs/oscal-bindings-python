@@ -1,0 +1,110 @@
+# Tasks
+
+## 1. Move the pin and add the dependency
+
+- [ ] 1.1 Move the pin in `scripts/spec_artifact.py` to `0.5.0+oscal.1.2.3` with sha256
+  `921cee0ee949915edb42fc1a574fe12830f2eecadba5c0c8e22b382c0f7c22cc`. The OSCAL release stays `1.2.3`, so
+  `__oscal_schema_version__` needs no edit. Verify with `hatch run generate` and
+  `git diff --exit-code -- src/oscal_bindings/v1/models.py`: the artifact re-fetches and `models.py` shows no drift.
+- [ ] 1.2 Add the `yaml` optional extra in `pyproject.toml` with `pyyaml` pinned exactly. Add `pyyaml` and
+  `types-PyYAML` to the dev and test environments. Re-lock with `hatch run lock`. Verify the committed lockfiles change
+  and `hatch test` collects in the `hatch-test` env.
+
+## 2. YAML-to-JSON converter
+
+- [ ] 2.1 Add `v1/extensions/yaml_io.py` with a schema-type resolver that maps a scalar location to its base JSON type.
+  It follows `$ref`, folds `allOf` to one base type, and treats a string open-enum `anyOf` as a string location (design
+  Decision 1). Verify with a unit test that resolves `start` to a number location, `last-modified` to a string
+  location, and a hash `algorithm` to a string location.
+- [ ] 2.2 Implement the node walk over the PyYAML composed graph that builds a JSON value, with the scalar typing of
+  design Decision 1:
+  1. A string location emits a quoted string that keeps the scalar's text, including `null`, `~`, and an empty scalar
+     as `"null"`, `"~"`, and `""`.
+  2. A number or integer location emits a bare JSON number token when the text matches the RFC 8259 number grammar,
+     else a located grammar error.
+  3. A boolean location emits `true` or `false`, else a located grammar error.
+  Verify with unit tests for YML-004.01 through YML-004.10, including `1.0` at a string location, `"443"` at a number
+  location, and `+443`, `007`, `0x1BB`, and `yes` at the locations the scenarios name. Verify that a `0x1BB` at a
+  `start` location reports a parse error whose structured entry names that `start` location (YML-010.01, PRS-006).
+- [ ] 2.3 Enforce the node-layer structure rules in the walk:
+  1. Reject a mapping with two keys of the same text, including a plain key and its quoted form (YML-003).
+  2. Reject a mapping whose key node is not a scalar, such as a sequence used as a key (YML-003.02).
+  3. Key a mapping on the `<<` scalar value, so a merge key is an unknown field (YML-009.04).
+  4. Ignore a node tag, so `!!int 7` keeps `"7"` and `!!omap` reads as an array (YML-004.05, YML-009.03).
+  5. Carry an ancestor set and reject an alias inside its own anchored node (YML-009.02).
+  Verify with a unit test for each rule.
+- [ ] 2.4 Enforce the input-stream rules:
+  1. Decode bytes as UTF-8 in the binding and map a decode failure to `OscalParseError` without a lower-level decode
+     error (YML-002.04, PRS-001.03). Reject a UTF-16 input.
+  2. Require exactly one document, and reject a no-document, a two-document, and a syntax-error stream
+     (YML-002.01 to YML-002.03).
+  Verify with a unit test for each case.
+
+## 3. Public YAML operations
+
+- [ ] 3.1 Implement `parse_oscal_yaml(data: str | bytes) -> OscalDocument`. It converts the YAML input to a JSON value,
+  serializes it to JSON text, and calls `parse_oscal` (design Decision 1). Verify with unit tests that:
+  1. A valid OSCAL YAML document parses to the same typed value as the equivalent JSON, from both `str` and `bytes`
+     (YML-005).
+  2. A YAML document carrying a field the schema does not define is a parse error (YML-005.03, PRS-004).
+- [ ] 3.2 Implement `parse_oscal_yaml_file(path: Path | str) -> OscalDocument`. It reads the file and parses the content
+  as `parse_oscal_yaml` does, and reports the not-found condition that names the path as `parse_oscal_file` does
+  (YML-006, PRS-002). Verify with unit tests that an existing file parses and a missing path reports not-found, distinct
+  from the parse error.
+- [ ] 3.3 Implement `serialize_oscal_yaml(model: OscalDocument) -> str`. It dumps the model through the JSON value in
+  block style and keeps a string-shaped scalar quoted (design Decision 4, YML-008). Verify with unit tests that:
+  1. A document whose metadata `version` is `"1.0"` serializes and parses back to the string `"1.0"` (YML-008.02).
+  2. The output holds no null (YML-008.03).
+- [ ] 3.4 Re-export the three functions from `v1/extensions/__init__.py` and `v1/__init__.py`. Raise an `ImportError`
+  with an install hint when the module imports without the `yaml` extra (design Decision 5). Verify with a unit test
+  that the names import from `oscal_bindings`. Verify that `oscal_bindings.v1.__all__` carries them.
+
+## 4. Resource limit
+
+- [ ] 4.1 Add the alias-expansion limit to the walk (spec `yaml-resource-limit`, design Decision 3). It counts one
+  resolution per traversal edge into a shared mapping or sequence node. It accumulates the count across the document. It
+  does not count a scalar alias. It raises `OscalParseError` once the cumulative count passes 100. Verify with unit
+  tests that:
+  1. An input over the limit is a parse error.
+  2. A document with a small fixed number of collection aliases parses.
+  3. A document with many scalar aliases parses.
+
+## 5. Traceability record
+
+- [ ] 5.1 Add the traceability record that holds one entry for every public operation in `v1/__all__`, each citing the
+  contract requirement that defines it. The three YAML functions cite YML-005, YML-006, and YML-008 (proposal item 7,
+  `binding-surface` SRF-003). Verify the record validates against `openspec/traceability.schema.json` of the pinned
+  0.5.0 artifact, and that each cited identifier resolves in that artifact's `openspec/requirements.json` (SRF-004).
+- [ ] 5.2 Add a test that fails on either condition (SRF-003.04, SRF-004):
+  1. A name in `v1/__all__` has no entry in the record.
+  2. A cited identifier does not resolve in the pinned requirement index.
+  Verify the test passes for the current surface and fails when an entry is removed.
+
+## 6. Conformance and documentation
+
+- [ ] 6.1 Add `yaml-round-trip` and `yaml-parse` handlers to the `OPERATIONS` map in `tests/test_conformance.py`,
+  reading the input as the corpus manifest defines. Verify all 23 YAML corpus cases pass with
+  `hatch test -- -k conformance`.
+- [ ] 6.2 Document the YAML usage in the README. Add a DEVELOPING.md note on the scalar-typing rule (YML-004) and the
+  documented alias-expansion limit of 100 (YML-011). Verify the documented usage example runs as written with
+  `hatch run python`.
+
+## 7. Full gate
+
+- [ ] 7.1 Run the full gate with `hatch run release`. Verify it passes:
+  generation with no `models.py` drift, lint, typing, security, the whole Python matrix with the YAML corpus cases, and
+  docs.
+
+## Workflow follow-up
+
+- Commit the spec files first on the feature branch, then each task group as a checkpoint, including the updated
+  `tasks.md`, per the project's GitHub workflow.
+- Open a pull request that references issue #7 once `hatch run release` passes. The pull request carries the
+  implementation only, not the archive.
+- After the pull request review approves, archive the change on the branch with `openspec archive add-yaml-io -y`. This
+  moves the change into `openspec/changes/archive/` and syncs the `yaml-resource-limit` delta into
+  `openspec/specs/yaml-resource-limit/spec.md`, the project's first main spec.
+- Verify the archive on the branch: `openspec validate --strict` passes for the archived change and the new main spec,
+  `openspec list --specs` shows `yaml-resource-limit`, and `hatch run release` passes on the archived tree. Push the
+  archive as a follow-up commit on the same pull request.
+- Merge the pull request once it is approved and the archive commit is in it. No archive step remains after the merge.
