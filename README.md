@@ -12,6 +12,16 @@ uv add oscal-bindings
 
 The distribution is `oscal-bindings`; the import package is `oscal_bindings`.
 
+YAML parse and serialize are an optional feature. Install the `yaml` extra to add them:
+
+```bash
+pip install "oscal-bindings[yaml]"
+# or
+uv add "oscal-bindings[yaml]"
+```
+
+The base install keeps a single runtime dependency (`pydantic[email]`). Importing a YAML operation without the extra raises `ImportError` with an install hint.
+
 To install from a local checkout (e.g., as a `uv` workspace path dependency):
 
 ```bash
@@ -259,6 +269,25 @@ Opt-outs:
 
 - `by_alias=False` emits Python field names, still without `null`.
 - `exclude_none=False` has no effect. OSCAL forbids `null`, so None-valued fields are always omitted. To tell whether a field was set, use attribute access (`rlink.hashes is None`) or `model_fields_set`.
+
+### YAML
+
+With the `yaml` extra installed, `parse_oscal_yaml`, `parse_oscal_yaml_file`, and `serialize_oscal_yaml` read and write OSCAL in YAML. They accept and produce the same typed `OscalDocument` as the JSON functions.
+
+```python
+from oscal_bindings import parse_oscal_yaml, parse_oscal_yaml_file, serialize_oscal_yaml
+
+doc = parse_oscal_yaml(yaml_string)          # str or bytes
+doc = parse_oscal_yaml_file("catalog.yaml")  # a missing path raises FileNotFoundError
+
+yaml_string = serialize_oscal_yaml(doc)
+```
+
+The input is one YAML 1.2 document in UTF-8. A stream with no document or more than one, a duplicate mapping key, or invalid UTF-8 is an `OscalParseError`, the same error the JSON functions raise.
+
+The OSCAL schema, not the YAML reader, decides the type of each scalar at its location. A value keeps its text unless the location is a number or a boolean, so `version: 1.0` at a string location stays the string `"1.0"`, and `yes` stays `"yes"`. A number location takes only the JSON number grammar (no leading `+`, no leading zero, no hexadecimal), and a boolean location takes only `true` or `false`; any other text is a parse error that names the scalar's location. A YAML tag does not change a value, and the key `<<` is an ordinary field, so a merge key is rejected as an unknown field.
+
+The parser limits collection-alias expansion to 100 resolutions across a document, so a small untrusted file cannot exhaust memory through alias expansion. Ordinary documents stay far under this limit; a document that exceeds it is a parse error.
 
 ### Field names vs. OSCAL names
 

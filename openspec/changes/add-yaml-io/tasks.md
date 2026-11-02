@@ -85,7 +85,7 @@
 - [ ] 6.1 Add `yaml-round-trip` and `yaml-parse` handlers to the `OPERATIONS` map in `tests/test_conformance.py`,
   reading the input as the corpus manifest defines. Verify all 23 YAML corpus cases pass with
   `hatch test -- -k conformance`.
-- [ ] 6.2 Document the YAML usage in the README. Add a DEVELOPING.md note on the scalar-typing rule (YML-004) and the
+- [x] 6.2 Document the YAML usage in the README. Add a DEVELOPING.md note on the scalar-typing rule (YML-004) and the
   documented alias-expansion limit of 100 (YML-011). Verify the documented usage example runs as written with
   `hatch run python`.
 
