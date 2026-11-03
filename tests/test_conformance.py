@@ -2,10 +2,11 @@
 
 One test per case in ``corpus/<release>/cases.json`` of the pinned spec
 artifact (``tests/support/spec_artifact.py``). The operations and case fields
-are defined in the artifact's ``corpus/<release>/README.md``. A case whose
-``known-defects`` names this binding is a strict expected failure: when the
-defect is fixed, the case passes unexpectedly and the run fails until the mark
-is removed.
+are defined in the artifact's ``corpus/<release>/README.md``. A case listed in
+``tests/support/expected_failures.py`` is a strict expected failure: when the
+defect is fixed, the case passes unexpectedly and the run fails until the entry
+is removed. The runner ignores any ``known-defects`` field in the corpus; this
+binding keeps its own list.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from support.canonical_json import canonicalize
+from support.expected_failures import EXPECTED_FAILURES
 from support.spec_artifact import corpus_root
 
 import oscal_bindings as ob
@@ -23,8 +25,6 @@ from oscal_bindings import OscalAccessError, OscalDoc, OscalParseError
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-
-BINDING = "oscal-bindings-python"
 
 TYPED_PARSERS: dict[str, Callable[[str | bytes], Any]] = {
     "catalog": ob.parse_catalog,
@@ -64,11 +64,12 @@ def _load_cases(operation_prefix: str = "") -> list[Any]:
     for case in cases:
         if not case["operation"].startswith(operation_prefix):
             continue
-        defects = [d for d in case.get("known-defects", []) if d["binding"] == BINDING]
-        marks = [
-            pytest.mark.xfail(strict=True, reason=f"known defect: {d['issue']}")
-            for d in defects
-        ]
+        issue = EXPECTED_FAILURES.get(case["id"])
+        marks = (
+            [pytest.mark.xfail(strict=True, reason=f"known defect: {issue}")]
+            if issue
+            else []
+        )
         params.append(pytest.param(case, id=case["id"], marks=marks))
     return params
 
@@ -197,6 +198,13 @@ def test_yaml_case_with_the_pure_python_parser(
 
     monkeypatch.setattr(_yaml_loader, "_LOADER", yaml.SafeLoader)
     test_case(yaml_case)
+
+
+def test_every_expected_failure_names_a_corpus_case() -> None:
+    """Each entry of the local expected-failure list is a case of the pinned corpus."""
+    cases = json.loads((corpus_root() / "cases.json").read_text("utf-8"))["cases"]
+    stale = sorted(set(EXPECTED_FAILURES) - {case["id"] for case in cases})
+    assert stale == [], f"expected failures not in the pinned corpus: {stale}"
 
 
 def test_every_category_is_mapped() -> None:

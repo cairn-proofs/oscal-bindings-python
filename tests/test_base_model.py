@@ -309,29 +309,25 @@ def test_canary_dict_rejects_name_key(canary: Canary, kwargs: dict[str, Any]) ->
 
 @pytest.mark.parametrize("kwargs", CALL_KWARGS.values(), ids=CALL_KWARGS.keys())
 @pytest.mark.parametrize("canary", CANARIES.values(), ids=CANARIES.keys())
-def test_canary_json_never_keeps_name_key(
-    canary: Canary, kwargs: dict[str, Any]
-) -> None:
-    """JSON mode: the value is never kept (3.3(b)).
+def test_canary_json_rejects_name_key(canary: Canary, kwargs: dict[str, Any]) -> None:
+    """JSON mode: a name key is ``extra_forbidden`` at its full loc, as in dict mode.
 
-    pydantic 2.13.x drops the key (design.md Root Cause 6, #6); 2.11.0 rejects
-    it with ``extra_forbidden``. Either is fine; keeping ``"t"`` is not.
+    pydantic 2.13.x through 2.14.1 dropped the key and lost its value (#6);
+    the 2.14.2 floor rejects it.
     """
     where = f"{canary.model.__name__}.model_validate_json(**{kwargs}) at {canary.loc}"
     result = _attempt(
         canary.model.model_validate_json, json.dumps(canary.data), **kwargs
     )
-    if isinstance(result, ValidationError):
-        assert _has_extra_forbidden(result, canary.loc), (
-            f"{where}: rejected, but not with extra_forbidden at the name key: "
-            f"{_errors(result)}"
+    if not isinstance(result, ValidationError):
+        pytest.fail(
+            f"{where}: name-keyed JSON ACCEPTED "
+            f"(media_type={canary.media_type(result)!r}). The key must be "
+            f"rejected as in dict mode (#6). {RC5}"
         )
-        return
-    kept = canary.media_type(result)
-    assert kept is None, (
-        f"{where}: name-keyed JSON value KEPT (media_type={kept!r}); validation "
-        f"now routes through __init__ (variant B0) or by-name validation got "
-        f"enabled. {RC5}"
+    assert _has_extra_forbidden(result, canary.loc), (
+        f"{where}: rejected, but not with extra_forbidden at the name key: "
+        f"{_errors(result)}"
     )
 
 

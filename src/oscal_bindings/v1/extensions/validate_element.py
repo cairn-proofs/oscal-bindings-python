@@ -43,6 +43,11 @@ def _build_element_map() -> dict[str, type[BaseModel]]:
             # OSCAL element. RootModel ("root-model") is kept for parity with
             # the pre-fix element-type list.
             and obj not in (BaseModel, OscalBaseModel)
+            # Skip parametrized generics such as the base
+            # ``RootModel[Mapping | list[Mapping]]``. pydantic >= 2.14 registers
+            # a module-scope parametrization in the module that writes it, so
+            # these appear in ``dir(models)`` under non-identifier names.
+            and obj.__pydantic_generic_metadata__["origin"] is None
         ):
             kebab = _pascal_to_kebab(name)
             element_map[kebab] = obj
