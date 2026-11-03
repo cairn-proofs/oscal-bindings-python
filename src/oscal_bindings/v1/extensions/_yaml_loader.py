@@ -138,7 +138,7 @@ _ESCAPE = re.compile(r"\\(?:u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))")
 #: supplementary private-use planes 15 and 16, then the BMP private-use area.
 #: Both parsers read a private-use character as printable content. About
 #: 137,000 candidates, so only an input built to hold every one of them, at
-#: least 520 KB, leaves too few free (a documented limit, YML-011).
+#: least 520 KB, leaves too few free (a documented limit, PRS-010).
 PLACEHOLDER_CANDIDATES = (
     range(0xF0000, 0xFFFFE),
     range(0x100000, 0x10FFFE),

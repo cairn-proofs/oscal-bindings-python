@@ -30,17 +30,17 @@
 
 ## 3. Retired YML-011 and the YAML docs
 
-- [ ] 3.1 Replace each citation of YML-011 with PRS-010 in `src/oscal_bindings/v1/extensions/yaml_io.py`,
+- [x] 3.1 Replace each citation of YML-011 with PRS-010 in `src/oscal_bindings/v1/extensions/yaml_io.py`,
   `src/oscal_bindings/v1/extensions/_yaml_loader.py`, `tests/test_yaml_io.py`, `tests/test_lint_config.py`, and
   `DEVELOPING.md`. Change the range "YML-001 to YML-011" in the `yaml_io.py` docstring and in `tests/test_yaml_io.py`
   to "YML-001 to YML-010". The YAML limits number four. So in the `yaml_io.py` docstring, change "three documented
   limits" to four, add the line-break placeholder limit, and state the operations of each limit. Make the same count
   change to the DEVELOPING.md heading "Three documented YAML resource limits". Verify with
   `git grep -n YML-011 -- . ':!openspec/changes/' ':!drafts/' ':!.agents/'`, which must find nothing.
-- [ ] 3.2 Replace the second sentence of the Purpose in `openspec/specs/yaml-resource-limit/spec.md` so that it places
+- [x] 3.2 Replace the second sentence of the Purpose in `openspec/specs/yaml-resource-limit/spec.md` so that it places
   the limits under the store's PRS-010 rule in the `document-parsing` capability. Do not change a requirement. Verify
   with `openspec validate --specs --strict`.
-- [ ] 3.3 Update the stale docs. Change the pin in DEVELOPING.md (it names `0.3.0+oscal.1.2.3`) and in `AGENTS.md`.
+- [x] 3.3 Update the stale docs. Change the pin in DEVELOPING.md (it names `0.3.0+oscal.1.2.3`) and in `AGENTS.md`.
   Replace "below the JSON path's own limit of about 200" in DEVELOPING.md with the documented JSON depth limit of 200.
   Update `.agents/summary/` where it names an old pin or YML-011. Verify with
   `git grep -n -e 0.3.0+oscal -e 0.5.1+oscal -e "about 200" -- DEVELOPING.md AGENTS.md .agents/summary/`, which must
@@ -48,7 +48,7 @@
 
 ## 4. Full gate
 
-- [ ] 4.1 Run `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` and verify `EXIT: 0`. Then verify that
+- [x] 4.1 Run `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` and verify `EXIT: 0`. Then verify that
   `git diff --exit-code -- src/oscal_bindings/v1/models.py` reports no change and that
   `openspec validate move-pin-to-0-6-0 --strict` passes.
 

@@ -1,7 +1,8 @@
 """Tests for the optional YAML parse and serialize operations.
 
-Covers the ``yaml-documents`` contract behavior (YML-002 to YML-011) and the
-binding-local resource limits (spec ``yaml-resource-limit``). The YAML corpus
+Covers the ``yaml-documents`` contract behavior (YML-002 to YML-010), the
+resource-limit rule PRS-010, and the binding-local resource limits (specs
+``yaml-resource-limit`` and ``json-resource-limit``). The YAML corpus
 cases run from :mod:`tests.test_conformance`. These tests check the scenarios at
 the unit level, including the schema-type resolver that the corpus does not
 exercise in isolation.
@@ -792,7 +793,7 @@ class TestDepthLimit:
         assert (entry["line"], entry["column"]) == (8, 14 + DEPTH_LIMIT - 2)
 
     def test_very_deep_input_is_rejected_by_the_documented_limit(self) -> None:
-        # No stack limit of the runtime rejects it first (YML-011).
+        # No stack limit of the runtime rejects it first (PRS-010).
         with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG):
             parse_oscal_yaml(_nested(100_000))
 
