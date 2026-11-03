@@ -6,14 +6,14 @@ Declared in `pyproject.toml` `[project.dependencies]`.
 
 | Dependency | Constraint | Why it's needed |
 |------------|-----------|-----------------|
-| `pydantic[email]` | `>=2.11` | The generated models are Pydantic v2 models (via `OscalBaseModel`). The `email` extra provides `EmailStr` validation used by contact fields. The 2.11 floor is for `ConfigDict(serialize_by_alias=True)` in `v1/_base.py`; the runtime also uses v2-only APIs (`model_validate_json`, `model_dump_json`, `RootModel`, `model_serializer`). The full serialization/parser/preservation suites pass on 2.11.0. |
+| `pydantic[email]` | `>=2.14.2,<3` | The generated models are Pydantic v2 models (via `OscalBaseModel`). The `email` extra provides `EmailStr` validation used by contact fields. The 2.14.2 floor is the first release whose JSON validation rejects a Python-field-name key as `extra_forbidden` instead of dropping it ([#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6), GHSA-qpmf-fgh3-ff25); `ConfigDict(serialize_by_alias=True)` in `v1/_base.py` needs 2.11+. The runtime also uses v2-only APIs (`model_validate_json`, `model_dump_json`, `RootModel`, `model_serializer`). `tests/test_pydantic_version.py` guards the range. |
 
 That is the **only** runtime dependency. The library is otherwise pure standard library (`pathlib`, `uuid`, `datetime`, `re`, `dataclasses`, `enum`, `typing`).
 
 ```mermaid
 graph TD
     APP["Downstream application"] --> OB["oscal_bindings"]
-    OB --> PYD["pydantic[email] >= 2.11"]
+    OB --> PYD["pydantic[email] >= 2.14.2, < 3"]
     OB --> STD["Python stdlib<br/>(pathlib, uuid, datetime, re, dataclasses)"]
 ```
 

@@ -36,39 +36,6 @@ To install directly from a Git tag, branch, or commit:
 pip install "git+https://github.com/cairn-proofs/oscal-bindings-python.git@main"
 ```
 
-## Known issue: Invalid OSCAL JSON keys can be silently lost
-
-> [!IMPORTANT]
-> On pydantic 2.13.x, which `pip install` picks today, the JSON parsers silently discard any key spelled with a Python field name (`back_matter`) instead of its OSCAL name (`back-matter`), along with that key's entire value. `validate_oscal` still reports the document as valid. Tracked in [#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6).
-
-Verified on pydantic 2.13.5. What happens:
-
-- `parse_oscal`, `parse_oscal_file`, the typed `parse_*` functions, and `model_validate_json` accept the document with the field unset.
-- `validate_oscal` returns `True`, so it can't catch the mistake.
-- A missing required field is reported only as `missing` at its OSCAL name, which hides the real cause.
-- If both spellings are present, the OSCAL-name value wins and the other key is ignored.
-
-```python
-doc = parse_oscal('{"catalog": {..., "back_matter": {"resources": [...]}}}')
-doc.root.catalog.back_matter    # None: the back-matter is gone
-```
-
-You're most likely to hit this with hand-written JSON, or with output from `model_dump(by_alias=False)` that's fed back in. Unknown keys (`bogus`, `back-matterr`) are still rejected, and dict input is rejected on every supported pydantic version.
-
-**Workaround:** if your input might not come from a conforming OSCAL tool, validate it as a dict. Dict validation rejects field-name keys with `extra_forbidden`:
-
-```python
-import json
-from oscal_bindings import CatalogDocument, OscalDocument
-
-CatalogDocument.model_validate(json.loads(text))   # known type: clearest errors
-OscalDocument.model_validate(json.loads(text))     # any of the 8 document types
-```
-
-This raises `pydantic.ValidationError`, not `OscalParseError`. Pinning `pydantic<2.13` probably avoids the bug too, but that hasn't been verified.
-
-This is an upstream pydantic-core bug in its new 2.13 JSON validation path. The fix is [pydantic/pydantic#13275](https://github.com/pydantic/pydantic/pull/13275), which hasn't merged yet. Once a fixed release ships, this library will raise its pydantic floor to that release.
-
 ## Upgrading to 0.3.0
 
 Version 0.3.0 is a breaking release. The class names now follow the naming manifest of the
@@ -307,9 +274,9 @@ Python code can use field names; OSCAL data must use OSCAL names.
 
 - Constructor keyword arguments accept either: `BackMatterResourceRlink(href=..., media_type=...)` and `BackMatterResourceRlink(href=..., **{"media-type": ...})` build the same model. Plain dicts nested inside the kwargs are OSCAL data and must use OSCAL names.
 - Dict input (`Model.model_validate(...)`, `validate_element`) rejects a field name at any depth with `extra_forbidden`.
-- JSON input (`parse_oscal`, `parse_oscal_file`, `validate_oscal`, the typed `parse_*` functions, `model_validate_json`) never populates a field from a field name key.
+- JSON input (`parse_oscal`, `parse_oscal_file`, the typed `parse_*` functions, `model_validate_json`) rejects a field name at any depth with `extra_forbidden`, and `validate_oscal` returns `False`.
 
-On pydantic 2.13.x, JSON input drops a field-name key without an error instead of rejecting it. See [Known issue: Invalid OSCAL JSON keys can be silently lost](#known-issue-invalid-oscal-json-keys-can-be-silently-lost).
+JSON rejection needs pydantic 2.14.2 or later, which this library requires. Earlier releases of this library allowed pydantic 2.13.x, where JSON input silently dropped a field-name key and its value ([#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)).
 
 ### Validation
 
@@ -374,7 +341,7 @@ Public symbols are re-exported from `oscal_bindings.v1` and from the top-level `
 ## Requirements
 
 - Python 3.11+ (tested on 3.11–3.14)
-- Pydantic 2.11+
+- Pydantic 2.14.2+ (below 3)
 
 ## License
 

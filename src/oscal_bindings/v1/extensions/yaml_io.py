@@ -5,9 +5,8 @@ YML-011), with two documented exceptions:
 
 1. The serializer inherits the JSON path's datetime defect, so a
    seven-fraction-digit datetime loses its seventh digit on a round trip. That
-   narrows YML-008 and SER-005 until issue #19 closes. The corpus marks
-   ``yaml-round-trip/string-scalars`` as a known defect, and the conformance
-   run xfails it.
+   narrows YML-008 and SER-005 until issue #19 closes. The conformance run
+   xfails ``yaml-round-trip/string-scalars`` (``tests/support/expected_failures.py``).
 2. A double-quoted escape that names a surrogate, such as a surrogate pair
    ``"\\ud83d\\ude00"``, is a parse error. YAML 1.2 defines an escape as a
    Unicode scalar value, which a surrogate is not. The JSON path accepts the

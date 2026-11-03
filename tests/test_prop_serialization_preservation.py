@@ -12,14 +12,11 @@ pin today's behavior:
   ``OscalBaseModel.__init__`` (design Hypothesized Root Cause 5): if pydantic
   ever routes ``model_validate*`` through the name-mapping ``__init__``, these
   tests fail.
-- Name-keyed OSCAL *JSON* input never round-trips its value (3.2, 3.3 as
-  observed). pydantic-core's JSON mode (2.46.5) does not report a key equal to
-  a field's Python name as ``extra_forbidden``; it drops it. So an optional
-  field's value is silently lost (the document is accepted with the field
-  ``None``), and a required one fails as ``missing`` at its alias. The JSON
-  tests pin exactly that, and also accept ``extra_forbidden`` so a stricter
-  pydantic doesn't break them. Silent dropping is a pre-existing defect,
-  tracked separately from issue #5.
+- Name-keyed OSCAL *JSON* input is rejected the same way, as
+  ``extra_forbidden`` at the renamed key, through every parse entry point and
+  ``model_validate_json`` (3.2, 3.3). When these tests were written, pydantic
+  2.13.x dropped such a key instead and lost its value (#6); the 2.14.2 floor
+  fixed that, and the JSON tests now require the rejection.
 - Unknown keys stay rejected (3.5).
 - ``serialize_oscal`` byte-identity (3.1) was checked once against pre-fix
   SHA-256 digests of every corpus doc; it isn't re-tested here because
@@ -302,29 +299,21 @@ def _outcome(call: Callable[[], BaseModel]) -> Outcome:
 def _check_json_name_keyed_outcome(
     label: str, outcome: Outcome, site: AliasSite, rel_path: JsonPath, where: str
 ) -> None:
-    """Assert JSON-mode name-keyed input never keeps the value (observed F).
+    """Assert JSON-mode name-keyed input is rejected as ``extra_forbidden``.
 
-    - Rejected: ``extra_forbidden`` at the Python name, or (required field
-      only) ``missing`` at the alias. pydantic-core's JSON mode drops the
-      name-keyed key, so a required field reports ``missing``.
-    - Accepted (optional field only): the field is ``None`` in the result.
+    JSON mode now matches dict mode (#6): the error is ``extra_forbidden`` at
+    the Python name, whether the field is optional or required.
     """
-    required = type(site.owner).model_fields[site.name].is_required()
-    if isinstance(outcome, list):
-        ok = _has_extra_forbidden(outcome, rel_path, site.name) or (
-            required and _has_error(outcome, "missing", rel_path, site.alias)
+    if not isinstance(outcome, list):
+        owner = _model_at(outcome, rel_path)
+        pytest.fail(
+            f"{label}: accepted {where} "
+            f"({site.name}={getattr(owner, site.name, None)!r}). Name-keyed JSON "
+            f"must be rejected as in dict mode (#6). {ROOT_CAUSE_5}"
         )
-        assert ok, (
-            f"{label}: rejected {where}, but not as extra_forbidden at the name "
-            f"or missing at the alias (required={required}); "
-            f"errors[:5]={outcome[:5]}"
-        )
-        return
-    assert not required, f"{label}: accepted {where} with a required field renamed"
-    owner = _model_at(outcome, rel_path)
-    assert getattr(owner, site.name, None) is None, (
-        f"{label}: accepted {where} AND kept the value: name-keyed JSON now "
-        f"populates by name. {ROOT_CAUSE_5}"
+    assert _has_extra_forbidden(outcome, rel_path, site.name), (
+        f"{label}: rejected {where}, but not as extra_forbidden at the name; "
+        f"errors[:5]={outcome[:5]}"
     )
 
 
@@ -357,17 +346,14 @@ def _name_keyed(corpus_doc: CorpusDoc, site: AliasSite) -> dict[str, Any]:
 
 
 @given(data=st.data())
-def test_parse_entry_points_never_keep_name_keyed_json_value(
+def test_parse_entry_points_reject_name_keyed_json(
     all_corpus_docs: list[CorpusDoc],
     tmp_path_factory: pytest.TempPathFactory,
     data: st.DataObject,
 ) -> None:
-    """Feature: oscal-default-serialization-fix, Property 2: name-keyed JSON
-    never keeps its value through any parse entry point, and every entry
-    point agrees on accept/reject.
-
-    The parse functions are JSON-mode, so they see pydantic-core's
-    drop-the-name-key behavior (module docstring), not ``extra_forbidden``.
+    """Feature: oscal-default-serialization-fix, Property 2: every parse entry
+    point rejects name-keyed JSON as ``extra_forbidden`` at the renamed key, and
+    ``validate_oscal`` reports it invalid (#6).
 
     **Validates: Requirements 3.2, 3.3**
     """
@@ -392,9 +378,7 @@ def test_parse_entry_points_never_keep_name_keyed_json_value(
 
     accepted["validate_oscal(str)"] = validate_oscal(text)
     accepted["validate_oscal(bytes)"] = validate_oscal(text.encode())
-    assert len(set(accepted.values())) == 1, (
-        f"entry points disagree on {where}: {accepted}"
-    )
+    assert not any(accepted.values()), f"accepted {where}: {accepted}"
 
 
 @given(data=st.data())
@@ -403,12 +387,11 @@ def test_model_validate_rejects_name_keyed_input_at_depth(
 ) -> None:
     """Feature: oscal-default-serialization-fix, Property 2: direct
     ``model_validate`` stays alias-only (``extra_forbidden`` at the renamed
-    key) at the document, wrapper, and owning model levels; direct
-    ``model_validate_json`` never keeps the value.
+    key) at the document, wrapper, and owning model levels, and direct
+    ``model_validate_json`` rejects it the same way (#6).
 
     Direct calls matter: ``model_validate*`` is exactly the path the
-    ``__pydantic_base_init__`` marker protects. The dict-mode assertions are
-    the strict tripwire.
+    ``__pydantic_base_init__`` marker protects.
 
     **Validates: Requirements 3.2, 3.3**
     """

@@ -372,6 +372,10 @@ def test_every_generated_object_model_subclasses_oscal_base_model() -> None:
         and issubclass(obj, BaseModel)
         and obj not in IMPORTED_BASES
         and name not in PRESERVED_ROOT_MODELS
+        # pydantic >= 2.14 registers the parametrized bases of the two root
+        # models (``RootModel[...]``) in the models module; they are not OSCAL
+        # object models (test_models_manifest checks they are only those bases).
+        and obj.__pydantic_generic_metadata__["origin"] is None
         and not issubclass(obj, OscalBaseModel)
     ]
     assert not offenders, f"not OscalBaseModel subclasses: {offenders}"

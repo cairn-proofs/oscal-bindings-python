@@ -54,6 +54,15 @@ def _is_model(obj: object) -> bool:
     return isinstance(obj, type) and issubclass(obj, BaseModel)
 
 
+def _is_parametrized_generic(obj: object) -> bool:
+    """A pydantic parametrization such as ``RootModel[Mapping | list[Mapping]]``.
+
+    pydantic >= 2.14 registers a module-scope parametrization in the module that
+    writes it, under a non-identifier name, so it appears in ``vars(models)``.
+    """
+    return _is_model(obj) and obj.__pydantic_generic_metadata__["origin"] is not None  # type: ignore[attr-defined]
+
+
 def _runtime_kind(obj: object) -> str:
     """The manifest kind that a module attribute has at runtime."""
     if isinstance(obj, type) and issubclass(obj, enum.Enum):
@@ -115,10 +124,33 @@ def test_each_class_of_the_module_is_a_manifest_name() -> None:
         if isinstance(obj, type)
         and obj.__module__ == models.__name__
         and (_is_model(obj) or issubclass(obj, enum.Enum))
+        and not _is_parametrized_generic(obj)
     }
     assert classes - set(ENTRIES) == set()
     # A class is reachable under its own name only, not as a second binding.
     assert all(getattr(models, name).__name__ == name for name in classes)
+
+
+def test_each_parametrized_generic_of_the_module_is_a_manifest_base() -> None:
+    """A parametrization in ``models`` is only the base of a manifest class.
+
+    The scan above skips parametrized generics. This keeps the skip narrow: each
+    one must be the direct base of a manifest-named class (today the two
+    ``RootModel[...]`` bases of ``OscalDocument`` and
+    ``MappingCollectionMappings``), not a type that code uses on its own.
+    """
+    bases = {
+        base
+        for name in ENTRIES
+        if isinstance(getattr(models, name, None), type)
+        for base in getattr(models, name).__bases__
+    }
+    stray = [
+        name
+        for name, obj in vars(models).items()
+        if _is_parametrized_generic(obj) and obj not in bases
+    ]
+    assert stray == []
 
 
 def test_each_union_value_of_the_module_is_a_manifest_union() -> None:
