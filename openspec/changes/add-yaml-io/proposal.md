@@ -108,7 +108,8 @@ local specs today, so there is no local requirement text to change. The new loca
 
 1. Source: a new public module `v1/extensions/yaml_io.py`, re-exported from `v1/extensions/__init__.py` and
    `v1/__init__.py` per the standard extension pattern. It imports PyYAML only when an operation is called, through a
-   new private module `v1/extensions/_yaml_loader.py`. No change to `models.py`, codegen, or `parser.py`.
+   new private module `v1/extensions/_yaml_loader.py`. No change to `models.py` or codegen. `parser.py` gains one
+   private helper that both file parsers use to read a file.
 2. Dependencies: a new `yaml` optional extra adds a YAML library and its type stubs to the dev and test environments.
    The lockfiles change and ship with it.
 3. Pin and generation: `scripts/spec_artifact.py` moves two minor versions. Generation re-fetches the artifact. CI

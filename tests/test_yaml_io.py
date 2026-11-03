@@ -531,9 +531,24 @@ class TestYaml11LineBreaks:
             "b": "x\u2028y",
         }
 
-    def test_no_free_placeholder_is_parse_error(self) -> None:
+    def test_every_bmp_private_use_character_leaves_placeholders(self) -> None:
+        # Task 10.3: the BMP area alone is not the whole candidate set.
         every = "".join(chr(cp) for cp in range(0xE000, 0xF900))
-        entry = _yaml_error(f"a: {every}\nb: x\x85y\n")
+        assert json.loads(to_json_text(f"# {every}\na: x\x85y\n")) == {"a": "x\x85y"}
+
+    def test_supplementary_private_use_characters_survive(self) -> None:
+        text = "a: \U000f0000\U0010fffd\nb: x\u2028y\n"
+        assert json.loads(to_json_text(text)) == {
+            "a": "\U000f0000\U0010fffd",
+            "b": "x\u2028y",
+        }
+
+    def test_no_free_placeholder_is_parse_error(self) -> None:
+        # The documented placeholder limit: an input that holds every candidate.
+        every = "".join(
+            chr(cp) for r in _yaml_loader.PLACEHOLDER_CANDIDATES for cp in r
+        )
+        entry = _yaml_error(f"# {every}\nb: x\x85y\n")
         assert entry["type"] == "yaml_line_break_placeholder"
 
 
@@ -806,6 +821,19 @@ class TestNumberBoundary:
         json_text = json_text.replace('"start":443', f'"start":{digits}')
         with pytest.raises(OscalParseError):
             ob.parse_oscal(json_text)
+
+
+class TestSchemaCache:
+    def test_unknown_keys_do_not_grow_the_cache(self) -> None:
+        # Task 10.1: the resolver caches by schema node, never by input key.
+        parse_oscal_yaml(HEAD)
+        sizes = _SCHEMA.cache_sizes()
+        for i in range(20):
+            keys = "".join(f"    k{i}x{j}: v\n" for j in range(5_000))
+            with pytest.raises(OscalParseError):
+                parse_oscal_yaml(HEAD + keys)
+        after = _SCHEMA.cache_sizes()
+        assert after == sizes
 
 
 class TestMemory:

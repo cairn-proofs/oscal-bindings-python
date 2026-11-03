@@ -80,6 +80,10 @@ The resolver has two order-dependent tie-breaks. A key that two object branches 
 first branch. A location with more than one base type folds by priority. Against the pinned schema neither tie-break
 decides a result. A test scans the schema and fails when a pin move makes either tie-break decide a result.
 
+The resolver caches its results by schema node, never by a key from the input. It caches the merged property map of
+each mapping location, in which the first branch that declares a key wins. So the caches are bounded by the size of
+the schema, and a stream of inputs with unknown keys does not grow them.
+
 The base JSON type is string, number, integer, or boolean. The converter then emits:
 
 1. At a string location: a quoted JSON string that holds the scalar's text. A float-shaped `1.0` stays `"1.0"`, and
@@ -152,13 +156,15 @@ PyYAML's defaults break the contract in five ways. The binding corrects each one
    CR as line breaks, so these three characters are content. A raw U+0085 in a quoted scalar folds to a space, and in
    a plain scalar it causes a syntax error. The scanner does this below the event layer. So before the binding parses
    the text, it replaces each raw occurrence of the three characters with a placeholder character. The composer then
-   restores the original character in each scalar's text. The placeholders are three private-use characters
-   (U+E000 to U+F8FF) that the input does not hold. PyYAML reads a private-use character as printable content. A
-   placeholder must also be a character that no escape in the input can produce. So the binding excludes each code
-   point that a `\x`, `\u`, or `\U` escape sequence in the text names. An input that leaves fewer than three free
-   placeholders is a parse error. This needs an input that holds or names more than 6,000 distinct private-use
-   characters and also holds one of the three characters. The binding skips the replacement when the input holds none
-   of the three characters.
+   restores the original character in each scalar's text. The placeholders are three private-use characters that the
+   input does not hold. The binding takes them from the supplementary private-use planes 15 and 16 (U+F0000 to
+   U+FFFFD and U+100000 to U+10FFFD) first, then from the BMP private-use area (U+E000 to U+F8FF). Both parsers read
+   a private-use character as printable content. A placeholder must also be a character that no escape in the input
+   can produce. So the binding excludes each code point that a `\u` or `\U` escape sequence in the text names. An
+   input that leaves fewer than three free placeholders is a parse error, and the README documents this limit
+   (YML-011). Such an input holds or names about 137,000 distinct private-use characters, at least 520 KB built for
+   that purpose, and also holds one of the three characters. The binding skips the replacement when the input holds
+   none of the three characters.
 
 The binding creates the event parser inside its error handling. Both parsers can reject the text when the binding
 creates them: the pure-Python parser rejects a NUL character, and libyaml rejects a lone surrogate when it encodes the
@@ -323,16 +329,19 @@ than one document are both parse errors (YML-002.02, YML-002.03). A syntax error
 
 ### Decision 7: The file parser keeps the JSON path's not-found behavior
 
-`parse_oscal_yaml_file` reads the file and parses its content as `parse_oscal_yaml` does. A missing file reports the
+`parse_oscal_yaml_file` reads the file and parses its content as `parse_oscal_yaml` does. It reads the file through
+the same private helper as `parse_oscal_file` (`_read_oscal_file` in `v1/parser.py`), so the two file parsers cannot
+drift. A missing file reports the
 not-found condition, the same behavior that `parse_oscal_file` has today. That condition names the path and is distinct
 from the parse error (YML-006, PRS-002, ERR-001.03). The file parser does not collapse not-found into the parse error.
 
 ## Risks / Trade-offs
 
 1. The binding's composer depends on PyYAML's event API (the event classes, `check_event`, `get_event`, and the source
-   marks). → The event API is public and stable across PyYAML 5 and 6. The corpus cases and the unit tests run with
-   both parsers. A PyYAML upgrade that changed the API would fail them, not pass silently. The dependency is pinned in
-   the lockfiles.
+   marks). → The event API is public and stable since PyYAML 3. The corpus cases and the unit tests run with both
+   parsers. The `yaml` extra takes the range `pyyaml>=6.0.1,<7`, so a consumer can take a PyYAML security release
+   without a release of this binding. The lockfiles pin the exact tested version, so CI tests one version. A PyYAML
+   upgrade that changed the API would fail the tests, not pass silently.
 2. The binding hand-rolls rules that `ruamel.yaml` gives for free (YAML 1.2 typing, duplicate-key rejection, and
    anchor redefinition). → The rules are small, and each maps to a corpus case or a unit test. If the rules prove
    fragile, Decision 2 can move to `ruamel.yaml` without changing the public API or the specs.

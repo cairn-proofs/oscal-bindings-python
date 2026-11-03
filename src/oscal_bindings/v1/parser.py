@@ -73,16 +73,27 @@ def parse_oscal_file(path: Path | str) -> OscalDocument:
             conform to the OSCAL schema.
         FileNotFoundError: If the file does not exist.
     """
+    return parse_oscal(_read_oscal_file(path))
+
+
+def _read_oscal_file(path: Path | str) -> bytes:
+    """Read an OSCAL file for a file parser (PRS-002).
+
+    Shared by :func:`parse_oscal_file` and the YAML file parser, so both report
+    a missing file and a read failure the same way.
+
+    Raises:
+        FileNotFoundError: The file does not exist.
+        OscalParseError: The file exists but cannot be read.
+    """
     file_path = Path(path)
     if not file_path.exists():
         raise FileNotFoundError(f"OSCAL file not found: {file_path}")
 
     try:
-        data = file_path.read_bytes()
+        return file_path.read_bytes()
     except OSError as e:
         raise OscalParseError(f"Failed to read file: {e}") from e
-
-    return parse_oscal(data)
 
 
 def serialize_oscal(model: OscalDocument, *, indent: int | None = 2) -> str:

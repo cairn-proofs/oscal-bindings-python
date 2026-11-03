@@ -43,7 +43,7 @@ from oscal_bindings.v1.extensions.yaml_io import (
     DEPTH_LIMIT,
 )
 from oscal_bindings.v1.models import OscalDocument
-from oscal_bindings.v1.parser import OscalParseError, parse_oscal
+from oscal_bindings.v1.parser import OscalParseError, _read_oscal_file, parse_oscal
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -128,7 +128,20 @@ _YAML11_BREAKS = ("\x85", "\u2028", "\u2029")
 #: scalar only excludes one more code point, which is safe.
 _ESCAPE = re.compile(r"\\(?:u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))")
 
-_PRIVATE_USE = range(0xE000, 0xF900)
+#: The placeholder candidates, in the order the binding takes them: the
+#: supplementary private-use planes 15 and 16, then the BMP private-use area.
+#: Both parsers read a private-use character as printable content. About
+#: 137,000 candidates, so only an input built to hold every one of them, at
+#: least 520 KB, leaves too few free (a documented limit, YML-011).
+PLACEHOLDER_CANDIDATES = (
+    range(0xF0000, 0xFFFFE),
+    range(0x100000, 0x10FFFE),
+    range(0xE000, 0xF900),
+)
+
+
+def _is_private_use(cp: int) -> bool:
+    return any(cp in r for r in PLACEHOLDER_CANDIDATES)
 
 
 def _shield(text: str) -> tuple[str, dict[int, int] | None]:
@@ -139,10 +152,10 @@ def _shield(text: str) -> tuple[str, dict[int, int] | None]:
     """
     if not any(ch in text for ch in _YAML11_BREAKS):
         return text, None
-    taken = {cp for cp in map(ord, text) if cp in _PRIVATE_USE}
+    taken = {cp for cp in map(ord, set(text)) if _is_private_use(cp)}
     for m in _ESCAPE.finditer(text):
         taken.add(int(m.group(1) or m.group(2), 16))
-    free = (cp for cp in _PRIVATE_USE if cp not in taken)
+    free = (cp for r in PLACEHOLDER_CANDIDATES for cp in r if cp not in taken)
     chosen = [cp for _, cp in zip(_YAML11_BREAKS, free, strict=False)]
     if len(chosen) < len(_YAML11_BREAKS):
         _fail(
@@ -355,13 +368,18 @@ class _Schema:
         self.defs: dict[str, Any] = schema.get("$defs", {})
         #: The root location: an `anyOf` over the eight document wrappers.
         self.root: Any = schema
-        # The caches key on `id()` of a subschema. That is safe only because
-        # every subschema is part of `self.root`, which `_SCHEMA` keeps for the
-        # life of the process, so no `id()` is reused. Do not cache a schema
-        # dict that the resolver builds on the fly (see `deref`).
-        self._field_cache: dict[tuple[int, str], Any] = {}
+        # The caches key on `id()` of a subschema, never on a key from the
+        # input, so their size is bounded by the schema. `id()` keys are safe
+        # only because every subschema is part of `self.root`, which `_SCHEMA`
+        # keeps for the life of the process, so no `id()` is reused. Do not
+        # cache a schema dict that the resolver builds on the fly (see `deref`).
+        self._props_cache: dict[int, dict[str, Any]] = {}
         self._items_cache: dict[int, Any] = {}
         self._type_cache: dict[int, str | None] = {}
+
+    def cache_sizes(self) -> tuple[int, int, int]:
+        """Return the entry counts of the three caches, for tests."""
+        return len(self._props_cache), len(self._items_cache), len(self._type_cache)
 
     def deref(self, node: Any) -> Any:
         """Follow a ``$ref`` once to its definition."""
@@ -394,18 +412,27 @@ class _Schema:
         """
         if schema is None:
             return None
-        cache_key = (id(schema), key)
-        if cache_key in self._field_cache:
-            return self._field_cache[cache_key]
-        found = None
+        return self.properties(schema).get(key)
+
+    def properties(self, schema: Any) -> dict[str, Any]:
+        """Return the merged properties of a mapping location.
+
+        The first branch that declares a key wins. The result is cached per
+        schema node, so an unknown key from the input adds no cache entry.
+        """
+        cache_key = id(schema)
+        cached = self._props_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        merged: dict[str, Any] = {}
         for branch in self.branches(schema):
             resolved = self.deref(branch)
             props = resolved.get("properties") if isinstance(resolved, dict) else None
-            if isinstance(props, dict) and key in props:
-                found = props[key]
-                break
-        self._field_cache[cache_key] = found
-        return found
+            if isinstance(props, dict):
+                for name, sub in props.items():
+                    merged.setdefault(name, sub)
+        self._props_cache[cache_key] = merged
+        return merged
 
     def items(self, schema: Any) -> Any:
         """Return the item subschema of a sequence location, or ``None``."""
@@ -705,15 +732,7 @@ def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
 
 def parse_oscal_yaml_file(path: Path) -> OscalDocument:
     """Implement :func:`oscal_bindings.v1.extensions.yaml_io.parse_oscal_yaml_file`."""
-    if not path.exists():
-        message = f"OSCAL file not found: {path}"
-        raise FileNotFoundError(message)
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        message = f"Failed to read file: {exc}"
-        raise OscalParseError(message) from exc
-    return parse_oscal_yaml(raw)
+    return parse_oscal_yaml(_read_oscal_file(path))
 
 
 def _represent_str(dumper: Any, data: str) -> yaml.ScalarNode:

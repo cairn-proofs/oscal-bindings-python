@@ -299,6 +299,8 @@ Content that the document writes out, and that no alias repeats, does not count 
 
 The limits do not bound the size of the input. Memory grows linearly with the input size, at a higher factor than the JSON path. Measured with `tracemalloc` on Python 3.14, the SP 800-53 rev5 catalog peaks at about 11 times its YAML size (6.2 MB), against about 3.4 times its JSON size for `parse_oscal`. A node-dense input costs more on both paths. A flow mapping of 150,000 short keys (1.7 MB) peaks at about 190 MB, most of it in the JSON validation step that both paths share. Cap the size of untrusted YAML input before you parse it.
 
+One more documented limit applies only to input that holds U+0085, U+2028, or U+2029. The parser swaps each of these for an unused private-use character while it reads the text. An input that also holds or names all of the about 137,000 private-use characters, which takes at least 520 KB built for that purpose, leaves none unused and is a parse error.
+
 ### Field names vs. OSCAL names
 
 Python code can use field names; OSCAL data must use OSCAL names.

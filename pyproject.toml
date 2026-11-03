@@ -50,11 +50,12 @@ codegen = ["datamodel-code-generator[http,black,isort]==0.83.0"]
 # Optional YAML parse/serialize surface (v1/extensions/yaml_io.py). It imports
 # PyYAML, through v1/extensions/_yaml_loader.py, only when an operation is
 # called. The base install keeps pydantic[email] as its one runtime dependency;
-# `pip install oscal-bindings[yaml]` adds PyYAML. Pinned exactly: the YAML path
-# depends on PyYAML's event API (the event classes, get_event, check_event, and
-# source marks), so an upgrade is a deliberate, re-locked change (design
-# Decision 2).
-yaml = ["pyyaml==6.0.3"]
+# `pip install oscal-bindings[yaml]` adds PyYAML. A range, not a pin: a library
+# extra must let a consumer take a PyYAML security release. The YAML path uses
+# only PyYAML's event API, stable since 3.x. 6.0.1 is the first 6.x that builds
+# with current Cython. The default env below and the lockfiles pin the exact
+# tested version (design Risk 1).
+yaml = ["pyyaml>=6.0.1,<7"]
 
 # Every Hatch env installs from a hatch-pip-compile lockfile (requirements.txt for
 # default, requirements/requirements-<env>.txt otherwise). Hatch re-locks when an
@@ -78,8 +79,8 @@ dependencies = [
     # `generate` validates names.json against its JSON Schema before codegen.
     "jsonschema-rs==0.58.6",
     # YAML optional-extra library, present in default so `hatch run typing`
-    # resolves v1/extensions/_yaml_loader.py and its type stubs. Pinned in step
-    # with the `yaml` extra above; types-PyYAML is stubs-only (dev/typing use).
+    # resolves v1/extensions/_yaml_loader.py and its type stubs. Pinned exactly,
+    # inside the `yaml` extra's range; types-PyYAML is stubs-only (dev/typing use).
     "pyyaml==6.0.3",
     "types-PyYAML==6.0.12.20261030",
 ]

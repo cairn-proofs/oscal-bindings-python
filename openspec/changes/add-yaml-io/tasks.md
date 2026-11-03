@@ -188,6 +188,21 @@
   `id()`-keyed schema caches. Rename `PRE_MOVE_ALL` to `PUBLISHED_ALL`.
 - [x] 9.11 Run the full gate with `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` and read the log.
 
+## 10. Fixes from the PR review
+
+- [x] 10.1 Cache the resolver's results by schema node only: one merged property map per mapping location, with the
+  first branch that declares a key winning (design Decision 1). Verify with a test that 20 parses of inputs with 5,000
+  unknown keys each leave the cache sizes unchanged.
+- [x] 10.2 Give the `yaml` extra the range `pyyaml>=6.0.1,<7`, keep the exact pin in the `default` env and the
+  lockfiles, and re-lock with `hatch run lock` (design Risk 1).
+- [x] 10.3 Take line-break placeholders from planes 15 and 16 first, then the BMP private-use area (design Decision 2).
+  Document the placeholder limit in the README and DEVELOPING. Verify with a test that an input holding every BMP
+  private-use character and U+0085 parses, and a test that the limit still rejects an input that holds every
+  candidate.
+- [x] 10.4 Move the file read of both file parsers into `_read_oscal_file` in `v1/parser.py` (design Decision 7).
+  Verify with the existing file-parser tests.
+- [x] 10.5 Run the full gate with `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` and read the log.
+
 ## Workflow follow-up
 
 - Commit the spec files first on the feature branch, then each task group as a checkpoint, including the updated
