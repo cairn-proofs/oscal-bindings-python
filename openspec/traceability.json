@@ -11,7 +11,7 @@
     { "name": "parse_assessment_results", "requirements": ["PRS-003"] },
     { "name": "parse_plan_of_action_and_milestones", "requirements": ["PRS-003"] },
     { "name": "parse_mapping_collection", "requirements": ["PRS-003"] },
-    { "name": "serialize_oscal", "requirements": ["SER-001", "SER-002", "SER-003"] },
+    { "name": "serialize_oscal", "requirements": ["SER-001", "SER-002", "SER-003", "SER-004", "SER-005"] },
     { "name": "validate_oscal", "requirements": ["ERR-002"] },
     { "name": "parse_oscal_yaml", "requirements": ["YML-005"] },
     { "name": "parse_oscal_yaml_file", "requirements": ["YML-006"] },

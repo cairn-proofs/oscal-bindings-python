@@ -6,8 +6,9 @@ cases run from :mod:`tests.test_conformance`. These tests check the scenarios at
 the unit level, including the schema-type resolver that the corpus does not
 exercise in isolation.
 
-Every test in this module runs once with libyaml's parser and once with
-PyYAML's pure-Python parser (design Decision 2). The base-install and
+Every test in this module runs once with libyaml's parser and emitter and once
+with PyYAML's pure-Python ones (design Decisions 2 and 4). On a PyYAML build
+without libyaml, the libyaml cases skip. The base-install and
 import-path tests are in :mod:`tests.test_yaml_base_install`.
 """
 
@@ -17,6 +18,7 @@ import json
 import re
 import textwrap
 import tracemalloc
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -38,14 +40,33 @@ from oscal_bindings.v1.extensions.yaml_io import (
 if TYPE_CHECKING:
     from support.corpus import CorpusDoc
 
-PARSERS = {"libyaml": yaml.CSafeLoader, "python": yaml.SafeLoader}
+HAS_LIBYAML = hasattr(yaml, "CSafeLoader")
+PURE_YAML = SimpleNamespace(SafeLoader=yaml.SafeLoader, SafeDumper=yaml.SafeDumper)
 
 
-@pytest.fixture(autouse=True, params=sorted(PARSERS))
+@pytest.fixture(autouse=True, params=["libyaml", "python"])
 def yaml_parser(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
-    """Run each test with each event parser."""
-    monkeypatch.setattr(_yaml_loader, "_LOADER", PARSERS[request.param])
+    """Run each test with each event parser and emitter."""
+    if request.param == "libyaml":
+        if not HAS_LIBYAML:
+            pytest.skip("this PyYAML build has no libyaml")
+        module: Any = yaml
+    else:
+        module = PURE_YAML
+    monkeypatch.setattr(_yaml_loader, "_LOADER", _yaml_loader.select_loader(module))
+    monkeypatch.setattr(_yaml_loader, "_DUMPER", _yaml_loader.select_dumper(module))
     return str(request.param)
+
+
+class TestParserSelection:
+    def test_a_build_without_libyaml_uses_the_pure_python_parser(self) -> None:
+        assert _yaml_loader.select_loader(PURE_YAML) is yaml.SafeLoader
+        assert issubclass(_yaml_loader.select_dumper(PURE_YAML), yaml.SafeDumper)
+
+    @pytest.mark.skipif(not HAS_LIBYAML, reason="this PyYAML build has no libyaml")
+    def test_a_build_with_libyaml_uses_libyaml(self) -> None:
+        assert _yaml_loader.select_loader(yaml) is yaml.CSafeLoader
+        assert issubclass(_yaml_loader.select_dumper(yaml), yaml.CSafeDumper)
 
 
 HEAD = textwrap.dedent(
@@ -389,6 +410,78 @@ class TestStreamRules:
         # YML-002.01.
         assert _yaml_error("catalog: [a, b\n")["type"] == "yaml_syntax"
 
+    def test_nul_character_is_parse_error(self) -> None:
+        # Task 9.1: the pure-Python parser rejects a NUL when it is created.
+        _yaml_error(HEAD.replace("title: T", "title: a\x00b"))
+
+    def test_lone_surrogate_in_text_is_parse_error(self) -> None:
+        # Task 9.1: libyaml rejects a lone surrogate when it encodes the text.
+        _yaml_error(HEAD.replace("title: T", "title: a\ud800b"))
+
+    @pytest.mark.parametrize(
+        ("data", "line", "column"),
+        [
+            (b"catalog:\r  \xff\n", 2, 3),
+            (b"catalog:\r\n  \xff\n", 2, 3),
+            (b"title: \xc3\xa9 \xff\n", 1, 10),
+        ],
+        ids=["cr", "crlf", "multibyte"],
+    )
+    def test_encoding_error_names_the_character_position(
+        self, data: bytes, line: int, column: int
+    ) -> None:
+        # Task 9.4: lines break at LF, CR, and CRLF; columns count characters.
+        entry = _yaml_error(data)
+        assert (entry["line"], entry["column"]) == (line, column)
+
+    @pytest.mark.parametrize("version", ["1.1", "1.2"])
+    def test_supported_version_directive_reads_as_yaml_1_2(self, version: str) -> None:
+        # YAML 1.2.2 section 6.8.1: a 1.2 processor accepts a 1.1 document.
+        text = f"%YAML {version}\n---\n" + HEAD.replace("title: T", "title: yes")
+        md = _json_value(parse_oscal_yaml(text))["catalog"]["metadata"]
+        assert md["title"] == "yes"
+
+    @pytest.mark.parametrize("version", ["1.0", "1.3", "2.0"])
+    def test_other_version_directive_is_parse_error(self, version: str) -> None:
+        # Task 9.3: both parsers reject it, so the result does not depend on
+        # the installed parser.
+        assert _yaml_error(f"%YAML {version}\n---\n{HEAD}")["type"] == "yaml_version"
+
+    def test_surrogate_escape_is_parse_error(self) -> None:
+        # Task 9.3: a surrogate is not a Unicode scalar value.
+        _yaml_error(HEAD.replace("title: T", 'title: "\\ud83d\\ude00"'))
+
+    def test_astral_escape_is_the_character(self) -> None:
+        md = _metadata('remarks: "\\U0001F600"\n')
+        assert md["remarks"] == "\U0001f600"
+
+
+class TestMessageLength:
+    """Task 9.2: a message quotes a bounded part of the input."""
+
+    BIG = "9" * 2_000_000
+
+    def test_number_grammar_message_is_short(self) -> None:
+        text = _component_with_start("+" + self.BIG)
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(text)
+        assert len(str(info.value)) < 300
+        assert info.value.errors[0]["input"] == "+" + self.BIG
+
+    def test_duplicate_key_message_is_short(self) -> None:
+        key = "k" + self.BIG
+        with pytest.raises(OscalParseError) as info:
+            # An explicit key: YAML caps an implicit key at 1024 characters.
+            parse_oscal_yaml(HEAD + f"    ? {key}\n    : a\n    ? {key}\n    : b\n")
+        assert len(str(info.value)) < 300
+        assert info.value.errors[0]["type"] == "yaml_duplicate_key"
+
+    def test_undefined_anchor_message_is_short(self) -> None:
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(HEAD + f"    remarks: *a{self.BIG}\n")
+        assert len(str(info.value)) < 300
+        assert info.value.errors[0]["type"] == "yaml_undefined_alias"
+
 
 # --- Task 2.6: YAML 1.1 line-break characters are content -----------------
 
@@ -594,8 +687,12 @@ class TestAliasBudget:
         # 14 KB of input repeats a 10,000-character scalar 101 times.
         text = _scalar_alias(10_000, 101)
         assert len(text) < 16_000
-        with pytest.raises(OscalParseError, match=CHAR_LIMIT_MSG):
+        with pytest.raises(OscalParseError, match=CHAR_LIMIT_MSG) as info:
             parse_oscal_yaml(text)
+        # The entry names the anchored scalar that the 101st alias repeats.
+        entry = info.value.errors[0]
+        assert (entry["line"], entry["column"]) == (8, 14)
+        assert entry["loc"] == ("catalog", "metadata", "props", 100, "remarks")
 
     def test_large_scalar_alias_bomb_is_rejected(self) -> None:
         with pytest.raises(OscalParseError, match=CHAR_LIMIT_MSG):
@@ -619,7 +716,11 @@ class TestAliasBudget:
         # 101 copies of a 1,000-node sequence charge 101,000 nodes.
         with pytest.raises(OscalParseError, match=NODE_LIMIT_MSG) as info:
             parse_oscal_yaml(_wide_alias(999, 101))
-        assert info.value.errors[0]["type"] == "yaml_alias_budget"
+        entry = info.value.errors[0]
+        assert entry["type"] == "yaml_alias_budget"
+        # The 101st copy passes the limit inside the anchored sequence on line 8.
+        assert entry["line"] == 8
+        assert entry["loc"][:4] == ("catalog", "metadata", "props", 100)
 
     def test_collection_aliases_within_the_node_limit_are_not_rejected(self) -> None:
         # 99 copies of a 1,000-node sequence charge 99,000 nodes.
@@ -663,7 +764,10 @@ class TestDepthLimit:
     def test_input_past_the_depth_limit_is_rejected(self) -> None:
         with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG) as info:
             parse_oscal_yaml(_nested(DEPTH_LIMIT + 1))
-        assert info.value.errors[0]["type"] == "yaml_depth_limit"
+        entry = info.value.errors[0]
+        assert entry["type"] == "yaml_depth_limit"
+        # The innermost `[` sits at depth 129, column 14 + 126 on line 8.
+        assert (entry["line"], entry["column"]) == (8, 14 + DEPTH_LIMIT - 2)
 
     def test_very_deep_input_is_rejected_by_the_documented_limit(self) -> None:
         # No stack limit of the runtime rejects it first (YML-011).
@@ -682,8 +786,13 @@ class TestDepthLimit:
         outer = "[" * 100 + "*d" + "]" * 100
         text = HEAD + f"    remarks: &d {inner}\n    x: {outer}\n"
         assert json.loads(to_json_text(HEAD + f"    remarks: &d {inner}\n"))
-        with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG):
+        with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG) as info:
             parse_oscal_yaml(text)
+        # The path names the alias use. The mark names the anchored node that
+        # passes the limit there, on line 8.
+        entry = info.value.errors[0]
+        assert entry["loc"][:3] == ("catalog", "metadata", "x")
+        assert entry["line"] == 8
 
 
 class TestNumberBoundary:
@@ -700,6 +809,19 @@ class TestNumberBoundary:
 
 
 class TestMemory:
+    def test_input_without_aliases_stays_within_its_factor(self) -> None:
+        # Task 9.5: the limits do not bound input without aliases, so this
+        # bounds its cost per input byte. A flow sequence of one-character
+        # scalars is the most node-dense input. Design: below 60 times.
+        text = HEAD + "    remarks: [" + ", ".join(["x"] * 20_000) + "]\n"
+        tracemalloc.start()
+        try:
+            to_json_text(text)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert peak < 60 * len(text), peak / len(text)
+
     @pytest.mark.parametrize(
         "text",
         [
@@ -734,4 +856,8 @@ def test_large_real_catalog_without_aliases_parses(
     text = yaml.dump(json.loads(raw), Dumper=yaml.CSafeDumper, sort_keys=False)
     events = yaml.parse(text, Loader=yaml.CSafeLoader)
     assert not any(isinstance(e, yaml.AliasEvent) for e in events)
-    assert _json_value(parse_oscal_yaml(text)) == _json_value(ob.parse_oscal(raw))
+    doc = parse_oscal_yaml(text)
+    expected = _json_value(ob.parse_oscal(raw))
+    assert _json_value(doc) == expected
+    # Task 9.6: the serializer round-trips a publication-sized catalog.
+    assert _json_value(parse_oscal_yaml(serialize_oscal_yaml(doc))) == expected

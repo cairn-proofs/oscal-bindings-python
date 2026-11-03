@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 import pytest
 from support.spec_artifact import OSCAL_RELEASE
 from support.version_package import (
-    PRE_MOVE_ALL,
+    PUBLISHED_ALL,
     SEMVER_RE,
     active_schema_path,
     schema_release,
@@ -70,12 +70,12 @@ class TestPublicSurface:
     """Req 4.4, 5.1 — the published surface survived the move intact."""
 
     def test_version_package_surface_matches_the_pre_move_snapshot(self):
-        assert set(oscal_bindings.v1.__all__) == PRE_MOVE_ALL
+        assert set(oscal_bindings.v1.__all__) == PUBLISHED_ALL
 
     def test_shim_surface_matches_the_pre_move_snapshot(self):
-        assert set(oscal_bindings.__all__) == PRE_MOVE_ALL
+        assert set(oscal_bindings.__all__) == PUBLISHED_ALL
 
-    @pytest.mark.parametrize("name", sorted(PRE_MOVE_ALL))
+    @pytest.mark.parametrize("name", sorted(PUBLISHED_ALL))
     def test_pre_move_name_imports_from_the_top_level(self, name: str):
         assert hasattr(oscal_bindings, name), f"{name} no longer importable"
 

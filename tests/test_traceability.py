@@ -65,10 +65,26 @@ def test_record_conforms_to_store_schema() -> None:
     assert not errors, [str(e) for e in errors]
 
 
+def _missing_entries(record: dict) -> list[str]:
+    """Return the public operations that have no entry in ``record``."""
+    recorded = {op["name"] for op in record["operations"]}
+    return sorted(_public_operations() - recorded)
+
+
+def _unresolved_identifiers(record: dict) -> list[str]:
+    """Return the cited identifiers of ``record`` that the pinned index lacks."""
+    ids = _index_ids()
+    return [
+        req
+        for op in record["operations"]
+        for req in op.get("requirements", [])
+        if req not in ids
+    ]
+
+
 def test_every_public_operation_has_an_entry() -> None:
     """SRF-003.04: a public operation without an entry fails conformance."""
-    recorded = {op["name"] for op in _load_record()["operations"]}
-    missing = sorted(_public_operations() - recorded)
+    missing = _missing_entries(_load_record())
     assert not missing, f"public operations without a record entry: {missing}"
 
 
@@ -86,13 +102,7 @@ def test_each_entry_names_one_public_operation_once() -> None:
 
 def test_cited_identifiers_resolve_in_the_pinned_index() -> None:
     """SRF-004: each contract identifier resolves in the requirement index."""
-    ids = _index_ids()
-    unresolved = [
-        req
-        for op in _load_record()["operations"]
-        for req in op.get("requirements", [])
-        if req not in ids
-    ]
+    unresolved = _unresolved_identifiers(_load_record())
     assert not unresolved, f"cited identifiers not in the pinned index: {unresolved}"
 
 
@@ -113,16 +123,15 @@ def test_detects_a_removed_entry() -> None:
     record["operations"] = [
         op for op in record["operations"] if op["name"] != "parse_oscal"
     ]
-    recorded = {op["name"] for op in record["operations"]}
-    missing = _public_operations() - recorded
-    assert "parse_oscal" in missing
+    assert _missing_entries(record) == ["parse_oscal"]
 
 
 def test_detects_an_unresolvable_identifier() -> None:
     """A cited identifier absent from the index is caught (SRF-004.02)."""
-    ids = _index_ids()
+    record = _load_record()
     # A retired/nonexistent identifier of the right shape.
-    assert "MDL-004" not in ids
+    record["operations"][0]["requirements"].append("MDL-004")
+    assert _unresolved_identifiers(record) == ["MDL-004"]
 
 
 @pytest.mark.parametrize(

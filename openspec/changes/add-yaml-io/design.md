@@ -47,7 +47,9 @@ of 500 never fired. The measurements in Decision 3 replace the estimates that bo
 2. A YAML-specific validity check. `validate_oscal` already satisfies ERR-002.
 3. Any change to `models.py`, codegen, or the JSON parser's behavior.
 4. A limit on the size of input that no alias repeats. The memory that such input uses is linear in the input size, and
-   the caller controls the input size. The JSON path applies no such limit either.
+   the caller controls the input size. The JSON path applies no such limit either. The factor is larger than the JSON
+   path's factor, because the YAML path holds a node tree and the JSON text at the same time. The README states the
+   measured factor, and a test keeps it from growing unnoticed.
 
 ## Decisions
 
@@ -108,6 +110,14 @@ entry has the keys that a Pydantic entry has, so one loop handles both kinds:
 The entry also has `line` and `column`, both 1-based, from the YAML source mark. A Pydantic entry does not have these
 two keys. A failure that Pydantic finds keeps the Pydantic entry unchanged.
 
+The message quotes at most 40 characters of input text, followed by an ellipsis when the binding shortens it. The
+`input` key holds the whole text, as a Pydantic entry does. So a large hostile scalar cannot make the message, and any
+log that writes it, as large as the input.
+
+A scalar at a location whose schema names no scalar type, such as `metadata: 5`, becomes the JSON string `"5"`, because
+YML-004 makes its value its text. Pydantic then reports a type error whose `input` is the string `"5"`. The JSON path
+reports the number `5` for the same document. This is the one difference between the entries of the two paths.
+
 **Alternatives considered.** (1) Emit every leaf as a JSON string and let Pydantic's lax mode coerce each value to the
 schema type. This is simpler, but lax coercion is not the JSON number grammar. It accepts `yes` as a boolean and `+443`
 and `007` as numbers, so it fails YML-004.08 and YML-004.10 and the matching corpus cases. Rejected. (2) Construct
@@ -149,6 +159,22 @@ PyYAML's defaults break the contract in five ways. The binding corrects each one
    placeholders is a parse error. This needs an input that holds or names more than 6,000 distinct private-use
    characters and also holds one of the three characters. The binding skips the replacement when the input holds none
    of the three characters.
+
+The binding creates the event parser inside its error handling. Both parsers can reject the text when the binding
+creates them: the pure-Python parser rejects a NUL character, and libyaml rejects a lone surrogate when it encodes the
+text. Each such failure is a parse error.
+
+A `%YAML` directive names the YAML version of the document. YAML 1.2.2 section 6.8.1 requires a 1.2 processor to
+accept a `%YAML 1.1` document and to read it as 1.2. So the binding accepts `%YAML 1.1` and `%YAML 1.2`, and reads
+both as YAML 1.2. The two parsers disagree on other versions: libyaml rejects `%YAML 1.3`, and the pure-Python parser
+accepts it. So the binding rejects every other version as a parse error, and the result does not depend on the
+installed parser.
+
+PyYAML's two parsers also disagree on a surrogate-pair escape such as `"\ud83d\ude00"`. libyaml rejects it, and the
+pure-Python parser joins it to one character. YAML 1.2 defines an escape as a Unicode scalar value, which a surrogate is
+not, so the binding rejects the escape with both parsers. The JSON path accepts the same pair. This is a documented
+divergence from YML-005, beside the datetime defect of issue #19. The escape `"\U0001F600"` gives the same character
+on both paths.
 
 The composer maps each anchor to its node. An alias to an anchor that is not defined is a parse error. An alias to a
 node that is still open on the composer's stack is an alias inside its own anchored node, which is a parse error
@@ -246,6 +272,10 @@ PyYAML's emitter writes U+0085 as a raw line break inside a single-quoted scalar
 the serializer writes a string that holds U+0085, U+2028, or U+2029 in double-quoted style, where the emitter writes the
 escapes `\N`, `\L`, and `\P`. Every YAML reader reads these escapes as the original characters.
 
+The serializer uses libyaml's emitter (`CSafeDumper`) when PyYAML has it, else the pure-Python emitter, as the parser
+does. libyaml's emitter is about three times faster on a large catalog. The two emitters can fold long lines
+differently, but their output reads back as the same value. The tests run the serializer with both emitters.
+
 **Alternatives considered.** Serialize the Pydantic model straight to YAML with a YAML representer per model type. This
 duplicates the no-null and key rules that the JSON path already enforces, and risks a YAML path that disagrees with the
 JSON path. Rejected for the same reason as Decision 1.
@@ -264,6 +294,10 @@ A base install without the extra keeps every non-YAML import path working: `impo
 operation raises `ImportError` with a message that names the extra to install. The base install keeps `pydantic[email]`
 as its one runtime dependency.
 
+The three limit constants stay in `yaml_io` and are not in any `__all__`. The README and DEVELOPING state each value
+in prose, and a test ties the prose to the constants. An exported constant is public API that the binding must keep
+stable, and no caller needs to read the value at run time.
+
 The three functions carry the real type signatures and the full docstrings. So a type checker resolves them through
 every documented import path, and pdoc publishes their contract. The binding does not re-export the YAML names through
 a module `__getattr__` or a `globals()` loop. Either one erases the static types and forces a star import to resolve
@@ -278,9 +312,10 @@ module that re-exports only. Rejected.
 ### Decision 6: One UTF-8 document, decoded by the binding
 
 The input is one YAML 1.2 document in UTF-8 (YML-002). The binding decodes bytes as UTF-8 itself and maps a decode
-failure to the binding's parse error, the same as the JSON path (PRS-001.03). It does not pass raw bytes to the YAML
-library. The library decodes bytes on its own and honors a UTF-16 byte-order mark. Passing raw bytes would accept a
-UTF-16 input that YML-002.04 requires the binding to reject.
+failure to the binding's parse error, the same as the JSON path (PRS-001.03). The error entry gives the line and the
+character column of the first invalid byte. The binding counts LF, CR, and CRLF as line breaks, as YAML 1.2 does. It
+does not pass raw bytes to the YAML library. The library decodes bytes on its own and honors a UTF-16 byte-order mark.
+Passing raw bytes would accept a UTF-16 input that YML-002.04 requires the binding to reject.
 
 The binding reads the event stream and requires exactly one document. A stream with no document and a stream with more
 than one document are both parse errors (YML-002.02, YML-002.03). A syntax error from the parser is a parse error

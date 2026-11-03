@@ -1,11 +1,17 @@
 """Optional YAML parse and serialize for OSCAL documents.
 
 This module implements the store's ``yaml-documents`` capability (YML-001 to
-YML-011), with one documented exception: the serializer inherits the JSON
-path's datetime defect, so a seven-fraction-digit datetime loses its seventh
-digit on a round trip. That narrows YML-008 and SER-005 until issue #19 closes.
-The corpus marks ``yaml-round-trip/string-scalars`` as a known defect, and the
-conformance run xfails it.
+YML-011), with two documented exceptions:
+
+1. The serializer inherits the JSON path's datetime defect, so a
+   seven-fraction-digit datetime loses its seventh digit on a round trip. That
+   narrows YML-008 and SER-005 until issue #19 closes. The corpus marks
+   ``yaml-round-trip/string-scalars`` as a known defect, and the conformance
+   run xfails it.
+2. A double-quoted escape that names a surrogate, such as a surrogate pair
+   ``"\\ud83d\\ude00"``, is a parse error. YAML 1.2 defines an escape as a
+   Unicode scalar value, which a surrogate is not. The JSON path accepts the
+   same pair, so this narrows YML-005. Write ``"\\U0001F600"`` instead.
 
 YAML is an optional feature. It needs the ``yaml`` extra
 (``pip install oscal-bindings[yaml]``). This module does not import PyYAML when
@@ -17,22 +23,25 @@ A parse reads one YAML 1.2 document in UTF-8, converts it to JSON text, and
 passes that text to :func:`~oscal_bindings.v1.parser.parse_oscal`. So the YAML
 parse result equals the JSON parse result for the JSON text of the input
 (YML-005), and the YAML path has the JSON path's validation and error detail.
-The OSCAL schema decides the type of each scalar at its location (YML-004).
+The OSCAL schema decides the type of each scalar at its location (YML-004). A
+``%YAML 1.1`` or ``%YAML 1.2`` directive is accepted, and both read as YAML
+1.2, as YAML 1.2.2 section 6.8.1 requires. Any other version is a parse error.
 
 Resource limits (YML-011). A parse applies three documented limits, and an input
 past any of them is an :class:`~oscal_bindings.v1.parser.OscalParseError`:
 
-1. Alias nodes: aliases can add at most :data:`ALIAS_NODE_LIMIT` nodes. Each use
-   of an alias adds every scalar, sequence, mapping, and mapping key of the
-   value it expands to.
-2. Alias characters: aliases can add at most :data:`ALIAS_CHAR_LIMIT` characters
-   of scalar text and key text.
-3. Depth: no node can sit deeper than :data:`DEPTH_LIMIT` sequences and
-   mappings, counted after alias expansion.
+1. Alias nodes: aliases can add at most 100,000 nodes. Each use of an alias adds
+   every scalar, sequence, mapping, and mapping key of the value it expands to.
+2. Alias characters: aliases can add at most 1,000,000 characters of scalar
+   text and key text.
+3. Depth: no node can sit deeper than 128 levels of sequences and mappings,
+   counted after alias expansion.
 
 Content that the input writes out, and that no alias repeats, does not count
 against the two alias limits. No step of the parse recurses per nesting level,
-so the depth limit, not the interpreter's stack, rejects deep input.
+so the depth limit, not the interpreter's stack, rejects deep input. The limits
+do not bound the size of input without aliases. Its memory cost grows linearly
+with the input size, at a higher factor than the JSON path (see the README).
 """
 
 from __future__ import annotations
@@ -49,13 +58,16 @@ __all__ = [
     "serialize_oscal_yaml",
 ]
 
+# The three limits are not exported: the README and DEVELOPING state each value,
+# and tests/test_lint_config.py ties the prose to these constants.
+
 #: The maximum number of nodes that aliases can add to one YAML input. Each use
 #: of an alias adds every scalar, sequence, mapping, and mapping key of the value
 #: it expands to, and an alias inside a repeated value adds its value each time.
 ALIAS_NODE_LIMIT = 100_000
 
 #: The maximum number of characters of scalar text and key text that aliases can
-#: add to one YAML input, counted as :data:`ALIAS_NODE_LIMIT` counts nodes.
+#: add to one YAML input, counted as ``ALIAS_NODE_LIMIT`` counts nodes.
 ALIAS_CHAR_LIMIT = 1_000_000
 
 #: The maximum depth of a node: the number of sequences and mappings that hold

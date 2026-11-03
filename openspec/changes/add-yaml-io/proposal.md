@@ -92,10 +92,10 @@ makes them optional, and all-or-nothing: a binding offers one for each of the ei
    requirements this change adds: the posture the binding takes on alias expansion and nesting depth, under YML-011.
    This is the project's first local spec. The three YAML parse and serialize operations are not here. The store's
    `yaml-documents` capability defines them, not this project. A YAML parser decides that YAML input is accepted,
-   which SRF-002.02 names as not binding-local. So those operations are contract operations, and the traceability record maps them to YML-005,
-   YML-006, and YML-008. The `yaml-resource-limit` requirements document a posture, not a public operation, so they earn
-   no traceability-record entry. SRF-007.01 forbids an entry that holds both a contract identifier and a binding-local
-   identifier, so the `parse_oscal_yaml` entry cites YML-005 only.
+   which SRF-002.02 names as not binding-local. So those operations are contract operations, and the traceability record
+   maps them to YML-005, YML-006, and YML-008. The `yaml-resource-limit` requirements document a posture, not a public
+   operation, so they earn no traceability-record entry. SRF-007.01 forbids an entry that holds both a contract
+   identifier and a binding-local identifier, so the `parse_oscal_yaml` entry cites YML-005 only.
 
 ### Modified Capabilities
 

@@ -30,6 +30,7 @@ from yaml.events import (
     AliasEvent,
     CollectionStartEvent,
     DocumentEndEvent,
+    DocumentStartEvent,
     MappingStartEvent,
     ScalarEvent,
     StreamEndEvent,
@@ -47,10 +48,29 @@ from oscal_bindings.v1.parser import OscalParseError, parse_oscal
 if TYPE_CHECKING:
     from pathlib import Path
 
-#: The event parser. libyaml's parser is about nine times faster than the
-#: pure-Python one, and both emit the same events and marks. A PyYAML build
-#: without libyaml falls back to the pure-Python parser.
-_LOADER: Any = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+def select_loader(module: Any = yaml) -> Any:
+    """Return libyaml's event parser when ``module`` has it, else PyYAML's own.
+
+    libyaml's parser is about four times faster, and both emit the same events
+    and marks. A PyYAML build without libyaml has only the pure-Python parser.
+    """
+    return getattr(module, "CSafeLoader", module.SafeLoader)
+
+
+#: The event parser that the parse uses.
+_LOADER: Any = select_loader()
+
+#: The YAML versions that a `%YAML` directive can name. YAML 1.2.2 section 6.8.1
+#: requires a 1.2 processor to accept a 1.1 document and to read it as 1.2.
+_VERSIONS = frozenset({(1, 1), (1, 2)})
+
+#: A surrogate code point. Only an escape can put one in a scalar's text, and
+#: YAML 1.2 defines an escape as a Unicode scalar value, which a surrogate is not.
+_SURROGATE = re.compile("[\ud800-\udfff]")
+
+#: The maximum number of input characters that a parse-error message quotes.
+_QUOTE_LIMIT = 40
 
 # JSON string encoder: escapes every non-ASCII character, so a lone surrogate
 # from a YAML escape reaches the JSON parser as an escape, as `json.dumps` does.
@@ -58,6 +78,18 @@ _encode_str = json.encoder.encode_basestring_ascii  # type: ignore[attr-defined]
 
 
 # --- Errors ------------------------------------------------------------------
+
+
+def _brief(text: str) -> str:
+    """Return ``repr(text)``, shortened to ``_QUOTE_LIMIT`` characters of text.
+
+    A message quotes input through this function, so a large hostile scalar
+    cannot make a message, or a log that writes it, as large as the input. The
+    error entry's ``input`` key keeps the whole text.
+    """
+    if len(text) <= _QUOTE_LIMIT:
+        return repr(text)
+    return f"{text[:_QUOTE_LIMIT]!r}... ({len(text):,} characters)"
 
 
 def _fail(
@@ -141,9 +173,14 @@ class _Node:
     kind: int
     line: int
     column: int
+    items: list[_Node | _Alias]
     text: str = ""
-    items: list[_Node | _Alias] = field(default_factory=list)
     closed: bool = False
+
+
+#: The ``items`` of every scalar node. A scalar never adds an item, so one shared
+#: empty list saves one list per scalar.
+_NO_ITEMS: list[_Node | _Alias] = []
 
 
 @dataclass(eq=False, slots=True)
@@ -167,18 +204,31 @@ def _compose(text: str, restore: dict[int, int] | None) -> _Node:
     document are parse errors. The composer checks the written depth against
     ``DEPTH_LIMIT``.
     """
-    loader = _LOADER(text)
+    loader = None
     try:
+        # Both parsers can reject the text when they are created: the
+        # pure-Python one rejects a NUL, and libyaml rejects a lone surrogate.
+        loader = _LOADER(text)
         return _compose_events(loader, restore)
     except yaml.MarkedYAMLError as exc:
         mark = exc.problem_mark or exc.context_mark
         line = mark.line + 1 if mark is not None else None
         column = mark.column + 1 if mark is not None else None
-        _fail("syntax", f"Invalid YAML: {exc}", at=(line, column))
+        # libyaml rejects a `%YAML` version it does not know in the parser.
+        kind = "version" if "incompatible YAML document" in str(exc) else "syntax"
+        _fail(kind, f"Invalid YAML: {exc}", at=(line, column))
     except yaml.YAMLError as exc:
+        # A reader error: a character that YAML does not allow, such as a NUL.
         _fail("syntax", f"Invalid YAML: {exc}")
+    except UnicodeEncodeError as exc:
+        _fail(
+            "encoding",
+            "YAML input holds a lone surrogate, which is not a Unicode character",
+            at=_position(text[: exc.start]),
+        )
     finally:
-        loader.dispose()
+        if loader is not None:
+            loader.dispose()
 
 
 def _compose_child(
@@ -203,7 +253,8 @@ def _compose_child(
         if target is None:
             _fail(
                 "undefined_alias",
-                f"YAML alias refers to an undefined anchor: {event.anchor!r}",
+                "YAML alias refers to an undefined anchor: "
+                f"{_brief(event.anchor or '')}",
                 at=at,
             )
         if not target.closed:
@@ -215,10 +266,16 @@ def _compose_child(
         return _Alias(target, *at)
     if isinstance(event, ScalarEvent):
         text = event.value if restore is None else event.value.translate(restore)
-        child = _Node(_SCALAR, *at, text=text, closed=True)
+        if _SURROGATE.search(text):
+            _fail(
+                "surrogate_escape",
+                "YAML escape names a surrogate, which is not a Unicode character",
+                at=at,
+            )
+        child = _Node(_SCALAR, *at, _NO_ITEMS, text=text, closed=True)
     else:
         kind = _MAPPING if isinstance(event, MappingStartEvent) else _SEQUENCE
-        child = _Node(kind, *at)
+        child = _Node(kind, *at, [])
     if event.anchor is not None:
         # YAML 1.2: a later anchor with the same name redefines it.
         anchors[event.anchor] = child
@@ -231,7 +288,16 @@ def _compose_events(loader: Any, restore: dict[int, int] | None) -> _Node:
         _fail("syntax", "Invalid YAML: no stream start")
     if loader.check_event(StreamEndEvent):
         _fail("stream", "YAML input holds no document", at=_mark(loader.peek_event()))
-    loader.get_event()  # DocumentStartEvent
+    start = loader.get_event()
+    if isinstance(start, DocumentStartEvent) and start.version is not None:
+        version = tuple(start.version)
+        if version not in _VERSIONS:
+            _fail(
+                "version",
+                f"YAML version {'.'.join(map(str, version))} is not supported; "
+                "the binding reads YAML 1.2 and YAML 1.1 documents",
+                at=_mark(start),
+            )
 
     anchors: dict[str, _Node] = {}
     stack: list[_Node] = []
@@ -289,6 +355,10 @@ class _Schema:
         self.defs: dict[str, Any] = schema.get("$defs", {})
         #: The root location: an `anyOf` over the eight document wrappers.
         self.root: Any = schema
+        # The caches key on `id()` of a subschema. That is safe only because
+        # every subschema is part of `self.root`, which `_SCHEMA` keeps for the
+        # life of the process, so no `id()` is reused. Do not cache a schema
+        # dict that the resolver builds on the fly (see `deref`).
         self._field_cache: dict[tuple[int, str], Any] = {}
         self._items_cache: dict[int, Any] = {}
         self._type_cache: dict[int, str | None] = {}
@@ -419,8 +489,13 @@ class _Frame:
 class _Walk:
     """Write the JSON text of a composed tree, with an explicit stack."""
 
+    #: The walk joins its output into one chunk after this many pieces, so it
+    #: keeps the JSON text, not one string object per node.
+    CHUNK = 4096
+
     def __init__(self) -> None:
         self.out: list[str] = []
+        self.chunks: list[str] = []
         self.stack: list[_Frame] = []
         self.alias_nodes = 0
         self.alias_chars = 0
@@ -458,6 +533,9 @@ class _Walk:
         out = self.out
         stack = self.stack
         while stack:
+            if len(out) > self.CHUNK:
+                self.chunks.append("".join(out))
+                out.clear()
             f = stack[-1]
             items = f.node.items
             if f.node.kind == _SEQUENCE:
@@ -486,7 +564,8 @@ class _Walk:
                 self.emit(
                     child, _SCHEMA.field(f.schema, key), key, f.depth + 1, f.charged
                 )
-        return "".join(out)
+        self.chunks.append("".join(out))
+        return "".join(self.chunks)
 
     def key(self, f: _Frame, key_item: _Node | _Alias) -> str:
         """Return a mapping key's text, after the key rules of YML-003."""
@@ -508,7 +587,7 @@ class _Walk:
         if key in f.keys:
             _fail(
                 "duplicate_key",
-                f"YAML mapping has a duplicate key: {key!r}",
+                f"YAML mapping has a duplicate key: {_brief(key)}",
                 loc=self.path(key),
                 at=(node.line, node.column),
                 text=key,
@@ -562,7 +641,7 @@ class _Walk:
                 return text
             _fail(
                 "number_grammar",
-                f"YAML scalar {text!r} does not match the JSON number grammar "
+                f"YAML scalar {_brief(text)} does not match the JSON number grammar "
                 "at this location",
                 loc=self.path(slot),
                 at=(node.line, node.column),
@@ -572,7 +651,7 @@ class _Walk:
             return text
         _fail(
             "boolean_grammar",
-            f"YAML scalar {text!r} is not a JSON boolean (true or false) "
+            f"YAML scalar {_brief(text)} is not a JSON boolean (true or false) "
             "at this location",
             loc=self.path(slot),
             at=(node.line, node.column),
@@ -595,10 +674,22 @@ def _decode(data: str | bytes) -> str:
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError as exc:
-        prefix = data[: exc.start]
-        line = prefix.count(b"\n") + 1
-        column = exc.start - (prefix.rfind(b"\n") + 1) + 1
-        _fail("encoding", "YAML input is not valid UTF-8", at=(line, column))
+        # The bytes before the first invalid byte are valid UTF-8. Count lines
+        # over LF, CR, and CRLF, as YAML 1.2 does, and columns in characters.
+        at = _position(data[: exc.start].decode("utf-8"))
+        _fail("encoding", "YAML input is not valid UTF-8", at=at)
+
+
+_LINE_BREAK = re.compile("\r\n|\r|\n")
+
+
+def _position(prefix: str) -> tuple[int, int]:
+    """Return the 1-based line and character column just after ``prefix``.
+
+    Lines break at LF, CR, and CRLF, as YAML 1.2 defines.
+    """
+    lines = _LINE_BREAK.split(prefix)
+    return len(lines), len(lines[-1]) + 1
 
 
 def to_json_text(data: str | bytes) -> str:
@@ -625,19 +716,30 @@ def parse_oscal_yaml_file(path: Path) -> OscalDocument:
     return parse_oscal_yaml(raw)
 
 
-class _Dumper(yaml.SafeDumper):
-    """A safe dumper that escapes the YAML 1.1 line-break characters."""
-
-
-def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
+def _represent_str(dumper: Any, data: str) -> yaml.ScalarNode:
     # PyYAML writes U+0085 as a raw break in a single-quoted scalar, which a
     # YAML 1.1 reader folds. Double-quoted style writes the escapes \N, \L, \P.
     if any(ch in data for ch in _YAML11_BREAKS):
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style='"')
-    return dumper.represent_str(data)
+        return dumper.represent_scalar(  # type: ignore[no-any-return]
+            "tag:yaml.org,2002:str", data, style='"'
+        )
+    return dumper.represent_str(data)  # type: ignore[no-any-return]
 
 
-_Dumper.add_representer(str, _represent_str)
+def select_dumper(module: Any = yaml) -> Any:
+    """Return a safe dumper that escapes the YAML 1.1 line-break characters.
+
+    It is built on libyaml's emitter when ``module`` has it, else on PyYAML's
+    own. libyaml's emitter is about three times faster on a large catalog.
+    """
+    base = getattr(module, "CSafeDumper", module.SafeDumper)
+    dumper: Any = type("_Dumper", (base,), {})
+    dumper.add_representer(str, _represent_str)
+    return dumper
+
+
+#: The dumper that the serializer uses.
+_DUMPER: Any = select_dumper()
 
 
 def serialize_oscal_yaml(model: OscalDocument) -> str:
@@ -645,7 +747,7 @@ def serialize_oscal_yaml(model: OscalDocument) -> str:
     json_value = json.loads(model.model_dump_json(by_alias=True, exclude_none=True))
     dumped: str = yaml.dump(
         json_value,
-        Dumper=_Dumper,
+        Dumper=_DUMPER,
         default_flow_style=False,
         sort_keys=True,
         allow_unicode=True,

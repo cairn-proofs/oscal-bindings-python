@@ -12,14 +12,14 @@ numbered per that document:
 
 None of the four uses `@given`, and that is the design's call rather than an
 omission. Each quantifies over a space that is either a single fixed input (the
-committed pre-move `__all__` snapshot; the one pinned artifact schema) or
+committed published `__all__` snapshot; the one pinned artifact schema) or
 finitely enumerable (the Public_Surface, 37 names). Hypothesis adds nothing to
 an input space you can write down, and a strategy that draws from
 `oscal_bindings.__all__` would only re-derive the expectation from the code
 under test. The enumerable case is `parametrize`d so each name fails
 individually; the fixed-input cases are plain assertions.
 
-The pre-move snapshot and the artifact schema lookup are imported from
+The published-surface snapshot and the artifact schema lookup are imported from
 `support.version_package` — shared with the example-based suite so there is one
 snapshot of record, not two that can drift apart.
 """
@@ -31,7 +31,7 @@ import importlib
 import pytest
 from support.spec_artifact import OSCAL_RELEASE
 from support.version_package import (
-    PRE_MOVE_ALL,
+    PUBLISHED_ALL,
     SEMVER_RE,
     active_schema_path,
     schema_release,
@@ -48,22 +48,22 @@ PUBLIC_SURFACE = sorted(oscal_bindings.__all__)
 # ---------------------------------------------------------------------------
 # Property 3 — the published surface is preserved by the move
 #
-# Example-based on purpose: the input is the committed pre-move `__all__`
+# Example-based on purpose: the input is the committed published `__all__`
 # snapshot, a single fixed value. There is nothing to sample.
 # ---------------------------------------------------------------------------
 
 
 class TestProperty3PublishedSurfacePreserved:
-    """Feature: major-version-namespace, Property 3: For all names in the pre-move
+    """Feature: major-version-namespace, Property 3: For all names in the published
     top-level __all__, that name appears in the Version_Package __all__, and the two
     sets are equal in both directions.
 
     **Validates: Requirements 4.4**
     """
 
-    def test_every_pre_move_name_appears_in_the_version_package_surface(self) -> None:
+    def test_every_published_name_appears_in_the_version_package_surface(self) -> None:
         """The forward direction: nothing was dropped by the move."""
-        dropped = PRE_MOVE_ALL - set(oscal_bindings.v1.__all__)
+        dropped = PUBLISHED_ALL - set(oscal_bindings.v1.__all__)
         assert not dropped, f"names lost in the move: {sorted(dropped)}"
 
     def test_the_version_package_surface_adds_nothing(self) -> None:
@@ -72,20 +72,22 @@ class TestProperty3PublishedSurfacePreserved:
         Req 4.4 is *same* surface, not *superset*: a name that appeared only
         after the move is drift too, and the snapshot is what makes it visible.
         """
-        added = set(oscal_bindings.v1.__all__) - PRE_MOVE_ALL
+        added = set(oscal_bindings.v1.__all__) - PUBLISHED_ALL
         assert not added, f"names added by the move: {sorted(added)}"
 
     def test_the_two_surfaces_are_equal(self) -> None:
         """Equality in both directions, stated as the single claim it is."""
-        assert set(oscal_bindings.v1.__all__) == PRE_MOVE_ALL
+        assert set(oscal_bindings.v1.__all__) == PUBLISHED_ALL
 
-    def test_every_pre_move_name_actually_resolves_on_the_version_package(self) -> None:
+    def test_every_published_name_actually_resolves_on_the_version_package(
+        self,
+    ) -> None:
         """`__all__` membership is a declaration; this checks it is backed.
 
         A name listed in `__all__` but never bound would pass set equality and
         still fail at `from oscal_bindings.v1 import <name>`.
         """
-        for name in sorted(PRE_MOVE_ALL):
+        for name in sorted(PUBLISHED_ALL):
             assert hasattr(oscal_bindings.v1, name), f"{name} declared but not bound"
 
 
@@ -109,7 +111,7 @@ class TestProperty4TypeIdentityAcrossTheShim:
     def test_the_public_surface_is_non_empty(self) -> None:
         """Guards the parametrization: an empty surface would vacuously pass."""
         assert PUBLIC_SURFACE
-        assert set(PUBLIC_SURFACE) == PRE_MOVE_ALL
+        assert set(PUBLIC_SURFACE) == PUBLISHED_ALL
 
     @pytest.mark.parametrize("name", PUBLIC_SURFACE)
     def test_shim_name_is_the_same_object_as_the_version_package_name(

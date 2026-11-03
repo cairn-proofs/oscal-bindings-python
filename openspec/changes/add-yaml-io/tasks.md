@@ -77,11 +77,11 @@
   3. A title that holds each of the three characters survives a round trip unchanged.
 - [x] 3.4 Bind the three YAML names at call time, not at attribute access (design Decision 5).
   `v1/extensions/yaml_io.py` holds the three public functions with full docstrings and imports no PyYAML at module
-  level. Each function imports the private `v1/extensions/_yaml_loader.py` inside its body. `v1/extensions/__init__.py` re-exports the three names,
-  and `v1/__init__.py` re-exports them from `.extensions`. Remove the wrappers from `v1/__init__.py`. A base install
-  without the `yaml` extra keeps every import path working, and a type checker resolves each function's real signature
-  through every path. Only a call raises `ImportError` with the install hint. Verify with the base-install and type
-  tests of task 8.2, and with a test that each import path gives the same function object.
+  level. Each function imports the private `v1/extensions/_yaml_loader.py` inside its body. `v1/extensions/__init__.py`
+  re-exports the three names, and `v1/__init__.py` re-exports them from `.extensions`. Remove the wrappers from
+  `v1/__init__.py`. A base install without the `yaml` extra keeps every import path working, and a type checker resolves
+  each function's real signature through every path. Only a call raises `ImportError` with the install hint. Verify with
+  the base-install and type tests of task 8.2, and with a test that each import path gives the same function object.
 
 ## 4. Resource limit
 
@@ -155,6 +155,38 @@
   Assert that only calling a YAML operation raises the install hint. Assert with a type-checker check that
   `parse_oscal_yaml` resolves to its real signature, not `Any`, through `oscal_bindings`, `oscal_bindings.v1`, and
   `oscal_bindings.extensions`.
+
+## 9. Fixes from the third review
+
+- [x] 9.1 Create the event parser inside the error handling of the composer, and map a failure at creation, including
+  libyaml's `UnicodeEncodeError` for a lone surrogate, to the parse error (design Decision 2). Verify with tests for a
+  NUL character and a lone surrogate with both parsers.
+- [x] 9.2 Quote at most 40 characters of input text in each parse-error message, and keep the whole text in `input`
+  (design Decision 1). Verify that `str(exc)` stays short for a 2 MB scalar at a number location, a 2 MB duplicate
+  key, and a 2 MB undefined anchor name.
+- [x] 9.3 Accept `%YAML 1.1` and `%YAML 1.2` and read both as YAML 1.2. Reject every other version with both parsers,
+  and reject a surrogate-pair escape with both parsers (design Decision 2). Verify with a test for each case on both
+  parsers.
+- [x] 9.4 Compute the line and the character column of an invalid-UTF-8 error over LF, CR, and CRLF line breaks (design
+  Decision 6). Verify with tests for CR-only line breaks and for a multibyte character before the invalid byte.
+- [x] 9.5 Lower the memory cost of input without aliases: no `items` list for a scalar node, and the walk joins its
+  output in chunks instead of keeping one string per node. Measure the peak against the input size with
+  `tracemalloc`, state the measured factor in the README, and correct the README claim that the limits stop memory
+  exhaustion: they bound alias expansion and depth. Add a test that bounds the peak for a node-dense input without
+  aliases.
+- [x] 9.6 Use `CSafeDumper` when PyYAML has it, else `SafeDumper`, with the escape rule of design Decision 4. Select the
+  parser and the emitter through functions that a test can call with a PyYAML that has no libyaml. Verify the
+  serializer with both emitters, a round trip of the SP 800-53 rev5 catalog, and the fallback selection.
+- [x] 9.7 Make `tests/test_yaml_io.py` collect and pass on a PyYAML without libyaml: skip only the libyaml cases.
+- [x] 9.8 Document the limit values as prose, not as exported data (design Decision 5). Document the two divergences
+  from YML-005 (the datetime defect and the surrogate-pair escape) in the `yaml_io` docstring and the README. Document
+  the `input` difference for a scalar at a location with no scalar type (design Decision 1).
+- [x] 9.9 Add SER-004 and SER-005 to the `serialize_oscal` entry of the traceability record, because the record states
+  the requirements that define an operation, not its current conformance. Make the traceability self-check tests call
+  the same check functions as the guard tests, on a broken record.
+- [x] 9.10 Assert `line` and `column` on the depth-limit and alias-budget errors. Record the lifetime rule of the
+  `id()`-keyed schema caches. Rename `PRE_MOVE_ALL` to `PUBLISHED_ALL`.
+- [x] 9.11 Run the full gate with `hatch run release > ./tmp/release.log 2>&1; echo "EXIT: $?"` and read the log.
 
 ## Workflow follow-up
 
