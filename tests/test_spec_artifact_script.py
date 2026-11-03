@@ -28,9 +28,9 @@ pinned = load_script("pinned_archive")
 
 def test_script_and_test_support_share_one_pin_and_one_cache() -> None:
     assert spec_artifact.SPEC_ARTIFACT is pin.SPEC_ARTIFACT
-    assert pin.SPEC_ARTIFACT_VERSION == "0.5.1+oscal.1.2.3"
+    assert pin.SPEC_ARTIFACT_VERSION == "0.6.0+oscal.1.2.3"
     assert pin.SPEC_ARTIFACT_SHA256 == (
-        "33a14ab00fcbc049934ad217989452896b74a1bb215bbd4f132ca3b81c8dfd8f"
+        "612d1463e385ff948cfea8871b9dbc1e670a9ee0fcc3d0334744b535a12537fe"
     )
     assert pin.CACHE_ROOT.resolve() == corpus.CACHE_ROOT.resolve()
     assert REPO_ROOT.resolve() / "tests" / ".corpus_cache" == pin.CACHE_ROOT

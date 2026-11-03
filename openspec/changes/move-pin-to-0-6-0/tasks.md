@@ -2,12 +2,12 @@
 
 ## 1. Move the pin
 
-- [ ] 1.1 Set `SPEC_ARTIFACT_VERSION` to `0.6.0+oscal.1.2.3` and `SPEC_ARTIFACT_SHA256` to
+- [x] 1.1 Set `SPEC_ARTIFACT_VERSION` to `0.6.0+oscal.1.2.3` and `SPEC_ARTIFACT_SHA256` to
   `612d1463e385ff948cfea8871b9dbc1e670a9ee0fcc3d0334744b535a12537fe` in `scripts/spec_artifact.py`, and update the
   two assertions in `tests/test_spec_artifact_script.py`. Verify with `hatch test tests/test_spec_artifact_script.py`.
-- [ ] 1.2 Run `hatch run generate` and verify that `git diff --exit-code -- src/oscal_bindings/v1/models.py` reports no
+- [x] 1.2 Run `hatch run generate` and verify that `git diff --exit-code -- src/oscal_bindings/v1/models.py` reports no
   change.
-- [ ] 1.3 Run `hatch test tests/test_conformance.py tests/test_traceability.py tests/test_corpus_coverage.py` and
+- [x] 1.3 Run `hatch test tests/test_conformance.py tests/test_traceability.py tests/test_corpus_coverage.py` and
   verify that each passes, including the case `parse/many-failures`. If a new case fails, stop and report it before
   you add an entry to `tests/support/expected_failures.py`.
 
