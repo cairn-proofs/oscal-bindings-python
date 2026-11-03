@@ -43,7 +43,13 @@ from oscal_bindings.v1.extensions.yaml_io import (
     DEPTH_LIMIT,
 )
 from oscal_bindings.v1.models import OscalDocument
-from oscal_bindings.v1.parser import OscalParseError, _read_oscal_file, parse_oscal
+from oscal_bindings.v1.parser import (
+    JSON_DIGIT_LIMIT,
+    JSON_DIGIT_LIMIT_MSG,
+    OscalParseError,
+    _read_oscal_file,
+    parse_oscal,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -499,6 +505,10 @@ _SCHEMA = _Schema()
 #: plus, no leading zero, no hexadecimal (YML-004.07, YML-004.10).
 _JSON_NUMBER = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 
+#: The integer part of a number that matches ``_JSON_NUMBER``: group 1 holds
+#: its digits, without the sign.
+_INTEGER_PART = re.compile(r"-?([0-9]+)")
+
 
 @dataclass(slots=True)
 class _Frame:
@@ -665,6 +675,20 @@ class _Walk:
             # The number is written as the text of its scalar (YML-005). The
             # schema's integer constraint is Pydantic's to enforce.
             if _JSON_NUMBER.fullmatch(text):
+                # The JSON digit limit (PRS-010, design D2a). The reader checks
+                # it here, so that the error gives the YAML location, not a
+                # position in the JSON text that the reader builds.
+                integer = _INTEGER_PART.match(text)
+                if integer and len(integer[1]) > JSON_DIGIT_LIMIT:
+                    entry = {
+                        "type": "json_digit_limit",
+                        "loc": self.path(slot),
+                        "msg": JSON_DIGIT_LIMIT_MSG,
+                        "input": None,
+                        "line": node.line,
+                        "column": node.column,
+                    }
+                    raise OscalParseError(JSON_DIGIT_LIMIT_MSG, errors=[entry])
                 return text
             _fail(
                 "number_grammar",

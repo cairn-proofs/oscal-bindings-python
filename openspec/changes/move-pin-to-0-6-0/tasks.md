@@ -13,15 +13,15 @@
 
 ## 2. JSON limits
 
-- [ ] 2.1 Add `JSON_DEPTH_LIMIT = 200` and `JSON_DIGIT_LIMIT = 4300` to `v1/parser.py`, outside `__all__`. Add the
+- [x] 2.1 Add `JSON_DEPTH_LIMIT = 200` and `JSON_DIGIT_LIMIT = 4300` to `v1/parser.py`, outside `__all__`. Add the
   error mapping of design D2 to `parse_oscal`, raised `from None`. State the byte-offset column in the docstring of
   `OscalParseError`. Verify with `hatch run typing` and `hatch run lint`.
-- [ ] 2.2 Add the digit check of design D2a to the scalar step in `v1/extensions/_yaml_loader.py`. Import
+- [x] 2.2 Add the digit check of design D2a to the scalar step in `v1/extensions/_yaml_loader.py`. Import
   `JSON_DIGIT_LIMIT` from `v1/parser.py`. Verify with `hatch run typing` and `hatch run lint`.
-- [ ] 2.3 Add the tests of design D4, items 1 to 7: the JSON tests to `tests/test_parser.py`, and the YAML tests to
+- [x] 2.3 Add the tests of design D4, items 1 to 7: the JSON tests to `tests/test_parser.py`, and the YAML tests to
   `tests/test_yaml_io.py`. Cover each scenario of `specs/json-resource-limit/spec.md`. Verify with
   `hatch test tests/test_parser.py tests/test_yaml_io.py`.
-- [ ] 2.4 Document the limits per design D6. Add a "Resource limits" section to the README. It lists the two JSON
+- [x] 2.4 Document the limits per design D6. Add a "Resource limits" section to the README. It lists the two JSON
   limits and the four YAML limits, each with its value, its measure, and its operations. The operations include
   `validate_oscal` for the JSON limits. The section names the two new entry types. Add D1, D2, and D2a to Key Design
   Decisions in DEVELOPING.md. Extend `tests/test_lint_config.py` so that it ties the two JSON values to the constants,
