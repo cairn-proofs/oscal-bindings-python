@@ -1,6 +1,6 @@
 """Shared fixtures-as-data for the ``major-version-namespace`` move.
 
-The pre-move public-surface snapshot and the artifact schema lookup are
+The published public-surface snapshot and the artifact schema lookup are
 asserted from two places — the example-based back-compat suite
 (``tests/test_oscal_bindings.py``) and the property suite
 (``tests/test_prop_version_package.py``). They live here so there is exactly one
@@ -19,11 +19,15 @@ from support.spec_artifact import schema_path
 if TYPE_CHECKING:
     from pathlib import Path
 
-#: The top-level ``__all__`` as it stood immediately before the ``v1`` move,
-#: transcribed from the pre-move ``src/oscal_bindings/__init__.py``. Deliberately
-#: a literal rather than something derived at runtime: derived expectations drift
-#: with the code they are meant to pin, and the whole point is to detect drift.
-PRE_MOVE_ALL = frozenset(
+#: The published top-level ``__all__``. The move properties (Property 3/4)
+#: assert that the compatibility shim and the version package both expose
+#: exactly this set. It began as the snapshot taken immediately before the
+#: ``v1`` move. Deliberately a literal rather than something derived at
+#: runtime: derived expectations drift with the code they are meant to pin. An
+#: intentional surface change updates this set in the same commit, so an
+#: unintentional addition still fails. The ``add-yaml-io`` change (#7) added
+#: ``parse_oscal_yaml``, ``parse_oscal_yaml_file``, and ``serialize_oscal_yaml``.
+PUBLISHED_ALL = frozenset(
     {
         "AssessmentPlanDocument",
         "AssessmentResultsDocument",
@@ -53,10 +57,13 @@ PRE_MOVE_ALL = frozenset(
         "parse_mapping_collection",
         "parse_oscal",
         "parse_oscal_file",
+        "parse_oscal_yaml",
+        "parse_oscal_yaml_file",
         "parse_plan_of_action_and_milestones",
         "parse_profile",
         "parse_system_security_plan",
         "serialize_oscal",
+        "serialize_oscal_yaml",
         "validate_element",
         "validate_oscal",
     }

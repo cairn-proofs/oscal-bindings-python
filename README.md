@@ -12,6 +12,16 @@ uv add oscal-bindings
 
 The distribution is `oscal-bindings`; the import package is `oscal_bindings`.
 
+YAML parse and serialize are an optional feature. Install the `yaml` extra to add them:
+
+```bash
+pip install "oscal-bindings[yaml]"
+# or
+uv add "oscal-bindings[yaml]"
+```
+
+The base install keeps a single runtime dependency (`pydantic[email]`). Every import works without the extra. A call to a YAML operation without the extra raises `ImportError` with an install hint.
+
 To install from a local checkout (e.g., as a `uv` workspace path dependency):
 
 ```bash
@@ -259,6 +269,37 @@ Opt-outs:
 
 - `by_alias=False` emits Python field names, still without `null`.
 - `exclude_none=False` has no effect. OSCAL forbids `null`, so None-valued fields are always omitted. To tell whether a field was set, use attribute access (`rlink.hashes is None`) or `model_fields_set`.
+
+### YAML
+
+With the `yaml` extra installed, `parse_oscal_yaml`, `parse_oscal_yaml_file`, and `serialize_oscal_yaml` read and write OSCAL in YAML. They accept and produce the same typed `OscalDocument` as the JSON functions.
+
+```python
+from oscal_bindings import parse_oscal_yaml, parse_oscal_yaml_file, serialize_oscal_yaml
+
+doc = parse_oscal_yaml(yaml_string)          # str or bytes
+doc = parse_oscal_yaml_file("catalog.yaml")  # a missing path raises FileNotFoundError
+
+yaml_string = serialize_oscal_yaml(doc)
+```
+
+The input is one YAML 1.2 document in UTF-8. A stream with no document or more than one, a duplicate mapping key, or invalid UTF-8 is an `OscalParseError`, the same error the JSON functions raise. An error that the YAML layer finds has one entry in `errors`, with the same `type`, `loc`, `msg`, and `input` keys as a schema-validation entry. Its `loc` is the JSON path of the failing node, and its `line` and `column` give the position in the YAML text. Its message quotes at most 40 characters of input, and `input` holds the whole text. A scalar at a location that takes no scalar, such as `metadata: 5`, reads as its text, so a schema-validation entry for it has the `input` `"5"` where the JSON path has `5`.
+
+The OSCAL schema, not the YAML reader, decides the type of each scalar at its location. A value keeps its text unless the location is a number or a boolean, so `version: 1.0` at a string location stays the string `"1.0"`, and `yes` stays `"yes"`. A number location takes only the JSON number grammar (no leading `+`, no leading zero, no hexadecimal), and a boolean location takes only `true` or `false`; any other text is a parse error that names the scalar's location. A YAML tag does not change a value, and the key `<<` is an ordinary field, so a merge key is rejected as an unknown field. The characters U+0085, U+2028, and U+2029 are content, as YAML 1.2 defines, not line breaks. A `%YAML 1.1` or `%YAML 1.2` directive is accepted, and both read as YAML 1.2. Any other version is a parse error.
+
+Two cases differ from the JSON path. A double-quoted escape that names a surrogate, such as the pair `"\ud83d\ude00"`, is a parse error, because a YAML escape must name a Unicode character; write `"\U0001F600"` instead. And the serializer drops the seventh fraction digit of a datetime, as `serialize_oscal` does ([#19](https://github.com/cairn-proofs/oscal-bindings-python/issues/19)).
+
+The YAML parser applies three documented limits on alias expansion and nesting depth, so a small file cannot expand into a large value or exhaust the call stack. An input past any of them is an `OscalParseError`:
+
+- Aliases can add at most 100,000 nodes. Each use of an alias adds every scalar, sequence, mapping, and mapping key of the value it expands to.
+- Aliases can add at most 1,000,000 characters of scalar text and key text.
+- No node can sit deeper than 128 levels of sequences and mappings, counted after alias expansion.
+
+Content that the document writes out, and that no alias repeats, does not count against the two alias limits, so a large document without aliases parses. The SP 800-53 rev5 catalog has about 323,000 nodes and nests 21 levels.
+
+The limits do not bound the size of the input. Memory grows linearly with the input size, at a higher factor than the JSON path. Measured with `tracemalloc` on Python 3.14, the SP 800-53 rev5 catalog peaks at about 11 times its YAML size (6.2 MB), against about 3.4 times its JSON size for `parse_oscal`. A node-dense input costs more on both paths. A flow mapping of 150,000 short keys (1.7 MB) peaks at about 190 MB, most of it in the JSON validation step that both paths share. Cap the size of untrusted YAML input before you parse it.
+
+One more documented limit applies only to input that holds U+0085, U+2028, or U+2029. The parser swaps each of these for an unused private-use character while it reads the text. An input that also holds or names all of the about 137,000 private-use characters, which takes at least 520 KB built for that purpose, leaves none unused and is a parse error.
 
 ### Field names vs. OSCAL names
 

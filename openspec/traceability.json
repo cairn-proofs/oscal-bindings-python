@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "operations": [
+    { "name": "parse_oscal", "requirements": ["PRS-001"] },
+    { "name": "parse_oscal_file", "requirements": ["PRS-002"] },
+    { "name": "parse_catalog", "requirements": ["PRS-003"] },
+    { "name": "parse_profile", "requirements": ["PRS-003"] },
+    { "name": "parse_component_definition", "requirements": ["PRS-003"] },
+    { "name": "parse_system_security_plan", "requirements": ["PRS-003"] },
+    { "name": "parse_assessment_plan", "requirements": ["PRS-003"] },
+    { "name": "parse_assessment_results", "requirements": ["PRS-003"] },
+    { "name": "parse_plan_of_action_and_milestones", "requirements": ["PRS-003"] },
+    { "name": "parse_mapping_collection", "requirements": ["PRS-003"] },
+    { "name": "serialize_oscal", "requirements": ["SER-001", "SER-002", "SER-003", "SER-004", "SER-005"] },
+    { "name": "validate_oscal", "requirements": ["ERR-002"] },
+    { "name": "parse_oscal_yaml", "requirements": ["YML-005"] },
+    { "name": "parse_oscal_yaml_file", "requirements": ["YML-006"] },
+    { "name": "serialize_oscal_yaml", "requirements": ["YML-008"] },
+    { "name": "OscalDoc", "requirements": ["FAC-001", "FAC-002", "FAC-003", "FAC-004"] },
+    { "name": "OscalWrapper", "requirements": ["FAC-001"] },
+    { "name": "OscalBody", "requirements": ["FAC-001"] },
+    { "name": "OscalAccessError", "requirements": ["ERR-001", "FAC-004"] },
+    { "name": "validate_element", "requirements": ["ELV-001"] },
+    { "name": "get_supported_element_types", "requirements": ["ELV-002"] },
+    { "name": "ElementValidationResult", "requirements": ["ELV-001"] },
+    { "name": "ElementValidationError", "requirements": ["ELV-001"] },
+    { "name": "make_hash", "requirements": ["BMB-001"] },
+    { "name": "make_rlink", "requirements": ["BMB-002"] },
+    { "name": "make_resource", "requirements": ["BMB-003"] },
+    { "name": "OscalParseError", "requirements": ["ERR-001", "ERR-003"] }
+  ]
+}

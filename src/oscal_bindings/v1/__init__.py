@@ -21,6 +21,9 @@ Key Functions:
     parse_oscal_file: Parse an OSCAL JSON file into a typed model.
     serialize_oscal: Serialize an OSCAL model back to JSON.
     validate_oscal: Validate a JSON string against the OSCAL schema.
+    parse_oscal_yaml: Parse an OSCAL YAML string into a typed model (``yaml`` extra).
+    parse_oscal_yaml_file: Parse an OSCAL YAML file into a typed model (``yaml`` extra).
+    serialize_oscal_yaml: Serialize an OSCAL model to YAML (``yaml`` extra).
     parse_catalog: Parse JSON as a Catalog document.
     parse_profile: Parse JSON as a Profile document.
 
@@ -42,6 +45,9 @@ from .extensions import (
     make_hash,
     make_resource,
     make_rlink,
+    parse_oscal_yaml,
+    parse_oscal_yaml_file,
+    serialize_oscal_yaml,
     validate_element,
 )
 from .models import *  # noqa: F403
@@ -109,10 +115,13 @@ __all__ = [
     "parse_mapping_collection",
     "parse_oscal",
     "parse_oscal_file",
+    "parse_oscal_yaml",
+    "parse_oscal_yaml_file",
     "parse_plan_of_action_and_milestones",
     "parse_profile",
     "parse_system_security_plan",
     "serialize_oscal",
+    "serialize_oscal_yaml",
     "validate_element",
     "validate_oscal",
 ]

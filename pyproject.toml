@@ -47,6 +47,15 @@ Issues = "https://github.com/cairn-proofs/oscal-bindings-python/issues"
 
 [project.optional-dependencies]
 codegen = ["datamodel-code-generator[http,black,isort]==0.83.0"]
+# Optional YAML parse/serialize surface (v1/extensions/yaml_io.py). It imports
+# PyYAML, through v1/extensions/_yaml_loader.py, only when an operation is
+# called. The base install keeps pydantic[email] as its one runtime dependency;
+# `pip install oscal-bindings[yaml]` adds PyYAML. A range, not a pin: a library
+# extra must let a consumer take a PyYAML security release. The YAML path uses
+# only PyYAML's event API, stable since 3.x. 6.0.1 is the first 6.x that builds
+# with current Cython. The default env below and the lockfiles pin the exact
+# tested version (design Risk 1).
+yaml = ["pyyaml>=6.0.1,<7"]
 
 # Every Hatch env installs from a hatch-pip-compile lockfile (requirements.txt for
 # default, requirements/requirements-<env>.txt otherwise). Hatch re-locks when an
@@ -69,6 +78,11 @@ dependencies = [
     "ruff==0.16.8",
     # `generate` validates names.json against its JSON Schema before codegen.
     "jsonschema-rs==0.58.6",
+    # YAML optional-extra library, present in default so `hatch run typing`
+    # resolves v1/extensions/_yaml_loader.py and its type stubs. Pinned exactly,
+    # inside the `yaml` extra's range; types-PyYAML is stubs-only (dev/typing use).
+    "pyyaml==6.0.3",
+    "types-PyYAML==6.0.12.20261030",
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -76,7 +90,7 @@ generate = "python scripts/hoist_names.py && datamodel-codegen --input ./build/c
 docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
 # No --install-types: it would pip-install stubs at run time, outside the lockfile.
 # Add any stub packages mypy needs to `dependencies` above instead.
-typing = "mypy src/oscal_bindings"
+typing = "mypy src/oscal_bindings tests/typing"
 lint = [
     "ruff check .",
     "ruff format --check .",
@@ -102,7 +116,14 @@ lock = [
     "hatch env run --env security -- python --version",
 ]
 upgrade = "PIP_COMPILE_UPGRADE=1 hatch run lock"
-release = ["generate", "lint", "typing", "security", "hatch test --all --cover", "docs"]
+release = [
+    "generate",
+    "lint",
+    "typing",
+    "security",
+    "hatch test --all --cover",
+    "docs",
+]
 
 [tool.hatch.envs.hatch-test]
 type = "pip-compile"
@@ -112,7 +133,9 @@ pip-compile-hashes = true
 # Resolve shared deps (pydantic, pytest, ...) to the same versions as default.
 pip-compile-constraint = "default"
 parallel = true
-extra-dependencies = ["hypothesis", "jsonschema-rs"]
+# pyyaml: the YAML corpus cases and the yaml_io unit tests import it. Constrained
+# to default's pin (6.0.3). types-PyYAML is not here; stubs are a typing concern.
+extra-dependencies = ["hypothesis", "jsonschema-rs", "pyyaml"]
 
 # Hatch runs cov-combine and then cov-report once after `hatch test --cover`.
 # cov-report adds the HTML report ([tool.coverage.html] sets the directory)

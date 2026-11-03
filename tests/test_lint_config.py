@@ -202,3 +202,20 @@ def test_tests_is_not_a_package() -> None:
 
 def test_postprocess_script_still_prints() -> None:
     assert "print(" in (ROOT / POSTPROCESS).read_text(encoding="utf-8")
+
+
+# --- YAML resource limits: the documented values match the constants (YML-011) -
+
+
+@pytest.mark.parametrize("doc", ["README.md", "DEVELOPING.md"])
+def test_yaml_limit_values_are_documented(doc: str) -> None:
+    from oscal_bindings.v1.extensions.yaml_io import (
+        ALIAS_CHAR_LIMIT,
+        ALIAS_NODE_LIMIT,
+        DEPTH_LIMIT,
+    )
+
+    text = (PYPROJECT.parent / doc).read_text(encoding="utf-8")
+    assert f"{ALIAS_NODE_LIMIT:,} nodes" in text
+    assert f"{ALIAS_CHAR_LIMIT:,} characters" in text
+    assert f"{DEPTH_LIMIT} levels" in text

@@ -42,6 +42,8 @@ src/oscal_bindings/
                        # assessment_period() for AP/AR); OscalAccessError
       builders.py      # make_hash / make_rlink / make_resource (back-matter)
       validate_element.py # validate_element / get_supported_element_types
+      yaml_io.py       # Optional YAML ops + documented limits; imports PyYAML only when called
+      _yaml_loader.py  # PyYAML event composer, iterative walk, serializer (private)
 scripts/               # Not a package: scripts import siblings by plain name
   spec_artifact.py     # Pin (version + sha256) of the spec artifact; shared by generate + tests.
                        # The artifact supplies the OSCAL schema, names.json, and the corpus

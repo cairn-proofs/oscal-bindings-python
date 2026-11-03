@@ -30,7 +30,10 @@ generated from.
 
 from oscal_bindings import v1 as _v1
 
-# The curated public surface, bounded by ``oscal_bindings.v1.__all__``.
+# The curated public surface, bounded by ``oscal_bindings.v1.__all__``. A plain
+# star import is safe: the YAML operations import PyYAML only when called
+# (design Decision 5), so a base install without the ``yaml`` extra imports fine.
+# A star import also keeps the names statically typed.
 from oscal_bindings.v1 import *  # noqa: F403
 
 # Not in ``v1.__all__`` (it is metadata, not API), so re-exported explicitly.
