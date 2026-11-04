@@ -256,7 +256,7 @@ The OSCAL schema, not the YAML reader, decides the type of each scalar at its lo
 
 Two cases differ from the JSON path. A double-quoted escape that names a surrogate, such as the pair `"\ud83d\ude00"`, is a parse error, because a YAML escape must name a Unicode character; write `"\U0001F600"` instead. And the serializer drops the seventh fraction digit of a datetime, as `serialize_oscal` does ([#19](https://github.com/cairn-proofs/oscal-bindings-python/issues/19)).
 
-The YAML parser applies three documented limits on alias expansion and nesting depth, so a small file cannot expand into a large value or exhaust the call stack. An input past any of them is an `OscalParseError`:
+The YAML parser applies three documented limits on alias expansion and nesting depth, so a small file cannot expand into a large value or exhaust the call stack. A fourth limit applies to line-break characters, below. [Resource limits](#resource-limits) lists every limit with the operations it applies to. An input past any of them is an `OscalParseError`:
 
 - Aliases can add at most 100,000 nodes. Each use of an alias adds every scalar, sequence, mapping, and mapping key of the value it expands to.
 - Aliases can add at most 1,000,000 characters of scalar text and key text.
@@ -298,6 +298,21 @@ except OscalParseError as e:
     print(e)          # Human-readable message
     print(e.errors)   # Pydantic validation error details
 ```
+
+### Resource limits
+
+The parse operations apply six documented limits (PRS-010 of the spec store). An input past any of them is an `OscalParseError`, also when the document is otherwise valid, and `validate_oscal` returns `False` for it. The error carries one entry whose `type` names the limit, and no entry holds the input text.
+
+| Limit | Value | Measure | Operations | Entry `type` |
+|---|---|---|---|---|
+| JSON depth | 200 levels | The number of arrays and objects that hold a value in the JSON text. Arrays and objects count the same. | `parse_oscal`, `parse_oscal_file`, the eight typed parsers, `OscalDoc.from_json`, `OscalDoc.from_file`, `validate_oscal` | `json_depth_limit` |
+| JSON digits | 4,300 digits | The digits of the integer part of one JSON number, at any location. A sign, a fraction, and an exponent do not count. | The operations of the JSON depth limit, and `parse_oscal_yaml` and `parse_oscal_yaml_file` at each number location | `json_digit_limit` |
+| Alias nodes | 100,000 nodes | The scalars, sequences, mappings, and mapping keys that aliases add to one YAML input | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_alias_budget` |
+| Alias characters | 1,000,000 characters | The characters of scalar text and key text that aliases add to one YAML input | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_alias_budget` |
+| YAML depth | 128 levels | The number of sequences and mappings that hold a node, after alias expansion | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_depth_limit` |
+| Line-break placeholders | about 137,000 private-use characters | The free private-use characters that a YAML input with U+0085, U+2028, or U+2029 leaves for them | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_line_break_placeholder` |
+
+pydantic-core's JSON parser sets the two JSON limits, and the binding cannot change them. The YAML depth limit is lower than the JSON depth limit, so deep YAML input always gets the YAML depth error. For a JSON limit, the entry's `line` and `column` give the position in the JSON text, and `column` counts UTF-8 bytes. For a YAML input, they give the position in the YAML source. No limit bounds the input size. See [YAML](#yaml) for the memory that a parse uses.
 
 ## Typed Parser Functions
 

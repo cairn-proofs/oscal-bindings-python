@@ -1,7 +1,7 @@
 """Optional YAML parse and serialize for OSCAL documents.
 
 This module implements the store's ``yaml-documents`` capability (YML-001 to
-YML-011), with two documented exceptions:
+YML-010), with two documented exceptions:
 
 1. The serializer inherits the JSON path's datetime defect, so a
    seven-fraction-digit datetime loses its seventh digit on a round trip. That
@@ -26,7 +26,8 @@ The OSCAL schema decides the type of each scalar at its location (YML-004). A
 ``%YAML 1.1`` or ``%YAML 1.2`` directive is accepted, and both read as YAML
 1.2, as YAML 1.2.2 section 6.8.1 requires. Any other version is a parse error.
 
-Resource limits (YML-011). A parse applies three documented limits, and an input
+Resource limits (PRS-010). :func:`parse_oscal_yaml` and
+:func:`parse_oscal_yaml_file` apply four documented YAML limits, and an input
 past any of them is an :class:`~oscal_bindings.v1.parser.OscalParseError`:
 
 1. Alias nodes: aliases can add at most 100,000 nodes. Each use of an alias adds
@@ -35,6 +36,16 @@ past any of them is an :class:`~oscal_bindings.v1.parser.OscalParseError`:
    text and key text.
 3. Depth: no node can sit deeper than 128 levels of sequences and mappings,
    counted after alias expansion.
+4. Line-break placeholders: an input that holds U+0085, U+2028, or U+2029 must
+   leave a free private-use character for each of them. Only an input of at
+   least 520 KB, built to hold or name about 137,000 private-use characters,
+   leaves none.
+
+The two operations also apply the JSON digit limit of
+:mod:`oscal_bindings.v1.parser` at each number location: a number whose
+integer part has more than 4,300 digits is a parse error at its YAML location.
+The YAML depth limit is lower than the JSON depth limit, so the JSON depth
+limit never rejects a YAML input. The README lists every limit.
 
 Content that the input writes out, and that no alias repeats, does not count
 against the two alias limits. No step of the parse recurses per nesting level,

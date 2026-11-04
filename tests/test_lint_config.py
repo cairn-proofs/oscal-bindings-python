@@ -204,7 +204,7 @@ def test_postprocess_script_still_prints() -> None:
     assert "print(" in (ROOT / POSTPROCESS).read_text(encoding="utf-8")
 
 
-# --- YAML resource limits: the documented values match the constants (YML-011) -
+# --- Resource limits: the documented values match the constants (PRS-010) ----
 
 
 @pytest.mark.parametrize("doc", ["README.md", "DEVELOPING.md"])
@@ -219,3 +219,48 @@ def test_yaml_limit_values_are_documented(doc: str) -> None:
     assert f"{ALIAS_NODE_LIMIT:,} nodes" in text
     assert f"{ALIAS_CHAR_LIMIT:,} characters" in text
     assert f"{DEPTH_LIMIT} levels" in text
+
+
+@pytest.mark.parametrize("doc", ["README.md", "DEVELOPING.md"])
+def test_json_limit_values_are_documented(doc: str) -> None:
+    from oscal_bindings.v1.parser import JSON_DEPTH_LIMIT, JSON_DIGIT_LIMIT
+
+    text = (PYPROJECT.parent / doc).read_text(encoding="utf-8")
+    assert f"{JSON_DEPTH_LIMIT}" in text
+    assert f"{JSON_DIGIT_LIMIT:,} digits" in text
+
+
+def _readme_limits_section() -> str:
+    text = (PYPROJECT.parent / "README.md").read_text(encoding="utf-8")
+    start = text.index("### Resource limits")
+    return text[start : text.index("\n## ", start)]
+
+
+def test_readme_limit_rows_state_values_and_operations() -> None:
+    # PRS-010: each documented limit names its measure and its operations.
+    # ERR-002: a limit that applies to the validity check names the check.
+    from oscal_bindings.v1.extensions.yaml_io import (
+        ALIAS_CHAR_LIMIT,
+        ALIAS_NODE_LIMIT,
+        DEPTH_LIMIT,
+    )
+    from oscal_bindings.v1.parser import JSON_DEPTH_LIMIT, JSON_DIGIT_LIMIT
+
+    rows = {
+        line.split("|")[1].strip(): line
+        for line in _readme_limits_section().splitlines()
+        if line.startswith("| ") and not line.startswith("| Limit")
+    }
+    assert f"{JSON_DEPTH_LIMIT} levels" in rows["JSON depth"]
+    assert f"{JSON_DIGIT_LIMIT:,} digits" in rows["JSON digits"]
+    assert f"{ALIAS_NODE_LIMIT:,} nodes" in rows["Alias nodes"]
+    assert f"{ALIAS_CHAR_LIMIT:,} characters" in rows["Alias characters"]
+    assert f"{DEPTH_LIMIT} levels" in rows["YAML depth"]
+    assert "Line-break placeholders" in rows
+    # The JSON digits row names the JSON depth operations by reference.
+    assert "`validate_oscal`" in rows["JSON depth"]
+    assert "operations of the JSON depth limit" in rows["JSON digits"]
+    for name, row in rows.items():
+        if name != "JSON depth":
+            assert "`parse_oscal_yaml`" in row, name
+            assert "`parse_oscal_yaml_file`" in row, name

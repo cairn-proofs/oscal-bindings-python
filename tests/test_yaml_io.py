@@ -1,7 +1,8 @@
 """Tests for the optional YAML parse and serialize operations.
 
-Covers the ``yaml-documents`` contract behavior (YML-002 to YML-011) and the
-binding-local resource limits (spec ``yaml-resource-limit``). The YAML corpus
+Covers the ``yaml-documents`` contract behavior (YML-002 to YML-010), the
+resource-limit rule PRS-010, and the binding-local resource limits (specs
+``yaml-resource-limit`` and ``json-resource-limit``). The YAML corpus
 cases run from :mod:`tests.test_conformance`. These tests check the scenarios at
 the unit level, including the schema-type resolver that the corpus does not
 exercise in isolation.
@@ -36,8 +37,15 @@ from oscal_bindings.v1.extensions.yaml_io import (
     parse_oscal_yaml_file,
     serialize_oscal_yaml,
 )
+from oscal_bindings.v1.parser import (
+    JSON_DEPTH_LIMIT,
+    JSON_DIGIT_LIMIT,
+    JSON_DIGIT_LIMIT_MSG,
+)
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from support.corpus import CorpusDoc
 
 HAS_LIBYAML = hasattr(yaml, "CSafeLoader")
@@ -785,7 +793,7 @@ class TestDepthLimit:
         assert (entry["line"], entry["column"]) == (8, 14 + DEPTH_LIMIT - 2)
 
     def test_very_deep_input_is_rejected_by_the_documented_limit(self) -> None:
-        # No stack limit of the runtime rejects it first (YML-011).
+        # No stack limit of the runtime rejects it first (PRS-010).
         with pytest.raises(OscalParseError, match=DEPTH_LIMIT_MSG):
             parse_oscal_yaml(_nested(100_000))
 
@@ -808,6 +816,59 @@ class TestDepthLimit:
         entry = info.value.errors[0]
         assert entry["loc"][:3] == ("catalog", "metadata", "x")
         assert entry["line"] == 8
+
+
+class TestJsonDigitLimit:
+    """The JSON digit limit on the YAML path (PRS-010, design D2a)."""
+
+    def _position(self, text: str, token: str) -> tuple[int, int]:
+        """Return the 1-based line and column of ``token`` in ``text``."""
+        offset = text.index(token)
+        line = text.count("\n", 0, offset) + 1
+        return line, offset - text.rfind("\n", 0, offset)
+
+    def test_number_past_the_limit_names_the_limit_at_its_yaml_location(
+        self, tmp_path: Path
+    ) -> None:
+        digits = "9" * (JSON_DIGIT_LIMIT + 1)
+        text = _component_with_start(digits)
+        path = tmp_path / "doc.yaml"
+        path.write_text(text, encoding="utf-8")
+        for parse in (parse_oscal_yaml, lambda _: parse_oscal_yaml_file(path)):
+            with pytest.raises(OscalParseError) as info:
+                parse(text)
+            (entry,) = info.value.errors
+            assert entry["type"] == "json_digit_limit"
+            assert entry["msg"] == str(info.value) == JSON_DIGIT_LIMIT_MSG
+            assert entry["input"] is None
+            assert (entry["line"], entry["column"]) == self._position(text, digits)
+            assert entry["loc"][-3:] == ("port-ranges", 0, "start")
+
+    def test_sign_does_not_count(self) -> None:
+        digits = "-" + "9" * JSON_DIGIT_LIMIT
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(_component_with_start(digits))
+        # A negative start fails the schema minimum, not the digit limit.
+        assert "json_digit_limit" not in {e["type"] for e in info.value.errors}
+
+    def test_number_at_the_limit_parses(self) -> None:
+        digits = "9" * JSON_DIGIT_LIMIT
+        doc = _json_value(parse_oscal_yaml(_component_with_start(digits)))
+        start = doc["component-definition"]["components"][0]["protocols"][0][
+            "port-ranges"
+        ][0]["start"]
+        assert start == int(digits)
+
+    def test_digits_at_a_string_location_are_text(self) -> None:
+        digits = "9" * 5_000
+        md = _json_value(parse_oscal_yaml(HEAD.replace("title: T", f"title: {digits}")))
+        assert md["catalog"]["metadata"]["title"] == digits
+
+    def test_deep_yaml_input_names_the_yaml_depth_limit(self) -> None:
+        assert DEPTH_LIMIT < JSON_DEPTH_LIMIT
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(_nested(JSON_DEPTH_LIMIT + 50))
+        assert [e["type"] for e in info.value.errors] == ["yaml_depth_limit"]
 
 
 class TestNumberBoundary:

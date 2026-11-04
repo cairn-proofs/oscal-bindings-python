@@ -2,19 +2,30 @@
 
 import json
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from oscal_bindings import OscalDoc
 from oscal_bindings.parser import (
     OscalDocument,
     OscalParseError,
     parse_catalog,
+    parse_component_definition,
     parse_oscal,
     parse_oscal_file,
     parse_profile,
     serialize_oscal,
     validate_oscal,
+)
+from oscal_bindings.v1.extensions.yaml_io import DEPTH_LIMIT
+from oscal_bindings.v1.parser import (
+    JSON_DEPTH_LIMIT,
+    JSON_DEPTH_LIMIT_MSG,
+    JSON_DIGIT_LIMIT,
+    JSON_DIGIT_LIMIT_MSG,
 )
 
 # Minimal valid OSCAL catalog document
@@ -328,3 +339,244 @@ class TestTypedParsers:
     def test_parse_profile_accepts_bytes(self):
         result = parse_profile(MINIMAL_PROFILE.encode("utf-8"))
         assert result.profile.uuid == "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+
+# --- JSON resource limits (PRS-010, local spec json-resource-limit) ---------
+#
+# These tests run against the installed pydantic-core, with no mock. A lock
+# update that moves a limit or changes its error text fails them (design D4).
+
+
+def _deep_catalog(levels: int) -> str:
+    """A conformant catalog whose groups nest ``levels`` levels deep.
+
+    The root object, the catalog object, and two containers for each level
+    (the `groups` array and the group object) hold the innermost title. So the
+    title of the deepest group sits at depth ``2 + 2 * levels``, and the group
+    object at one level less.
+    """
+    group: dict[str, object] = {"title": "g"}
+    for _ in range(levels - 1):
+        group = {"title": "g", "groups": [group]}
+    doc = json.loads(MINIMAL_CATALOG)
+    doc["catalog"]["groups"] = [group]
+    return json.dumps(doc)
+
+
+# Groups nested 99 levels put the deepest title at depth 200, the limit. A
+# 100th level adds a group object at depth 201.
+AT_DEPTH_LIMIT = (JSON_DEPTH_LIMIT - 2) // 2
+PAST_DEPTH_LIMIT = AT_DEPTH_LIMIT + 1
+
+
+def _component(start: str) -> str:
+    """A conformant component definition whose port-range start is ``start``."""
+    doc = {
+        "component-definition": {
+            "uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            "metadata": json.loads(MINIMAL_CATALOG)["catalog"]["metadata"],
+            "components": [
+                {
+                    "uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d480",
+                    "type": "service",
+                    "title": "S",
+                    "description": "d",
+                    "protocols": [
+                        {"name": "https", "port-ranges": [{"start": 0, "end": 443}]}
+                    ],
+                }
+            ],
+        }
+    }
+    return json.dumps(doc).replace('"start": 0', f'"start": {start}')
+
+
+def _unknown_key(value: str) -> str:
+    """The minimal catalog with an unknown key ``x`` that holds ``value``.
+
+    The root object and the catalog object hold ``value``, so it sits at
+    depth 2.
+    """
+    return MINIMAL_CATALOG[:-2] + f', "x": {value}' + "}}"
+
+
+AT_DIGIT_LIMIT = "9" * JSON_DIGIT_LIMIT
+PAST_DIGIT_LIMIT = "9" * (JSON_DIGIT_LIMIT + 1)
+
+
+def _json_parsers(tmp_path: Path) -> dict[str, Callable[[str], object]]:
+    """Each JSON operation that the JSON limits apply to, on text."""
+
+    def from_file(text: str) -> object:
+        path = tmp_path / "doc.json"
+        path.write_text(text, encoding="utf-8")
+        return parse_oscal_file(path)
+
+    def doc_from_file(text: str) -> object:
+        path = tmp_path / "doc.json"
+        path.write_text(text, encoding="utf-8")
+        return OscalDoc.from_file(path)
+
+    return {
+        "parse_oscal": parse_oscal,
+        "parse_oscal(bytes)": lambda text: parse_oscal(text.encode()),
+        "parse_oscal_file": from_file,
+        "OscalDoc.from_json": OscalDoc.from_json,
+        "OscalDoc.from_file": doc_from_file,
+    }
+
+
+def _limit_error(parse: Callable[[str], object], text: str) -> dict[str, Any]:
+    """Parse ``text``, require a JSON limit error, and return its one entry."""
+    with pytest.raises(OscalParseError) as info:
+        parse(text)
+    errors = info.value.errors
+    assert len(errors) == 1, errors
+    entry: dict[str, Any] = errors[0]
+    assert str(info.value) == entry["msg"]
+    return entry
+
+
+JSON_LIMIT_KINDS = {"json_depth_limit", "json_digit_limit", "json_invalid"}
+
+
+def _kinds(error: OscalParseError) -> set[str]:
+    return {e["type"] for e in error.errors}
+
+
+class TestJsonDepthLimit:
+    def test_limit_value(self) -> None:
+        assert JSON_DEPTH_LIMIT == 200
+        assert DEPTH_LIMIT < JSON_DEPTH_LIMIT
+
+    def test_conformant_document_at_the_limit_parses_on_each_operation(
+        self, tmp_path: Path
+    ) -> None:
+        text = _deep_catalog(AT_DEPTH_LIMIT)
+        for name, parse in _json_parsers(tmp_path).items():
+            assert parse(text) is not None, name
+        assert parse_catalog(text).catalog.groups
+        assert validate_oscal(text) is True
+
+    def test_conformant_document_past_the_limit_is_rejected_on_each_operation(
+        self, tmp_path: Path
+    ) -> None:
+        text = _deep_catalog(PAST_DEPTH_LIMIT)
+        parsers = {**_json_parsers(tmp_path), "parse_catalog": parse_catalog}
+        for name, parse in parsers.items():
+            entry = _limit_error(parse, text)
+            assert entry["type"] == "json_depth_limit", name
+            assert entry["msg"] == JSON_DEPTH_LIMIT_MSG
+        assert validate_oscal(text) is False
+
+    @pytest.mark.parametrize(
+        ("opener", "closer"), [("[", "]"), ('{"a":', "}")], ids=["arrays", "objects"]
+    )
+    def test_arrays_and_objects_count_the_same(self, opener: str, closer: str) -> None:
+        # Two objects hold the value of `x`, so n containers put the scalar at
+        # depth 2 + n.
+        def nested(n: int) -> str:
+            return _unknown_key(opener * n + "1" + closer * n)
+
+        at = nested(JSON_DEPTH_LIMIT - 2)
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal(at)
+        assert "extra_forbidden" in _kinds(info.value)
+        assert not _kinds(info.value) & JSON_LIMIT_KINDS
+        entry = _limit_error(parse_oscal, nested(JSON_DEPTH_LIMIT - 1))
+        assert entry["type"] == "json_depth_limit"
+        assert (entry["loc"], entry["line"]) == ((), 1)
+        assert isinstance(entry["column"], int)
+
+
+class TestJsonDigitLimit:
+    def test_limit_value(self) -> None:
+        assert JSON_DIGIT_LIMIT == 4300
+
+    def test_number_at_the_limit_parses_on_each_operation(self, tmp_path: Path) -> None:
+        text = _component(AT_DIGIT_LIMIT)
+        for name, parse in _json_parsers(tmp_path).items():
+            assert parse(text) is not None, name
+        doc = parse_component_definition(text)
+        start = doc.component_definition.components[0].protocols[0].port_ranges[0].start
+        assert start == int(AT_DIGIT_LIMIT)
+        assert validate_oscal(text) is True
+
+    def test_number_past_the_limit_is_rejected_on_each_operation(
+        self, tmp_path: Path
+    ) -> None:
+        text = _component(PAST_DIGIT_LIMIT)
+        parsers = {
+            **_json_parsers(tmp_path),
+            "parse_component_definition": parse_component_definition,
+        }
+        for name, parse in parsers.items():
+            entry = _limit_error(parse, text)
+            assert entry["type"] == "json_digit_limit", name
+            assert entry["msg"] == JSON_DIGIT_LIMIT_MSG
+        assert validate_oscal(text) is False
+
+    @pytest.mark.parametrize(
+        "number",
+        [
+            "-" + AT_DIGIT_LIMIT,
+            AT_DIGIT_LIMIT + "." + "9" * 20_000,
+            AT_DIGIT_LIMIT + "e" + "9" * 10,
+            "1e5000",
+        ],
+        ids=["sign", "fraction", "exponent", "large-exponent"],
+    )
+    def test_sign_fraction_and_exponent_do_not_count(self, number: str) -> None:
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal(_unknown_key(number))
+        assert "extra_forbidden" in _kinds(info.value)
+        assert not _kinds(info.value) & JSON_LIMIT_KINDS
+
+    def test_limit_applies_at_any_location(self) -> None:
+        entry = _limit_error(parse_oscal, _unknown_key(PAST_DIGIT_LIMIT))
+        assert entry["type"] == "json_digit_limit"
+
+    def test_schema_invalid_document_over_the_limit_gets_one_limit_entry(
+        self,
+    ) -> None:
+        doc = json.loads(_component("1"))
+        component = doc["component-definition"]["components"][0]
+        component["title"] = 5
+        del component["description"]
+        text = json.dumps(doc).replace('"start": 1', f'"start": {PAST_DIGIT_LIMIT}')
+        entry = _limit_error(parse_oscal, text)
+        assert entry["type"] == "json_digit_limit"
+
+
+class TestJsonLimitErrorShape:
+    @pytest.mark.parametrize(
+        "text",
+        [_deep_catalog(PAST_DEPTH_LIMIT), _component(PAST_DIGIT_LIMIT)],
+        ids=["depth", "digits"],
+    )
+    def test_error_holds_no_input_text(self, text: str) -> None:
+        assert len(text) > 1_000
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal(text)
+        error = info.value
+        (entry,) = error.errors
+        assert set(entry) == {"type", "loc", "msg", "input", "line", "column"}
+        assert entry["input"] is None
+        assert not any(isinstance(v, str) and len(v) > 200 for v in entry.values())
+        # No exception in the chain keeps the ValidationError and its input.
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
+    def test_the_two_limits_have_different_types(self) -> None:
+        depth = _limit_error(parse_oscal, _deep_catalog(PAST_DEPTH_LIMIT))
+        digits = _limit_error(parse_oscal, _component(PAST_DIGIT_LIMIT))
+        assert depth["type"] != digits["type"]
+
+    def test_column_counts_bytes(self) -> None:
+        # Each `é` is one character and two UTF-8 bytes. Five of them before
+        # the number move the reported column by 10, not by 5.
+        plain = _limit_error(parse_oscal, _unknown_key(PAST_DIGIT_LIMIT))
+        accented = MINIMAL_CATALOG.replace("Test Catalog", "Test Catalog" + "é" * 5)
+        text = accented[:-2] + f', "x": {PAST_DIGIT_LIMIT}' + "}}"
+        entry = _limit_error(parse_oscal, text)
+        assert entry["column"] == plain["column"] + 5 * 2

@@ -3,7 +3,7 @@
 ## Purpose
 Defines the resource limits that the binding applies to YAML input. A small untrusted YAML document cannot then exhaust
 memory or the call stack through alias expansion or deep nesting. These limits are the YAML behavior the binding itself
-decides, under the resource-limit requirement of the store's `yaml-documents` capability.
+decides, under the resource-limit rule PRS-010 of the store's `document-parsing` capability.
 
 ## Requirements
 

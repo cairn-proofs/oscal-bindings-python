@@ -6,6 +6,7 @@ into Pydantic models and serializing them back to JSON.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -25,11 +26,70 @@ from oscal_bindings.v1.models import (
 
 
 class OscalParseError(Exception):
-    """Raised when an OSCAL document cannot be parsed or validated."""
+    """Raised when an OSCAL document cannot be parsed or validated.
+
+    ``errors`` holds the structured entries, in the Pydantic entry shape. A
+    schema-conformance failure gives one entry for each failing location. An
+    input over a documented resource limit gives one entry whose ``type`` names
+    the limit, such as ``json_depth_limit`` or ``json_digit_limit``, and whose
+    ``input`` is ``None``. For a JSON limit, ``line`` and ``column`` give the
+    position in the JSON text, and ``column`` counts UTF-8 bytes, not
+    characters.
+    """
 
     def __init__(self, message: str, errors: list[Any] | None = None) -> None:
         super().__init__(message)
         self.errors = errors or []
+
+
+#: The JSON depth limit (PRS-010). A value that more than this many arrays and
+#: objects hold is a parse error. pydantic-core's JSON parser sets the value,
+#: and tests pin it at the boundary.
+JSON_DEPTH_LIMIT = 200
+
+#: The JSON digit limit (PRS-010). A number whose integer part has more than
+#: this many digits is a parse error. A sign, a fraction, and an exponent do not
+#: count. pydantic-core's JSON parser sets the value, and tests pin it.
+JSON_DIGIT_LIMIT = 4300
+
+JSON_DEPTH_LIMIT_MSG = f"JSON nesting exceeds the depth limit of {JSON_DEPTH_LIMIT}"
+JSON_DIGIT_LIMIT_MSG = (
+    f"A JSON number exceeds the limit of {JSON_DIGIT_LIMIT:,} digits "
+    "in its integer part"
+)
+
+# The ctx.error prefixes of pydantic-core's json_invalid entry for each limit.
+_LIMIT_PREFIXES = (
+    ("recursion limit exceeded", "json_depth_limit", JSON_DEPTH_LIMIT_MSG),
+    ("number out of range", "json_digit_limit", JSON_DIGIT_LIMIT_MSG),
+)
+_POSITION = re.compile(r" at line (\d+) column (\d+)$")
+
+
+def _limit_entry(e: ValidationError) -> dict[str, Any] | None:
+    """Return the limit entry for a JSON limit rejection, or None (design D2).
+
+    The entry has the keys of a YAML limit entry. It holds no input text.
+    """
+    if e.error_count() != 1:
+        return None
+    (error,) = e.errors(include_url=False, include_input=False)
+    if error["type"] != "json_invalid":
+        return None
+    detail = str(error.get("ctx", {}).get("error", ""))
+    for prefix, kind, message in _LIMIT_PREFIXES:
+        if detail.startswith(prefix):
+            match = _POSITION.search(detail)
+            line, column = (int(match[1]), int(match[2])) if match else (None, None)
+            return {
+                "type": kind,
+                "loc": (),
+                "msg": message,
+                "input": None,
+                "line": line,
+                "column": column,
+            }
+    return None
 
 
 def parse_oscal(data: str | bytes) -> OscalDocument:
@@ -46,17 +106,25 @@ def parse_oscal(data: str | bytes) -> OscalDocument:
 
     Raises:
         OscalParseError: If the input is not valid JSON, contains
-            invalid UTF-8 bytes, or does not conform to the OSCAL schema.
+            invalid UTF-8 bytes, does not conform to the OSCAL schema, or
+            exceeds the JSON depth limit or the JSON digit limit.
     """
+    limit: dict[str, Any] | None = None
     try:
         return OscalDocument.model_validate_json(data)
     except ValidationError as e:
-        raise OscalParseError(
-            f"Failed to parse OSCAL document: {e.error_count()} validation error(s)",
-            errors=list(e.errors()),
-        ) from e
+        limit = _limit_entry(e)
+        if limit is None:
+            count = e.error_count()
+            raise OscalParseError(
+                f"Failed to parse OSCAL document: {count} validation error(s)",
+                errors=list(e.errors()),
+            ) from e
     except ValueError as e:
         raise OscalParseError(f"Invalid JSON: {e}") from e
+    # Raised outside the handler, so that neither __cause__ nor __context__
+    # holds the ValidationError and its copy of the input.
+    raise OscalParseError(limit["msg"], errors=[limit])
 
 
 def parse_oscal_file(path: Path | str) -> OscalDocument:
