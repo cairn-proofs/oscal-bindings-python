@@ -305,6 +305,16 @@ The root key of the input (`catalog`, `profile`, and so on) selects the one docu
 Not an OSCAL document: no known root key (found: 'assessment_plan')
 ```
 
+The `input` of an entry is the failing value when that value is a string, a number, a boolean, or a null. When the failing value is an object or an array, `input` is the sentinel `OscalParseError.OMITTED_INPUT` (shown as `<omitted input>`), so the error holds no copy of the document. Use `loc` to find the value in your own input. The sentinel stays the same object through `copy` and `pickle`. To write the entries as JSON, pass `default=repr`:
+
+```python
+if entry["input"] is OscalParseError.OMITTED_INPUT:
+    ...
+json.dumps(e.errors, default=repr)
+```
+
+An entry for a [resource limit](#resource-limits) has `input` `None`.
+
 ### Resource limits
 
 The parse operations apply six documented limits (PRS-010 of the spec store). An input past any of them is an `OscalParseError`, also when the document is otherwise valid, and `validate_oscal` returns `False` for it. The error carries one entry whose `type` names the limit, and no entry holds the input text.

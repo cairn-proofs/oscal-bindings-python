@@ -1,7 +1,11 @@
 """Tests for OSCAL parsing, serialization, and validation utilities."""
 
+import copy
+import gc
 import json
+import pickle  # nosec B403 - the test pickles its own error entries
 import tempfile
+import tracemalloc
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -679,3 +683,90 @@ class TestDocumentTypeSelection:
         catalog = parse_oscal(MINIMAL_CATALOG).root
         assert models.OscalDocument(root=catalog).root is catalog
         assert models.OscalDocument.model_validate(catalog).root is catalog
+
+
+# ---------------------------------------------------------------------------
+# Parse error entries (spec parse-error-entries)
+# ---------------------------------------------------------------------------
+
+OMITTED = OscalParseError.OMITTED_INPUT
+
+
+def _catalog_without_metadata() -> str:
+    data = json.loads(MINIMAL_CATALOG)
+    del data["catalog"]["metadata"]
+    return json.dumps(data)
+
+
+def _schema_error(text: str | bytes) -> OscalParseError:
+    with pytest.raises(OscalParseError) as info:
+        parse_oscal(text)
+    return info.value
+
+
+class TestParseErrorEntries:
+    def test_a_missing_field_has_the_sentinel_input(self) -> None:
+        (entry,) = _schema_error(_catalog_without_metadata()).errors
+        assert entry["type"] == "missing"
+        assert entry["loc"] == ("CatalogDocument", "catalog", "metadata")
+        assert entry["input"] is OMITTED
+
+    def test_a_scalar_input_is_kept(self) -> None:
+        (entry,) = _schema_error(_catalog_with_control_id(5)).errors
+        assert entry["input"] == 5
+
+    def test_an_unknown_key_with_an_array_value_has_the_sentinel_input(self) -> None:
+        data = json.loads(MINIMAL_CATALOG)
+        data["catalog"]["bogus"] = [1, 2, 3]
+        (entry,) = _schema_error(json.dumps(data)).errors
+        assert entry["type"] == "extra_forbidden"
+        assert entry["input"] is OMITTED
+
+    def test_no_root_key_names_the_keys_and_has_the_sentinel_input(self) -> None:
+        (entry,) = _schema_error('{"metadata": {}}').errors
+        assert entry["type"] == "oscal_document_type"
+        assert entry["msg"] == f"{NO_ROOT_KEY} (found: 'metadata')"
+        assert entry["input"] is OMITTED
+
+    def test_the_sentinel_survives_a_copy(self) -> None:
+        errors = _schema_error(_catalog_without_metadata()).errors
+        assert repr(OMITTED) == "<omitted input>"
+        assert copy.copy(OMITTED) is OMITTED
+        assert copy.deepcopy(errors)[0]["input"] is OMITTED
+        # Pickling a module-level singleton from the binding is safe here.
+        assert pickle.loads(pickle.dumps(errors))[0]["input"] is OMITTED  # noqa: S301
+
+    def test_no_exception_in_the_chain(self) -> None:
+        error = _schema_error(_catalog_without_metadata())
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
+    def test_the_error_holds_little_memory(self, nist_docs: list[Any]) -> None:
+        (doc,) = [
+            d
+            for d in nist_docs
+            if d.rel_path.endswith("NIST_SP-800-53_rev5_catalog.json")
+        ]
+        data = json.loads(doc.raw_bytes)
+        del data["catalog"]["metadata"]
+        text = json.dumps(data).encode()
+        del data
+        # Measure what dropping the error frees. pydantic-core's string cache
+        # keeps memory of its own across parses, so the total grows without it.
+        tracemalloc.start()
+        try:
+            try:
+                parse_oscal(text)
+            except OscalParseError as caught:
+                error = caught
+            gc.collect()
+            with_error, _ = tracemalloc.get_traced_memory()
+            count = len(error.errors)
+            del error
+            gc.collect()
+            without_error, _ = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        held = with_error - without_error
+        assert count == 1
+        assert held < len(text) / 10, f"{held:,} B held for {len(text):,} B of input"

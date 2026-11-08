@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, ClassVar, Self, cast
 
 from pydantic import ValidationError
 
@@ -26,19 +26,50 @@ from oscal_bindings.v1.models import (
 )
 
 
+class _OmittedInput:
+    """The ``input`` of an entry whose failing value is an object or an array.
+
+    The one instance is ``OscalParseError.OMITTED_INPUT``. A copy, a deep copy,
+    and a pickle round trip give the same object.
+    """
+
+    __slots__ = ()
+    _instance: ClassVar[Self | None] = None
+
+    def __new__(cls) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "<omitted input>"
+
+    def __reduce__(self) -> tuple[type[_OmittedInput], tuple[()]]:
+        return (_OmittedInput, ())
+
+
 class OscalParseError(Exception):
     """Raised when an OSCAL document cannot be parsed or validated.
 
     ``errors`` holds the structured entries, in the Pydantic entry shape. A
-    schema-conformance failure gives one entry for each failing location. An
-    input over a documented resource limit gives one entry whose ``type`` names
-    the limit, such as ``json_depth_limit`` or ``json_digit_limit``, and whose
-    ``input`` is ``None``. For a JSON limit, ``line`` and ``column`` give the
+    schema-conformance failure gives one entry for each failing location. The
+    ``input`` of such an entry is the failing value when it is a string, a
+    number, a boolean, or a null. When the failing value is an object or an
+    array, ``input`` is ``OscalParseError.OMITTED_INPUT``, so the error holds
+    no copy of the document. ``json.dumps`` of the entries then needs
+    ``default=repr``.
+
+    An input over a documented resource limit gives one entry whose ``type``
+    names the limit, such as ``json_depth_limit`` or ``json_digit_limit``, and
+    whose ``input`` is ``None``. For a JSON limit, ``line`` and ``column`` give the
     position in the JSON text, and ``column`` counts UTF-8 bytes, not
     characters. An input that names no document type gives one
     ``oscal_document_type`` entry at ``loc == ()``. For a JSON object, its
     ``msg`` names the keys of the object.
     """
+
+    #: The ``input`` of an entry whose failing value is an object or an array.
+    OMITTED_INPUT: ClassVar[Any] = _OmittedInput()
 
     def __init__(self, message: str, errors: list[Any] | None = None) -> None:
         super().__init__(message)
@@ -107,6 +138,17 @@ def _name_root_keys(errors: list[Any]) -> list[Any]:
     return [{**entry, "msg": f"{entry['msg']} (found: {keys})"}]
 
 
+def _omit_container_inputs(errors: list[Any]) -> list[Any]:
+    """Replace each object or array ``input`` with the sentinel (#42)."""
+    omitted = OscalParseError.OMITTED_INPUT
+    return [
+        {**entry, "input": omitted}
+        if isinstance(entry.get("input"), dict | list)
+        else entry
+        for entry in errors
+    ]
+
+
 def parse_oscal(data: str | bytes) -> OscalDocument:
     """Parse an OSCAL JSON document into a typed Pydantic model.
 
@@ -125,21 +167,24 @@ def parse_oscal(data: str | bytes) -> OscalDocument:
             exceeds the JSON depth limit or the JSON digit limit.
     """
     limit: dict[str, Any] | None = None
+    errors: list[Any] = []
     try:
         return OscalDocument.model_validate_json(data)
     except ValidationError as e:
         limit = _limit_entry(e)
         if limit is None:
-            count = e.error_count()
-            raise OscalParseError(
-                f"Failed to parse OSCAL document: {count} validation error(s)",
-                errors=_name_root_keys(e.errors()),
-            ) from e
+            # Name the root keys before the inputs are replaced (design D3).
+            errors = _omit_container_inputs(_name_root_keys(e.errors()))
     except ValueError as e:
         raise OscalParseError(f"Invalid JSON: {e}") from e
     # Raised outside the handler, so that neither __cause__ nor __context__
     # holds the ValidationError and its copy of the input.
-    raise OscalParseError(limit["msg"], errors=[limit])
+    if limit is not None:
+        raise OscalParseError(limit["msg"], errors=[limit])
+    raise OscalParseError(
+        f"Failed to parse OSCAL document: {len(errors)} validation error(s)",
+        errors=errors,
+    )
 
 
 def parse_oscal_file(path: Path | str) -> OscalDocument:
