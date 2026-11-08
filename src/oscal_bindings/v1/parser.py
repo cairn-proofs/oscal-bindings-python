@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
+from oscal_bindings.v1._base import DOCUMENT_TYPE_ERROR
 from oscal_bindings.v1.models import (
     AssessmentPlanDocument,
     AssessmentResultsDocument,
@@ -34,7 +35,9 @@ class OscalParseError(Exception):
     the limit, such as ``json_depth_limit`` or ``json_digit_limit``, and whose
     ``input`` is ``None``. For a JSON limit, ``line`` and ``column`` give the
     position in the JSON text, and ``column`` counts UTF-8 bytes, not
-    characters.
+    characters. An input that names no document type gives one
+    ``oscal_document_type`` entry at ``loc == ()``. For a JSON object, its
+    ``msg`` names the keys of the object.
     """
 
     def __init__(self, message: str, errors: list[Any] | None = None) -> None:
@@ -92,6 +95,18 @@ def _limit_entry(e: ValidationError) -> dict[str, Any] | None:
     return None
 
 
+def _name_root_keys(errors: list[Any]) -> list[Any]:
+    """Name the keys of an object that has no known root key (design D7)."""
+    if len(errors) != 1:
+        return errors
+    (entry,) = errors
+    found = entry.get("input")
+    if entry["type"] != DOCUMENT_TYPE_ERROR or not isinstance(found, dict) or not found:
+        return errors
+    keys = ", ".join(repr(key) for key in found)
+    return [{**entry, "msg": f"{entry['msg']} (found: {keys})"}]
+
+
 def parse_oscal(data: str | bytes) -> OscalDocument:
     """Parse an OSCAL JSON document into a typed Pydantic model.
 
@@ -118,7 +133,7 @@ def parse_oscal(data: str | bytes) -> OscalDocument:
             count = e.error_count()
             raise OscalParseError(
                 f"Failed to parse OSCAL document: {count} validation error(s)",
-                errors=list(e.errors()),
+                errors=_name_root_keys(e.errors()),
             ) from e
     except ValueError as e:
         raise OscalParseError(f"Invalid JSON: {e}") from e

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, RootModel, Tag, ValidationError
 from support.model_instances import (
     ALIAS_FIELDS,
     OBJECT_MODELS,
@@ -43,7 +43,12 @@ from support.model_instances import (
 
 from oscal_bindings import parse_oscal
 from oscal_bindings.v1 import models
-from oscal_bindings.v1._base import OscalBaseModel
+from oscal_bindings.v1._base import (
+    DOCUMENT_TYPE_ERROR,
+    DOCUMENT_TYPE_MESSAGE,
+    OscalBaseModel,
+    root_key_discriminator,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -652,3 +657,88 @@ def test_nothing_but_construction_calls_init(
             f"OscalBaseModel.__init__ was called for {exc} outside direct "
             f"construction. {RC5}"
         )
+
+
+# ---------------------------------------------------------------------------
+# root_key_discriminator (design D3 of discriminate-document-union)
+# ---------------------------------------------------------------------------
+
+
+class _AlphaDoc(OscalBaseModel):
+    model_config = ConfigDict(extra="forbid")
+    alpha: int
+
+
+class _BetaDoc(OscalBaseModel):
+    model_config = ConfigDict(extra="forbid")
+    beta_body: Annotated[int, Field(alias="beta-body")]
+
+
+class _AlphaDocChild(_AlphaDoc):
+    pass
+
+
+class _TwoDocs(RootModel[_AlphaDoc | _BetaDoc]):
+    root: Annotated[
+        Annotated[_AlphaDoc, Tag("_AlphaDoc")] | Annotated[_BetaDoc, Tag("_BetaDoc")],
+        root_key_discriminator({"alpha": "_AlphaDoc", "beta-body": "_BetaDoc"}),
+    ]
+
+
+def _root_errors(data: object) -> list[tuple[str, tuple[Any, ...]]]:
+    with pytest.raises(ValidationError) as info:
+        _TwoDocs.model_validate(data)
+    return [(e["type"], e["loc"]) for e in info.value.errors()]
+
+
+@pytest.mark.parametrize(
+    ("data", "member"),
+    [({"alpha": 1}, _AlphaDoc), ({"beta-body": 2}, _BetaDoc)],
+)
+def test_root_key_selects_the_member(data: dict[str, Any], member: type) -> None:
+    assert type(_TwoDocs.model_validate(data).root) is member
+    assert type(_TwoDocs.model_validate_json(json.dumps(data)).root) is member
+
+
+def test_first_known_root_key_in_input_order_selects_the_member() -> None:
+    assert _root_errors({"beta-body": 2, "alpha": 1}) == [
+        ("extra_forbidden", ("_BetaDoc", "alpha"))
+    ]
+    assert _root_errors({"alpha": 1, "beta-body": 2}) == [
+        ("extra_forbidden", ("_AlphaDoc", "beta-body"))
+    ]
+
+
+def test_a_fault_reports_only_the_selected_member() -> None:
+    assert _root_errors({"alpha": "x"}) == [("int_parsing", ("_AlphaDoc", "alpha"))]
+
+
+def test_member_instance_selects_its_member() -> None:
+    alpha = _AlphaDoc(alpha=1)
+    assert _TwoDocs(root=alpha).root is alpha
+    assert _TwoDocs.model_validate(_BetaDoc(beta_body=2)).root == _BetaDoc(beta_body=2)
+
+
+def test_subclass_instance_selects_its_member() -> None:
+    child = _AlphaDocChild(alpha=1)
+    assert isinstance(_TwoDocs(root=child).root, _AlphaDoc)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{}, {"metadata": {}}, [], "catalog", 5, None, models.Metadata],
+    ids=["empty", "unknown-key", "list", "str", "int", "none", "class"],
+)
+def test_no_known_root_key_reports_one_error(data: object) -> None:
+    with pytest.raises(ValidationError) as info:
+        _TwoDocs.model_validate(data)
+    (entry,) = info.value.errors(include_url=False)
+    assert entry["type"] == DOCUMENT_TYPE_ERROR
+    assert entry["loc"] == ()
+    assert entry["msg"] == DOCUMENT_TYPE_MESSAGE
+
+
+def test_other_model_instance_reports_one_error() -> None:
+    assert _root_errors(models.Property(name="n", value="v")) == [
+        (DOCUMENT_TYPE_ERROR, ())
+    ]

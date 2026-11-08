@@ -18,7 +18,7 @@ import typing
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from pydantic import RootModel, TypeAdapter, ValidationError
+from pydantic import RootModel, Tag, TypeAdapter, ValidationError
 from support.scripts import load_script
 from support.spec_artifact import ensure_spec_artifact
 from support.spec_artifact import schema_path as _artifact_schema_path
@@ -91,7 +91,11 @@ RAW = (
     )
     + _object("MappingCollection", "mappings: Mapping | MappingCollectionMappings1")
     + _object("CatalogDocument", "catalog: Catalog")
-    + _object("MappingCollectionDocument", "mapping_collection: MappingCollection")
+    + _object(
+        "MappingCollectionDocument",
+        "mapping_collection: "
+        "Annotated[MappingCollection, Field(alias='mapping-collection')]",
+    )
     + "\n\nclass Model(RootModel[CatalogDocument | MappingCollectionDocument]):\n"
     "    root: CatalogDocument | MappingCollectionDocument\n"
     + "\n\nGroupWithGroups.model_rebuild()\n"
@@ -119,8 +123,12 @@ def _manifest(*extra: dict[str, Any]) -> dict[str, Any]:
         },
         {"name": "Catalog", "kind": "object"},
         {"name": "MappingCollection", "kind": "object"},
-        {"name": "CatalogDocument", "kind": "document"},
-        {"name": "MappingCollectionDocument", "kind": "document"},
+        {"name": "CatalogDocument", "kind": "document", "body-field": "catalog"},
+        {
+            "name": "MappingCollectionDocument",
+            "kind": "document",
+            "body-field": "mapping-collection",
+        },
         {
             "name": "OscalDocument",
             "kind": "document-union",
@@ -243,6 +251,132 @@ class TestOscalDocument:
             "OscalDocument: expected one RootModel over the 2 document types" in f
             for f in failures
         )
+
+    def test_root_field_is_discriminated_on_the_body_field(self, done: str) -> None:
+        assert (
+            "    root: Annotated[\n"
+            "        Annotated[CatalogDocument, Tag('CatalogDocument')]\n"
+            "        | Annotated[MappingCollectionDocument, "
+            "Tag('MappingCollectionDocument')],\n"
+            "        root_key_discriminator(\n"
+            "            {\n"
+            "                'catalog': 'CatalogDocument',\n"
+            "                'mapping-collection': 'MappingCollectionDocument',\n"
+            "            }\n"
+            "        ),\n"
+            "    ]\n"
+        ) in done
+        assert (
+            "from pydantic import ConfigDict, EmailStr, Field, RootModel, Tag\n"
+        ) in done
+        assert (
+            "from oscal_bindings.v1._base import OscalBaseModel, "
+            "root_key_discriminator\n"
+        ) in done
+
+    def test_a_long_tagged_member_is_split_as_black_splits_it(self) -> None:
+        text = pp.root_field_text(
+            ["A", "PlanOfActionAndMilestonesDocument"],
+            {"a": "A", "poam": "PlanOfActionAndMilestonesDocument"},
+        )
+        assert (
+            "        | Annotated[\n"
+            "            PlanOfActionAndMilestonesDocument, "
+            "Tag('PlanOfActionAndMilestonesDocument')\n"
+            "        ],\n"
+        ) in text
+        assert all(len(line) <= pp.LINE_LENGTH for line in text.split("\n"))
+
+    def test_the_generated_module_selects_the_member_by_root_key(
+        self, generated: Any
+    ) -> None:
+        doc = generated.OscalDocument.model_validate(
+            {"mapping-collection": {"mappings": {"uuid": "u"}}}
+        )
+        assert type(doc.root).__name__ == "MappingCollectionDocument"
+        with pytest.raises(ValidationError) as info:
+            generated.OscalDocument.model_validate({"catalog": {"groups": "x"}})
+        assert {e["loc"][0] for e in info.value.errors()} == {"CatalogDocument"}
+
+    def test_the_generated_module_rejects_no_known_root_key(
+        self, generated: Any
+    ) -> None:
+        with pytest.raises(ValidationError) as info:
+            generated.OscalDocument.model_validate({"metadata": {}})
+        assert [(e["type"], e["loc"]) for e in info.value.errors()] == [
+            ("oscal_document_type", ())
+        ]
+
+    @staticmethod
+    def _documents(**body_fields: str | None) -> dict[str, Any]:
+        """The manifest with the given body-field per document (None: absent)."""
+        manifest = _manifest()
+        for entry in manifest["types"]:
+            if entry["name"] in body_fields:
+                entry.pop("body-field", None)
+                if body_fields[entry["name"]] is not None:
+                    entry["body-field"] = body_fields[entry["name"]]
+        return manifest
+
+    def test_member_without_body_field_fails(self) -> None:
+        failures = _failures(RAW, self._documents(CatalogDocument=None))
+        assert (
+            "OscalDocument: the member CatalogDocument has no document entry with "
+            "a body-field"
+        ) in failures
+
+    def test_member_without_document_entry_fails(self) -> None:
+        manifest = _manifest()
+        manifest["types"] = [
+            e for e in manifest["types"] if e["name"] != "MappingCollectionDocument"
+        ]
+        failures = _failures(RAW, manifest)
+        assert (
+            "OscalDocument: the member MappingCollectionDocument has no document "
+            "entry with a body-field"
+        ) in failures
+
+    def test_two_members_with_one_body_field_fail(self) -> None:
+        manifest = self._documents(MappingCollectionDocument="catalog")
+        failures = _failures(RAW, manifest)
+        assert (
+            "OscalDocument: the members CatalogDocument and MappingCollectionDocument "
+            "have the same body-field 'catalog'"
+        ) in failures
+
+    @pytest.mark.parametrize(
+        ("body_field", "source"),
+        [
+            pytest.param("mapping_collection", RAW, id="name-not-alias"),
+            pytest.param(
+                "mapping-collection",
+                RAW.replace(
+                    "Field(alias='mapping-collection')]\n",
+                    "Field(alias='mapping-collection')] = None\n",
+                ),
+                id="optional",
+            ),
+        ],
+    )
+    def test_body_field_that_is_no_required_key_fails(
+        self, body_field: str, source: str
+    ) -> None:
+        manifest = self._documents(MappingCollectionDocument=body_field)
+        failures = _failures(source, manifest)
+        assert (
+            "OscalDocument: the member class MappingCollectionDocument has no "
+            f"required field with the key {body_field!r}"
+        ) in failures
+
+    def test_root_field_that_is_no_plain_union_fails(self) -> None:
+        source = RAW.replace(
+            "    root: CatalogDocument | MappingCollectionDocument\n",
+            "    root: Annotated[CatalogDocument | MappingCollectionDocument, 1]\n",
+        )
+        failures = _failures(source)
+        assert (
+            "OscalDocument: expected a root field of a plain union of the 2 members"
+        ) in failures
 
 
 class TestMappingCollectionMappings:
@@ -761,7 +895,25 @@ class TestCommittedModels:
             e for e in released_manifest["types"] if e["kind"] == "document-union"
         ]
         root = models.OscalDocument.model_fields["root"].annotation
-        assert {t.__name__ for t in typing.get_args(root)} == set(entry["members"])
+        members = {}
+        for tagged in typing.get_args(root):
+            cls, tag = typing.get_args(tagged)
+            assert isinstance(tag, Tag)
+            members[tag.tag] = cls.__name__
+        assert members == {name: name for name in entry["members"]}
+
+    def test_oscal_document_selects_each_member_by_its_body_field(
+        self, released_manifest: dict[str, Any]
+    ) -> None:
+        body_fields = {
+            e["name"]: e["body-field"]
+            for e in released_manifest["types"]
+            if e["kind"] == "document"
+        }
+        for name, body_field in body_fields.items():
+            with pytest.raises(ValidationError) as info:
+                models.OscalDocument.model_validate({body_field: {}})
+            assert {e["loc"][0] for e in info.value.errors()} == {name}
 
     def test_union_alias_validates_each_variant(self) -> None:
         adapter = TypeAdapter(models.CatalogGroup)
@@ -860,18 +1012,20 @@ class TestRealDrift:
 
 
 class TestRerun:
-    """A second run is rejected: the single-or-many step needs the codegen form.
+    """A second run is rejected: two steps need the codegen form.
 
     The committed module holds ``MappingCollectionMappings`` as a ``RootModel``
     of ``Mapping | list[Mapping]`` already, so no ``RootModel[list[Mapping]]``
-    is left to convert.
+    is left to convert. Its ``OscalDocument.root`` is a tagged union already,
+    not the plain union of the members.
     """
 
     EXPECTED: typing.ClassVar[list[str]] = [
         (
             "MappingCollectionMappings: expected one RootModel of list[Mapping] in a "
             "field union with Mapping, found 0"
-        )
+        ),
+        "OscalDocument: expected a root field of a plain union of the 8 members",
     ]
 
     def test_postprocess_of_its_own_output_raises(

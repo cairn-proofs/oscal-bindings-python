@@ -299,6 +299,12 @@ except OscalParseError as e:
     print(e.errors)   # Pydantic validation error details
 ```
 
+The root key of the input (`catalog`, `profile`, and so on) selects the one document type that the parser validates the input against. So `e.errors` holds only the errors of that document type, and the first `loc` segment of each entry is its class name, for example `('CatalogDocument', 'catalog', 'controls', 0, 'id')`. An input with no known root key gives one entry with the `type` `oscal_document_type` and the `loc` `()`. For a JSON object, its message names the keys of the object:
+
+```text
+Not an OSCAL document: no known root key (found: 'assessment_plan')
+```
+
 ### Resource limits
 
 The parse operations apply six documented limits (PRS-010 of the spec store). An input past any of them is an `OscalParseError`, also when the document is otherwise valid, and `validate_oscal` returns `False` for it. The error carries one entry whose `type` names the limit, and no entry holds the input text.
@@ -313,6 +319,25 @@ The parse operations apply six documented limits (PRS-010 of the spec store). An
 | Line-break placeholders | about 137,000 private-use characters | The free private-use characters that a YAML input with U+0085, U+2028, or U+2029 leaves for them | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_line_break_placeholder` |
 
 pydantic-core's JSON parser sets the two JSON limits, and the binding cannot change them. The YAML depth limit is lower than the JSON depth limit, so deep YAML input always gets the YAML depth error. For a JSON limit, the entry's `line` and `column` give the position in the JSON text, and `column` counts UTF-8 bytes. For a YAML input, they give the position in the YAML source. No limit bounds the input size. See [YAML](#yaml) for the memory that a parse uses.
+
+### Performance
+
+A parse of the NIST SP 800-53 rev5 catalog (10.4 MB) takes about 60 ms of validation work on Python 3.14. It creates about 174,000 objects that Python's cyclic garbage collector tracks. At the default GC threshold, the parse starts about 87 collections. Each collection also scans a part of the objects that the process already holds, so the GC time of a parse increases with the documents that your application keeps:
+
+| Parsed documents that the process holds | Parse time | GC part |
+|---|---|---|
+| 0 | 85 ms | 28 ms |
+| 1 | 113 ms | 58 ms |
+| 3 | 195 ms | 139 ms |
+| 3, after `gc.freeze()` | 74 ms | 16 ms |
+| 1, with `gc.set_threshold(50_000)` | 65 ms | 9 ms |
+
+The library does not change the GC settings, because they apply to the full process and to all of its threads. Your application can change them:
+
+1. After it loads documents that it keeps for a long time, call `gc.freeze()`. The collector then does not scan those objects again.
+2. For a batch job that parses many documents, raise the first GC threshold, for example `gc.set_threshold(50_000)`. A higher threshold uses more memory between collections.
+
+`scripts/bench_serialization.py` reports each time with the GC enabled and with the GC disabled.
 
 ## Typed Parser Functions
 

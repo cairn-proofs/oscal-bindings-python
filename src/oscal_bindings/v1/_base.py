@@ -14,6 +14,10 @@ delegates to children that do. The base gives every model valid OSCAL output by 
   `BackMatterResourceRlink(href=..., media_type=...)`. Validation
   (`model_validate*`, the parse functions) stays alias-only.
 
+It also holds `root_key_discriminator`, the discriminator of the `root` field
+of `OscalDocument`. The generated module passes it the root-key map from the
+naming manifest.
+
 This module imports only `pydantic` and the standard library so that
 `models.py -> _base` can't form an import cycle.
 """
@@ -21,14 +25,18 @@ This module imports only `pydantic` and the standard library so that
 from __future__ import annotations
 
 import functools
-from typing import Any
+from typing import TYPE_CHECKING, Any, Final
 
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Discriminator,
     SerializerFunctionWrapHandler,
     model_serializer,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 
 @functools.cache
@@ -86,3 +94,46 @@ class OscalBaseModel(BaseModel):
         if type(data) is dict:
             return {k: v for k, v in data.items() if v is not None}
         return data
+
+
+#: The error type of an input that names no document type.
+DOCUMENT_TYPE_ERROR: Final = "oscal_document_type"
+#: The message of an input that names no document type.
+DOCUMENT_TYPE_MESSAGE: Final = "Not an OSCAL document: no known root key"
+
+
+def _root_key_tag(root_keys: Mapping[str, str]) -> Callable[[Any], str | None]:
+    tags = frozenset(root_keys.values())
+
+    def tag(value: Any) -> str | None:
+        if isinstance(value, dict):
+            # The first known root key in input order selects the member.
+            for key in value:
+                found = root_keys.get(key)
+                if found is not None:
+                    return found
+            return None
+        if isinstance(value, BaseModel):
+            # A subclass of a member selects its member.
+            for cls in type(value).__mro__:
+                if cls.__name__ in tags:
+                    return cls.__name__
+        return None
+
+    return tag
+
+
+def root_key_discriminator(root_keys: Mapping[str, str]) -> Discriminator:
+    """Return the discriminator of a union of document types (design D3).
+
+    `root_keys` maps the root key of each document type to the tag of its
+    union member, which is the member class name. A dict selects the member of
+    its first known root key, in input order. A model instance selects the
+    first class of its MRO whose name is a tag. Other input, and a dict with no
+    known root key, fail with one `oscal_document_type` error at `loc == ()`.
+    """
+    return Discriminator(
+        _root_key_tag(dict(root_keys)),
+        custom_error_type=DOCUMENT_TYPE_ERROR,
+        custom_error_message=DOCUMENT_TYPE_MESSAGE,
+    )
