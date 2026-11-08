@@ -27,6 +27,7 @@ __pycache__/
 # (requirements/design/tasks) and steering are committed.
 /.kiro/settings/
 /.kiro/specs/**/tasks.meta.json
-
+.agents/reviews/
+private/
 .DS_Store
 tmp
