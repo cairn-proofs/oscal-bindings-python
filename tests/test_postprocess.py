@@ -193,10 +193,24 @@ class TestUnionAliases:
 
     def test_inline_unions_of_the_variant_set_use_the_alias(self, done: str) -> None:
         """The match ignores the order of the names and keeps ``None``."""
-        assert "groups: list[Group] | None = None" in done
-        assert "list[Group] | None,\n" in done
+        field = "Annotated[Group, Field(union_mode='left_to_right')]"
+        assert f"groups: list[{field}] | None = None" in done
+        assert f"list[{field}] | None,\n" in done
+        assert "Group: TypeAlias = GroupWithControls | GroupWithGroups" in done
         assert "GroupWithGroups | GroupWithControls" not in done
         assert "GroupWithControls | GroupWithGroups]" not in done
+
+    def test_union_fields_select_the_first_variant_that_validates(
+        self, generated: Any
+    ) -> None:
+        value = generated.GroupWithGroups.model_validate(
+            {"groups": [{"groups": [{"controls": ["b"]}]}, {"controls": ["c"]}]}
+        )
+        assert [type(g).__name__ for g in value.groups] == [
+            "GroupWithGroups",
+            "GroupWithControls",
+        ]
+        assert isinstance(value.groups[0], generated.Group)
 
     def test_type_alias_is_imported(self, done: str) -> None:
         assert "from typing import Annotated, TypeAlias\n" in done

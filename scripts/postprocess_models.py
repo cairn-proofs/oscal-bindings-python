@@ -22,7 +22,8 @@ as a class with its manifest name. This script completes the module:
       key are step failures.
    3. Each ``union`` entry becomes a ``TypeAlias`` of its variants, in manifest
       order, after the last variant class. Each inline union of exactly the
-      variant set becomes the alias name.
+      variant set becomes ``Annotated[<alias>, Field(union_mode='left_to_right')]``.
+      The alias itself stays a plain union.
 
 3. It names each scalar alias from its definition key without the
    ``oscal-complete-oscal-<module>:`` prefix (``LocationUuid``). A scalar has
@@ -89,6 +90,10 @@ KIND_FORMS: Final[Mapping[str, str]] = {
     "single-or-many": "root model",
     "document-union": "root model",
 }
+#: The text of a union alias at a field. ``left_to_right`` stops at the first
+#: variant that validates. The variant properties of a union are exclusive, so
+#: that is the variant that smart mode picks, at a lower cost (#43).
+UNION_FIELD: Final = "Annotated[{alias}, Field(union_mode='left_to_right')]"
 #: The form of a scalar alias: ``Name = Annotated[...]``.
 SCALAR_FORM: Final = "scalar alias"
 #: The longest alias line that is written on one line, as black formats it.
@@ -469,11 +474,14 @@ def _name_runs(
         i = last + 1
 
 
-def replace_inline_unions(content: str, aliases: Mapping[str, Sequence[str]]) -> str:
+def replace_inline_unions(
+    content: str, aliases: Mapping[str, Sequence[str]], wrap: str = "{alias}"
+) -> str:
     """Replace each inline union of exactly a variant set with its alias.
 
     ``aliases`` maps each alias name to its variant names. The match ignores
     the order of the names and a ``None`` member, which stays at the end.
+    ``wrap`` formats the alias at each site, with the field ``alias``.
     """
     by_set = {frozenset(variants): alias for alias, variants in aliases.items()}
     tokens = _code_tokens(content)
@@ -484,7 +492,7 @@ def replace_inline_unions(content: str, aliases: Mapping[str, Sequence[str]]) ->
         alias = by_set.get(frozenset(members))
         if alias is None or len(members) != len(set(members)):
             continue
-        text = alias + (" | None" if "None" in names else "")
+        text = wrap.format(alias=alias) + (" | None" if "None" in names else "")
         start, end = tokens[first].start, tokens[last].end
         edits.append((starts[start[0]] + start[1], starts[end[0]] + end[1], text))
     return _apply(content, edits)
@@ -787,13 +795,14 @@ def add_union_aliases(
     """Add a ``TypeAlias`` per ``union`` entry and use it for its inline unions.
 
     The alias lists the variants in manifest order. It follows the last variant
-    class, because the value of an alias is evaluated at import.
+    class, because the value of an alias is evaluated at import. Each field
+    validates the alias left to right (``UNION_FIELD``, #43).
     """
     aliases = {
         entry["name"]: [variant["type"] for variant in entry.get("variants", [])]
         for entry in _entries(manifest, "union")
     }
-    content = replace_inline_unions(content, aliases)
+    content = replace_inline_unions(content, aliases, UNION_FIELD)
     classes = {
         definition.name: definition
         for definition in module_definitions(content)

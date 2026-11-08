@@ -4368,7 +4368,7 @@ class Map(OscalBaseModel):
     targets: Annotated[list[MappingItem], Field(min_length=1)]
     qualifiers: Annotated[list[QualifierItem] | None, Field(min_length=1)] = None
     confidence_score: Annotated[
-        ConfidenceScore | None,
+        Annotated[ConfidenceScore, Field(union_mode='left_to_right')] | None,
         Field(
             alias='confidence-score',
             description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
@@ -4412,7 +4412,7 @@ class MappingProvenance(OscalBaseModel):
         ),
     ]
     confidence_score: Annotated[
-        ConfidenceScore | None,
+        Annotated[ConfidenceScore, Field(union_mode='left_to_right')] | None,
         Field(
             alias='confidence-score',
             description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
@@ -4561,12 +4561,12 @@ class ReviewedControls(OscalBaseModel):
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
     control_selections: Annotated[
-        list[ControlSelection],
+        list[Annotated[ControlSelection, Field(union_mode='left_to_right')]],
         Field(alias='control-selections', min_length=1),
     ]
     control_objective_selections: Annotated[
         list[
-            ControlObjectiveSelection
+            Annotated[ControlObjectiveSelection, Field(union_mode='left_to_right')]
         ]
         | None,
         Field(alias='control-objective-selections', min_length=1),
@@ -4608,7 +4608,7 @@ class RelatedTaskIdentifiedSubject(OscalBaseModel):
             title='Assessment Subject Placeholder Universally Unique Identifier Reference'),
     ]
     subjects: Annotated[
-        list[AssessmentSubject],
+        list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]],
         Field(min_length=1),
     ]
 
@@ -4688,7 +4688,7 @@ class Metadata(OscalBaseModel):
     roles: Annotated[list[MetadataRole] | None, Field(min_length=1)] = None
     locations: Annotated[list[MetadataLocation] | None, Field(min_length=1)] = None
     parties: Annotated[
-        list[MetadataParty] | None,
+        list[Annotated[MetadataParty, Field(union_mode='left_to_right')]] | None,
         Field(min_length=1),
     ] = None
     responsible_parties: Annotated[
@@ -4771,7 +4771,7 @@ class Mapping(OscalBaseModel):
         GapSummary | None, Field(alias='target-gap-summary')
     ] = None
     confidence_score: Annotated[
-        ConfidenceScore | None,
+        Annotated[ConfidenceScore, Field(union_mode='left_to_right')] | None,
         Field(
             alias='confidence-score',
             description="This records either a string category or a decimal value from 0-1 representing a percentage. Both of these values describe an estimation of the author's confidence that this mapping is correct and accurate.",
@@ -4810,13 +4810,13 @@ class ProfileGroupWithInsertControls(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[Parameter] | None, Field(min_length=1)
+        list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1)
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
     parts: Annotated[list[Part] | None, Field(min_length=1)] = None
     insert_controls: Annotated[
-        list[InsertControls] | None,
+        list[Annotated[InsertControls, Field(union_mode='left_to_right')]] | None,
         Field(alias='insert-controls', min_length=1),
     ] = None
 
@@ -4850,7 +4850,7 @@ class ModifyAlterAdd(OscalBaseModel):
             title='Title Change'),
     ] = None
     params: Annotated[
-        list[Parameter] | None, Field(min_length=1)
+        list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1)
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
@@ -5130,7 +5130,7 @@ class TaskAssociatedActivity(OscalBaseModel):
         list[ResponsibleRole] | None, Field(alias='responsible-roles', min_length=1)
     ] = None
     subjects: Annotated[
-        list[AssessmentSubject],
+        list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]],
         Field(min_length=1),
     ]
     remarks: Annotated[
@@ -5162,7 +5162,7 @@ class RelatedTask(OscalBaseModel):
         list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1)
     ] = None
     subjects: Annotated[
-        list[AssessmentSubject]
+        list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]]
         | None,
         Field(min_length=1),
     ] = None
@@ -5296,7 +5296,7 @@ class Control(OscalBaseModel):
             title='Control Title'),
     ]
     params: Annotated[
-        list[Parameter] | None, Field(min_length=1)
+        list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1)
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
@@ -5471,7 +5471,7 @@ class Task(OscalBaseModel):
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
     timing: Annotated[
-        TaskTiming | None,
+        Annotated[TaskTiming, Field(union_mode='left_to_right')] | None,
         Field(
             description='The timing under which the task is intended to occur.',
             title='Event Timing'),
@@ -5483,7 +5483,7 @@ class Task(OscalBaseModel):
         Field(alias='associated-activities', min_length=1),
     ] = None
     subjects: Annotated[
-        list[AssessmentSubject]
+        list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]]
         | None,
         Field(min_length=1),
     ] = None
@@ -5729,7 +5729,7 @@ class CatalogGroupWithControls(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[Parameter] | None, Field(min_length=1)
+        list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1)
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
@@ -5765,7 +5765,7 @@ class Modify(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     set_parameters: Annotated[
-        list[ModifySetParameter] | None,
+        list[Annotated[ModifySetParameter, Field(union_mode='left_to_right')]] | None,
         Field(alias='set-parameters', min_length=1),
     ] = None
     alters: Annotated[list[ModifyAlter] | None, Field(min_length=1)] = None
@@ -6015,7 +6015,7 @@ class AssessmentPlan(OscalBaseModel):
     ] = None
     reviewed_controls: Annotated[ReviewedControls, Field(alias='reviewed-controls')]
     assessment_subjects: Annotated[
-        list[AssessmentSubject]
+        list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]]
         | None,
         Field(alias='assessment-subjects', min_length=1),
     ] = None
@@ -6295,11 +6295,11 @@ class Catalog(OscalBaseModel):
     ]
     metadata: Metadata
     params: Annotated[
-        list[Parameter] | None, Field(min_length=1)
+        list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1)
     ] = None
     controls: Annotated[list[Control] | None, Field(min_length=1)] = None
     groups: Annotated[
-        list[CatalogGroup] | None,
+        list[Annotated[CatalogGroup, Field(union_mode='left_to_right')]] | None,
         Field(min_length=1),
     ] = None
     back_matter: Annotated[BackMatter | None, Field(alias='back-matter')] = None
@@ -6335,13 +6335,13 @@ class CatalogGroupWithGroups(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[Parameter] | None, Field(min_length=1)
+        list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1)
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
     parts: Annotated[list[Part] | None, Field(min_length=1)] = None
     groups: Annotated[
-        list[CatalogGroup] | None,
+        list[Annotated[CatalogGroup, Field(union_mode='left_to_right')]] | None,
         Field(min_length=1),
     ] = None
 
@@ -6365,10 +6365,10 @@ class Profile(OscalBaseModel):
     ]
     metadata: Metadata
     imports: Annotated[
-        list[Import], Field(min_length=1)
+        list[Annotated[Import, Field(union_mode='left_to_right')]], Field(min_length=1)
     ]
     merge: Annotated[
-        Merge | None,
+        Annotated[Merge, Field(union_mode='left_to_right')] | None,
         Field(
             description='Provides structuring directives that instruct how controls are organized after profile resolution.',
             title='Merge Controls'),
@@ -6385,11 +6385,11 @@ class MergeCustom(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid')
     groups: Annotated[
-        list[ProfileGroup] | None,
+        list[Annotated[ProfileGroup, Field(union_mode='left_to_right')]] | None,
         Field(min_length=1),
     ] = None
     insert_controls: Annotated[
-        list[InsertControls] | None,
+        list[Annotated[InsertControls, Field(union_mode='left_to_right')]] | None,
         Field(alias='insert-controls', min_length=1),
     ] = None
 
@@ -6448,13 +6448,13 @@ class ProfileGroupWithGroups(OscalBaseModel):
             title='Group Title'),
     ]
     params: Annotated[
-        list[Parameter] | None, Field(min_length=1)
+        list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1)
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1)] = None
     links: Annotated[list[Link] | None, Field(min_length=1)] = None
     parts: Annotated[list[Part] | None, Field(min_length=1)] = None
     groups: Annotated[
-        list[ProfileGroup] | None,
+        list[Annotated[ProfileGroup, Field(union_mode='left_to_right')]] | None,
         Field(min_length=1),
     ] = None
 

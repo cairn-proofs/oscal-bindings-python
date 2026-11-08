@@ -115,7 +115,12 @@ rule for a manifest type. `hatch run generate` runs three steps:
    1. Phase 1 changes structure. It collapses each scalar `RootModel` to an `Annotated` alias, and it removes
       `pattern=` from fields of a type that has no regex constraint (`AwareDatetime`, `AnyUrl`, `EmailStr`, numbers).
    2. It adds the manifest types that codegen does not emit: one `TypeAlias` per union (`CatalogGroup`), the
-      `MappingCollectionMappings` root model, and the `OscalDocument` root model.
+      `MappingCollectionMappings` root model, and the `OscalDocument` root model. Each union alias stays a plain union,
+      so `isinstance(value, CatalogGroup)` works. Each field that uses an alias is
+      `Annotated[<alias>, Field(union_mode='left_to_right')]`. No variant accepts the property of another variant of
+      its union, so the first variant that validates is the variant that smart mode picks. `left_to_right` stops
+      there, and parses the 800-53 catalog about 18% faster (#43). The tests of `tests/test_models_manifest.py` check
+      the exclusivity for each union of the pinned manifest.
    3. It discriminates the `root` field of `OscalDocument` on the root key of the input. The root key of each member is
       the `body-field` of its manifest `document` entry. Each member is tagged with its class name, so an error `loc`
       starts with the class name (`('CatalogDocument', 'catalog', …)`). `root_key_discriminator` in `v1/_base.py`
