@@ -6,8 +6,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, TypeAlias
 
-from oscal_bindings.v1._base import OscalBaseModel
-from pydantic import AnyUrl, AwareDatetime, ConfigDict, EmailStr, Field, RootModel
+from oscal_bindings.v1._base import OscalBaseModel, root_key_discriminator
+from pydantic import AnyUrl, AwareDatetime, ConfigDict, EmailStr, Field, RootModel, Tag
 
 
 class ParameterSelectionHowMany(Enum):
@@ -6500,16 +6500,30 @@ class OscalDocument(
         | PlanOfActionAndMilestonesDocument
     ]
 ):
-    root: (
-        CatalogDocument
-        | MappingCollectionDocument
-        | ProfileDocument
-        | ComponentDefinitionDocument
-        | SystemSecurityPlanDocument
-        | AssessmentPlanDocument
-        | AssessmentResultsDocument
-        | PlanOfActionAndMilestonesDocument
-    )
+    root: Annotated[
+        Annotated[CatalogDocument, Tag('CatalogDocument')]
+        | Annotated[MappingCollectionDocument, Tag('MappingCollectionDocument')]
+        | Annotated[ProfileDocument, Tag('ProfileDocument')]
+        | Annotated[ComponentDefinitionDocument, Tag('ComponentDefinitionDocument')]
+        | Annotated[SystemSecurityPlanDocument, Tag('SystemSecurityPlanDocument')]
+        | Annotated[AssessmentPlanDocument, Tag('AssessmentPlanDocument')]
+        | Annotated[AssessmentResultsDocument, Tag('AssessmentResultsDocument')]
+        | Annotated[
+            PlanOfActionAndMilestonesDocument, Tag('PlanOfActionAndMilestonesDocument')
+        ],
+        root_key_discriminator(
+            {
+                'catalog': 'CatalogDocument',
+                'mapping-collection': 'MappingCollectionDocument',
+                'profile': 'ProfileDocument',
+                'component-definition': 'ComponentDefinitionDocument',
+                'system-security-plan': 'SystemSecurityPlanDocument',
+                'assessment-plan': 'AssessmentPlanDocument',
+                'assessment-results': 'AssessmentResultsDocument',
+                'plan-of-action-and-milestones': 'PlanOfActionAndMilestonesDocument',
+            }
+        ),
+    ]
 
 
 AssessmentPart.model_rebuild()

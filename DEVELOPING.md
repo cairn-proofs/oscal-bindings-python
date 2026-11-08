@@ -116,9 +116,16 @@ rule for a manifest type. `hatch run generate` runs three steps:
       `pattern=` from fields of a type that has no regex constraint (`AwareDatetime`, `AnyUrl`, `EmailStr`, numbers).
    2. It adds the manifest types that codegen does not emit: one `TypeAlias` per union (`CatalogGroup`), the
       `MappingCollectionMappings` root model, and the `OscalDocument` root model.
-   3. It names each scalar alias from its definition key without the `oscal-complete-oscal-<module>:` prefix
+   3. It discriminates the `root` field of `OscalDocument` on the root key of the input. The root key of each member is
+      the `body-field` of its manifest `document` entry. Each member is tagged with its class name, so an error `loc`
+      starts with the class name (`('CatalogDocument', 'catalog', …)`). `root_key_discriminator` in `v1/_base.py`
+      holds the logic. The generated module holds only the root-key map. Pydantic validates the body against one
+      member, and an input with no known root key fails with one `oscal_document_type` error. A member without a
+      `body-field`, two members with one `body-field`, and a member class with no required field of that key fail the
+      step.
+   4. It names each scalar alias from its definition key without the `oscal-complete-oscal-<module>:` prefix
       (`LocationUuid`). A scalar has no manifest entry, so its name is a binding name and not a contract name.
-   4. Three guards compare the result with the manifest and the artifact schema. Each guard reports every offender.
+   5. Three guards compare the result with the manifest and the artifact schema. Each guard reports every offender.
       The guards check these rules:
       1. Each manifest name is defined once in the form of its kind.
       2. Each other module-level name is a scalar alias, with the name of a scalar definition of the artifact schema.

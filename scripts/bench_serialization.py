@@ -1,6 +1,7 @@
 """Benchmark parse and serialize time for one OSCAL document.
 
-Reports the median of N timed runs (after one untimed warm-up) for:
+Reports the median of N timed runs (after one untimed warm-up), with cyclic GC
+enabled and with cyclic GC disabled, for:
 
 - ``parse_oscal(bytes)``
 - ``serialize_oscal(doc, indent=None)`` (compact)
@@ -12,6 +13,13 @@ Uses only API that exists both before and after the default-serialization fix
 (GitHub issue #5), so the same script measures both trees. Output sizes are
 printed alongside times so a change in what the default paths emit is visible.
 
+The GC-off median measures the binding alone. The GC-on median also includes the
+cyclic GC cost, which grows with the objects the process holds (design D8 of the
+discriminate-document-union change). So the script times the parse case before
+it parses the document for the serialize cases, and it drops the result of each
+run after its time is read: the next run holds no previous result, and no time
+includes the deallocation of a result.
+
 Usage::
 
     hatch run python scripts/bench_serialization.py [--catalog PATH] [--runs N]
@@ -20,6 +28,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import gc
 import platform
 import statistics
 import sys
@@ -51,15 +60,28 @@ DEFAULT_CATALOG = (
 DEFAULT_RUNS = 7
 
 
-def _median_ms(fn: Callable[[], object], runs: int) -> tuple[float, object]:
-    """Run ``fn`` once untimed, then ``runs`` times; return (median ms, result)."""
-    result = fn()  # warm-up
+def _median_ms(fn: Callable[[], object], runs: int, *, collect: bool) -> float:
+    """Run ``fn`` once untimed, then ``runs`` times; return the median ms.
+
+    ``collect`` False disables cyclic GC for each timed call. The result of
+    each call is dropped after its time is read.
+    """
+    fn()  # warm-up
     samples: list[float] = []
+    enabled = gc.isenabled()
     for _ in range(runs):
-        start = time.perf_counter()
-        result = fn()
-        samples.append((time.perf_counter() - start) * 1000.0)
-    return statistics.median(samples), result
+        gc.collect()
+        if not collect:
+            gc.disable()
+        try:
+            start = time.perf_counter()
+            result = fn()
+            samples.append((time.perf_counter() - start) * 1000.0)
+        finally:
+            if enabled:
+                gc.enable()
+        del result
+    return statistics.median(samples)
 
 
 def _size(value: object) -> str:
@@ -84,18 +106,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     raw = args.catalog.read_bytes()
-    doc = parse_oscal(raw)
-
-    cases: list[tuple[str, Callable[[], object]]] = [
-        ("parse_oscal(bytes)", lambda: parse_oscal(raw)),
-        (
-            "serialize_oscal(doc, indent=None)",
-            lambda: serialize_oscal(doc, indent=None),
-        ),
-        ("serialize_oscal(doc)", lambda: serialize_oscal(doc)),
-        ("doc.model_dump_json()", doc.model_dump_json),
-        ("pydantic_core.to_json(doc)", lambda: pydantic_core.to_json(doc)),
-    ]
 
     print(f"Document: {args.catalog.name} ({len(raw):,} B)")
     print(
@@ -103,12 +113,31 @@ def main(argv: list[str] | None = None) -> int:
         f"pydantic-core {pydantic_core.__version__}"
     )
     print(f"Median of {args.runs} runs after 1 warm-up\n")
-    width = max(len(name) for name, _ in cases)
-    print(f"| {'Path':<{width}} | {'Median ms':>10} | {'Output':>14} |")
-    print(f"|{'-' * (width + 2)}|{'-' * 12}|{'-' * 16}|")
-    for name, fn in cases:
-        ms, result = _median_ms(fn, args.runs)
-        print(f"| {name:<{width}} | {ms:>10.1f} | {_size(result):>14} |")
+    width = len("serialize_oscal(doc, indent=None)")
+    print(
+        f"| {'Path':<{width}} | {'GC on ms':>9} | {'GC off ms':>9} | {'Output':>14} |"
+    )
+    print(f"|{'-' * (width + 2)}|{'-' * 11}|{'-' * 11}|{'-' * 16}|")
+
+    def row(name: str, fn: Callable[[], object]) -> None:
+        on = _median_ms(fn, args.runs, collect=True)
+        off = _median_ms(fn, args.runs, collect=False)
+        size = _size(fn())
+        print(f"| {name:<{width}} | {on:>9.1f} | {off:>9.1f} | {size:>14} |")
+
+    # The parse case runs first, so no parsed document is live while it runs.
+    row("parse_oscal(bytes)", lambda: parse_oscal(raw))
+    doc = parse_oscal(raw)
+    for name, fn in [
+        (
+            "serialize_oscal(doc, indent=None)",
+            lambda: serialize_oscal(doc, indent=None),
+        ),
+        ("serialize_oscal(doc)", lambda: serialize_oscal(doc)),
+        ("doc.model_dump_json()", doc.model_dump_json),
+        ("pydantic_core.to_json(doc)", lambda: pydantic_core.to_json(doc)),
+    ]:
+        row(name, fn)
     return 0
 
 

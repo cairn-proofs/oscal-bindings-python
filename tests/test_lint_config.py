@@ -233,7 +233,10 @@ def test_json_limit_values_are_documented(doc: str) -> None:
 def _readme_limits_section() -> str:
     text = (PYPROJECT.parent / "README.md").read_text(encoding="utf-8")
     start = text.index("### Resource limits")
-    return text[start : text.index("\n## ", start)]
+    # The section ends at the next heading of level 2 or 3.
+    end = re.compile(r"\n#{2,3} ").search(text, start + 1)
+    assert end is not None
+    return text[start : end.start()]
 
 
 def test_readme_limit_rows_state_values_and_operations() -> None:

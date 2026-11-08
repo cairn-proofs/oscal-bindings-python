@@ -317,6 +317,28 @@ def _check_json_name_keyed_outcome(
     )
 
 
+def _is_root_key_site(doc: CorpusDoc, site: AliasSite) -> bool:
+    """True if ``site`` is the root key, so a rename leaves no known root key."""
+    return site.path == () and site.alias == doc.root_key
+
+
+def _check_no_root_key_outcome(
+    label: str, outcome: Outcome, site: AliasSite, where: str, *, named: bool
+) -> None:
+    """Assert a name-keyed root key is rejected as ``oscal_document_type``.
+
+    The document union has no member for the renamed root key, so it reports
+    one entry at the root. A parse operation names the key in the message
+    (design D7 of discriminate-document-union).
+    """
+    assert isinstance(outcome, list), f"{label}: accepted {where}"
+    assert [(e["type"], tuple(e["loc"])) for e in outcome] == [
+        ("oscal_document_type", ())
+    ], f"{label}: rejected {where}, but not as oscal_document_type; {outcome[:5]}"
+    if named:
+        assert repr(site.name) in outcome[0]["msg"], (label, where, outcome[0]["msg"])
+
+
 def _describe(doc: CorpusDoc, path: JsonPath, key: str, alias: str = "") -> str:
     where = "$" + "".join(f"[{p!r}]" for p in path)
     renamed = f" (renamed from {alias!r})" if alias else ""
@@ -353,7 +375,8 @@ def test_parse_entry_points_reject_name_keyed_json(
 ) -> None:
     """Feature: oscal-default-serialization-fix, Property 2: every parse entry
     point rejects name-keyed JSON as ``extra_forbidden`` at the renamed key, and
-    ``validate_oscal`` reports it invalid (#6).
+    ``validate_oscal`` reports it invalid (#6). A renamed root key is one
+    ``oscal_document_type`` entry that names the key (#41).
 
     **Validates: Requirements 3.2, 3.3**
     """
@@ -371,10 +394,14 @@ def test_parse_entry_points_reject_name_keyed_json(
         f"typed parser for {corpus_doc.root_key}": (lambda: typed(text), site.path),
     }
     accepted: dict[str, bool] = {}
+    root_key_site = _is_root_key_site(corpus_doc, site)
     for label, (parse, rel_path) in parsers.items():
         outcome = _outcome(parse)
         accepted[label] = not isinstance(outcome, list)
-        _check_json_name_keyed_outcome(label, outcome, site, rel_path, where)
+        if root_key_site:
+            _check_no_root_key_outcome(label, outcome, site, where, named=True)
+        else:
+            _check_json_name_keyed_outcome(label, outcome, site, rel_path, where)
 
     accepted["validate_oscal(str)"] = validate_oscal(text)
     accepted["validate_oscal(bytes)"] = validate_oscal(text.encode())
@@ -388,7 +415,8 @@ def test_model_validate_rejects_name_keyed_input_at_depth(
     """Feature: oscal-default-serialization-fix, Property 2: direct
     ``model_validate`` stays alias-only (``extra_forbidden`` at the renamed
     key) at the document, wrapper, and owning model levels, and direct
-    ``model_validate_json`` rejects it the same way (#6).
+    ``model_validate_json`` rejects it the same way (#6). For a renamed root
+    key, ``OscalDocument`` reports one ``oscal_document_type`` entry (#41).
 
     Direct calls matter: ``model_validate*`` is exactly the path the
     ``__pydantic_base_init__`` marker protects.
@@ -417,9 +445,15 @@ def test_model_validate_rejects_name_keyed_input_at_depth(
             (),
         ),
     }
+    root_key_site = _is_root_key_site(corpus_doc, site)
     for label, (call, rel_path) in dict_calls.items():
         with pytest.raises(ValidationError) as excinfo:
             call()
+        if root_key_site and label.startswith("OscalDocument."):
+            _check_no_root_key_outcome(
+                label, excinfo.value.errors(), site, where, named=False
+            )
+            continue
         assert _has_extra_forbidden(excinfo.value.errors(), rel_path, site.name), (
             f"{label}: no extra_forbidden for {where}. {ROOT_CAUSE_5}"
         )
@@ -435,7 +469,10 @@ def test_model_validate_rejects_name_keyed_input_at_depth(
         ),
     }
     for label, (call, rel_path) in json_calls.items():
-        _check_json_name_keyed_outcome(label, _outcome(call), site, rel_path, where)
+        if root_key_site and label.startswith("OscalDocument."):
+            _check_no_root_key_outcome(label, _outcome(call), site, where, named=False)
+        else:
+            _check_json_name_keyed_outcome(label, _outcome(call), site, rel_path, where)
 
 
 # --- validate_element: leaf types and nested resource.rlinks[i] (3.4) --------

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from support.spec_artifact import corpus_root
 
 from oscal_bindings import OscalDoc
 from oscal_bindings.parser import (
@@ -20,6 +21,7 @@ from oscal_bindings.parser import (
     serialize_oscal,
     validate_oscal,
 )
+from oscal_bindings.v1 import models
 from oscal_bindings.v1.extensions.yaml_io import DEPTH_LIMIT
 from oscal_bindings.v1.parser import (
     JSON_DEPTH_LIMIT,
@@ -580,3 +582,100 @@ class TestJsonLimitErrorShape:
         text = accented[:-2] + f', "x": {PAST_DIGIT_LIMIT}' + "}}"
         entry = _limit_error(parse_oscal, text)
         assert entry["column"] == plain["column"] + 5 * 2
+
+
+# ---------------------------------------------------------------------------
+# Document type selection (spec document-type-selection)
+# ---------------------------------------------------------------------------
+
+
+NO_ROOT_KEY = "Not an OSCAL document: no known root key"
+
+
+def _catalog_with_control_id(control_id: object) -> str:
+    data = json.loads(MINIMAL_CATALOG)
+    data["catalog"]["controls"] = [{"id": control_id, "title": "C"}]
+    return json.dumps(data)
+
+
+def _parse_errors(text: str) -> list[dict[str, Any]]:
+    with pytest.raises(OscalParseError) as info:
+        parse_oscal(text)
+    errors: list[dict[str, Any]] = info.value.errors
+    return errors
+
+
+class TestDocumentTypeSelection:
+    @pytest.mark.parametrize(
+        ("root_key", "cls"),
+        [
+            ("catalog", models.CatalogDocument),
+            ("profile", models.ProfileDocument),
+            ("component-definition", models.ComponentDefinitionDocument),
+            ("system-security-plan", models.SystemSecurityPlanDocument),
+            ("assessment-plan", models.AssessmentPlanDocument),
+            ("assessment-results", models.AssessmentResultsDocument),
+            ("plan-of-action-and-milestones", models.PlanOfActionAndMilestonesDocument),
+            ("mapping-collection", models.MappingCollectionDocument),
+        ],
+    )
+    def test_each_document_type_parses_to_its_type_and_round_trips(
+        self, root_key: str, cls: type
+    ) -> None:
+        path = corpus_root() / "documents" / "valid" / f"{root_key}.json"
+        parsed = parse_oscal(path.read_bytes())
+        assert type(parsed.root) is cls
+        assert parse_oscal(serialize_oscal(parsed)) == parsed
+
+    def test_a_fault_reports_only_errors_of_the_selected_type(self) -> None:
+        errors = _parse_errors(_catalog_with_control_id(5))
+        assert [(e["type"], e["loc"]) for e in errors] == [
+            ("string_type", ("CatalogDocument", "catalog", "controls", 0, "id"))
+        ]
+
+    def test_two_root_keys_select_the_first_one(self) -> None:
+        data = json.loads(MINIMAL_CATALOG)
+        data["profile"] = json.loads(MINIMAL_PROFILE)["profile"]
+        errors = _parse_errors(json.dumps(data))
+        assert [(e["type"], e["loc"]) for e in errors] == [
+            ("extra_forbidden", ("CatalogDocument", "profile"))
+        ]
+        profile_first = {"profile": data["profile"], "catalog": data["catalog"]}
+        errors = _parse_errors(json.dumps(profile_first))
+        assert {e["loc"][0] for e in errors} == {"ProfileDocument"}
+
+    @pytest.mark.parametrize(
+        ("text", "msg"),
+        [
+            ("{}", NO_ROOT_KEY),
+            ("[]", NO_ROOT_KEY),
+            ('"catalog"', NO_ROOT_KEY),
+            ("5", NO_ROOT_KEY),
+            ("null", NO_ROOT_KEY),
+            ('{"metadata": {}}', f"{NO_ROOT_KEY} (found: 'metadata')"),
+            ('{"a": 1, "b": 2}', f"{NO_ROOT_KEY} (found: 'a', 'b')"),
+        ],
+        ids=["empty", "array", "string", "number", "null", "one-key", "two-keys"],
+    )
+    def test_no_root_key_reports_one_error(self, text: str, msg: str) -> None:
+        (entry,) = _parse_errors(text)
+        assert entry["type"] == "oscal_document_type"
+        assert entry["loc"] == ()
+        assert entry["msg"] == msg
+
+    def test_name_keyed_root_key_is_named(self) -> None:
+        path = corpus_root() / "documents" / "valid" / "assessment-plan.json"
+        data = json.loads(path.read_bytes())
+        data["assessment_plan"] = data.pop("assessment-plan")
+        (entry,) = _parse_errors(json.dumps(data))
+        assert entry["type"] == "oscal_document_type"
+        assert entry["loc"] == ()
+        assert entry["msg"] == f"{NO_ROOT_KEY} (found: 'assessment_plan')"
+
+    def test_validity_check_returns_false_for_no_root_key(self) -> None:
+        assert validate_oscal('{"metadata": {}}') is False
+
+    def test_a_document_value_is_accepted_as_the_root(self) -> None:
+        catalog = parse_oscal(MINIMAL_CATALOG).root
+        assert models.OscalDocument(root=catalog).root is catalog
+        assert models.OscalDocument.model_validate(catalog).root is catalog

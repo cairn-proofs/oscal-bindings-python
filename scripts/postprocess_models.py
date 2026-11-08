@@ -13,7 +13,13 @@ as a class with its manifest name. This script completes the module:
    1. Each ``single-or-many`` entry becomes a ``RootModel`` of the item or a
       list of the item, and it replaces the inline union of the field.
    2. The ``document-union`` entry is the root ``RootModel``, renamed to its
-      manifest name.
+      manifest name. Its ``root`` field becomes a tagged union. The tag of
+      each member is its class name. ``root_key_discriminator`` of
+      ``oscal_bindings.v1._base`` selects the member from the root key of the
+      input. The root key of a member is the ``body-field`` of its
+      ``document`` entry. A member without a ``body-field``, two members with
+      one ``body-field``, and a member class with no required field of that
+      key are step failures.
    3. Each ``union`` entry becomes a ``TypeAlias`` of its variants, in manifest
       order, after the last variant class. Each inline union of exactly the
       variant set becomes the alias name.
@@ -499,6 +505,42 @@ def ensure_typing_import(content: str, name: str) -> str:
     return content[: match.start()] + line + content[match.end() :]
 
 
+def _import_order(name: str) -> tuple[int, str]:
+    """Return the isort sort key of ``name``: constants, classes, functions."""
+    if name.isupper():
+        return 0, name
+    return (1 if name[0].isupper() else 2), name
+
+
+def ensure_from_import(content: str, module: str, name: str) -> str:
+    """Add ``name`` to the module-level ``from <module> import ...`` statement.
+
+    The statement keeps the isort and black format of the codegen output. A
+    module that has no such statement gets one after ``from __future__``.
+    """
+    nodes = [
+        node
+        for node in ast.parse(content).body
+        if isinstance(node, ast.ImportFrom) and node.module == module
+    ]
+    names = {name}
+    lines = content.split("\n")
+    if nodes:
+        node = nodes[0]
+        names.update(alias.name for alias in node.names)
+        start, end = node.lineno - 1, node.end_lineno or node.lineno
+    else:
+        future = lines.index("from __future__ import annotations")
+        start = end = future + 2
+    ordered = sorted(names, key=_import_order)
+    text = f"from {module} import {', '.join(ordered)}"
+    if len(text) > LINE_LENGTH:
+        body = "".join(f"    {item},\n" for item in ordered)
+        text = f"from {module} import (\n{body})"
+    lines[start:end] = text.split("\n") + ([] if nodes else [""])
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Manifest types that codegen does not emit with their names
 # ---------------------------------------------------------------------------
@@ -593,6 +635,141 @@ def rename_document_union(
             )
             continue
         content = rename_names(content, {roots[0]: entry["name"]})
+    return content
+
+
+#: The module that holds the discriminator of the document union (design D3).
+_BASE_MODULE: Final = "oscal_bindings.v1._base"
+#: The function of ``_BASE_MODULE`` that builds that discriminator.
+_DISCRIMINATOR: Final = "root_key_discriminator"
+
+
+def _field_alias(annotation: ast.expr) -> str | None:
+    """Return the ``alias=`` of the ``Field(...)`` in ``Annotated[...]``."""
+    if not (
+        isinstance(annotation, ast.Subscript)
+        and _is_name(annotation.value, "Annotated")
+        and isinstance(annotation.slice, ast.Tuple)
+    ):
+        return None
+    for meta in annotation.slice.elts[1:]:
+        if isinstance(meta, ast.Call) and _is_name(meta.func, "Field"):
+            for keyword in meta.keywords:
+                if keyword.arg == "alias" and isinstance(keyword.value, ast.Constant):
+                    return str(keyword.value.value)
+    return None
+
+
+def _required_keys(node: ast.ClassDef) -> frozenset[str]:
+    """Return the input key of each field of ``node`` that has no default."""
+    return frozenset(
+        _field_alias(item.annotation) or item.target.id
+        for item in node.body
+        if isinstance(item, ast.AnnAssign)
+        and isinstance(item.target, ast.Name)
+        and item.value is None
+    )
+
+
+def _tagged_member(member: str, prefix: str, suffix: str) -> str:
+    """Return one tagged member line, split as black splits a long line."""
+    line = f"        {prefix}Annotated[{member}, Tag('{member}')]{suffix}\n"
+    if len(line) - 1 <= LINE_LENGTH:
+        return line
+    return (
+        f"        {prefix}Annotated[\n"
+        f"            {member}, Tag('{member}')\n"
+        f"        ]{suffix}\n"
+    )
+
+
+def root_field_text(members: Sequence[str], root_keys: Mapping[str, str]) -> str:
+    """Return the tagged ``root`` field of the document union, in black format."""
+    last = len(members) - 1
+    tagged = "".join(
+        _tagged_member(member, "| " if i else "", "," if i == last else "")
+        for i, member in enumerate(members)
+    )
+    entries = "".join(
+        f"                '{key}': '{tag}',\n" for key, tag in root_keys.items()
+    )
+    return (
+        "    root: Annotated[\n"
+        f"{tagged}"
+        f"        {_DISCRIMINATOR}(\n"
+        "            {\n"
+        f"{entries}"
+        "            }\n"
+        "        ),\n"
+        "    ]"
+    )
+
+
+def discriminate_document_union(
+    content: str, manifest: Mapping[str, Any], failures: list[str]
+) -> str:
+    """Discriminate the root field of the document union on its root key.
+
+    The root key of each member is the ``body-field`` of its ``document``
+    entry. The field keeps the codegen member order (design D3, D4, D5).
+    """
+    documents = {entry["name"]: entry for entry in _entries(manifest, "document")}
+    for entry in _entries(manifest, "document-union"):
+        name = entry["name"]
+        members = list(entry.get("members", []))
+        classes = {
+            node.name: node
+            for node in ast.parse(content).body
+            if isinstance(node, ast.ClassDef)
+        }
+        root_keys: dict[str, str] = {}
+        for member in members:
+            body_field = documents.get(member, {}).get("body-field")
+            if not isinstance(body_field, str):
+                failures.append(
+                    f"{name}: the member {member} has no document entry with a "
+                    "body-field"
+                )
+            elif body_field in root_keys:
+                failures.append(
+                    f"{name}: the members {root_keys[body_field]} and {member} "
+                    f"have the same body-field {body_field!r}"
+                )
+            elif member in classes and body_field not in _required_keys(
+                classes[member]
+            ):
+                failures.append(
+                    f"{name}: the member class {member} has no required field "
+                    f"with the key {body_field!r}"
+                )
+            else:
+                root_keys[body_field] = member
+        union = classes.get(name)
+        fields = [
+            item
+            for item in (union.body if union is not None else [])
+            if isinstance(item, ast.AnnAssign)
+            and isinstance(item.target, ast.Name)
+            and item.target.id == "root"
+        ]
+        order = _union_names(fields[0].annotation) if len(fields) == 1 else None
+        if order is None or frozenset(order) != frozenset(members):
+            failures.append(
+                f"{name}: expected a root field of a plain union of the "
+                f"{len(members)} members"
+            )
+            continue
+        if len(root_keys) != len(members):
+            continue
+        by_tag = {tag: key for key, tag in root_keys.items()}
+        ordered = {by_tag[member]: member for member in order}
+        lines = content.split("\n")
+        (field,) = fields
+        start, end = field.lineno - 1, field.end_lineno or field.lineno
+        lines[start:end] = [root_field_text(order, ordered)]
+        content = "\n".join(lines)
+        content = ensure_from_import(content, "pydantic", "Tag")
+        content = ensure_from_import(content, _BASE_MODULE, _DISCRIMINATOR)
     return content
 
 
@@ -843,6 +1020,7 @@ def postprocess(
     renames = scalar_renames(content, schema, manifest, failures)
     content = rename_names(content, renames)
     content = rename_document_union(content, manifest, failures)
+    content = discriminate_document_union(content, manifest, failures)
     content = add_union_aliases(content, manifest, failures)
 
     # Remove the RootModel import if no longer used.

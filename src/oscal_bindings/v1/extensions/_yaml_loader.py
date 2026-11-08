@@ -372,7 +372,7 @@ class _Schema:
     def __init__(self) -> None:
         schema = OscalDocument.model_json_schema()
         self.defs: dict[str, Any] = schema.get("$defs", {})
-        #: The root location: an `anyOf` over the eight document wrappers.
+        #: The root location: a `oneOf` over the eight document wrappers.
         self.root: Any = schema
         # The caches key on `id()` of a subschema, never on a key from the
         # input, so their size is bounded by the schema. `id()` keys are safe
