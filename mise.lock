@@ -4,6 +4,7 @@ lockfile_version = 2
 
 [[tools."npm:@fission-ai/openspec"]]
 version = "1.16.1"
+aube = { path = ".mise/locks/npm-fission-ai-openspec/1.16.1", digest = "sha256:c69e582354ca07c34d2b54145bf39505174695e5efcf14bda9c15819142d263a" }
 backend = "npm:@fission-ai/openspec"
 specifiers = ["1.16.1"]
 
