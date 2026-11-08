@@ -109,8 +109,9 @@ def test_cited_identifiers_resolve_in_the_pinned_index() -> None:
 def test_yaml_operations_cite_the_contract_requirements() -> None:
     """The three YAML operations cite YML-005, YML-006, YML-008 (proposal item 7)."""
     by_name = {op["name"]: op for op in _load_record()["operations"]}
-    assert by_name["parse_oscal_yaml"].get("requirements") == ["YML-005"]
-    assert by_name["parse_oscal_yaml_file"].get("requirements") == ["YML-006"]
+    assert by_name["parse_oscal_yaml"].get("requirements") == ["YML-005", "PRS-013"]
+    file_op = by_name["parse_oscal_yaml_file"]
+    assert file_op.get("requirements") == ["YML-006", "PRS-013"]
     assert by_name["serialize_oscal_yaml"].get("requirements") == ["YML-008"]
 
 

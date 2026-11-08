@@ -9,11 +9,13 @@ that the binding reports when the input names no document type.
 
 ### Requirement: The root key selects one document type
 
-For a JSON object input, the binding SHALL select one document type from the root keys of the object:
+The contract rule for the document type of the parse failures is
+[PRS-013](https://github.com/cairn-proofs/oscal-bindings-specs/blob/v0.7.0%2Boscal.1.2.3/openspec/specs/document-parsing/spec.md#requirement-prs-013-the-root-key-selects-the-document-type-of-the-parse-failures).
+For a JSON object input, the binding SHALL meet these conditions:
 
-1. The root key of a document type is the one required top-level key of that type, for example `catalog`.
-2. The selected type is the type of the first root key, in input order, that is the root key of a document type.
-3. The binding SHALL validate the input only against the selected type.
+1. For an object with two or more root keys, the binding selects the document type of the first root key, in input
+   order.
+2. The first segment of the location of each entry of the parse error is the class name of the selected document type.
 
 #### Scenario: A valid document parses to its type
 
@@ -39,17 +41,13 @@ For a JSON object input, the binding SHALL select one document type from the roo
 
 ### Requirement: An input with no root key reports one error
 
-The binding SHALL report a parse error with exactly one entry for an input of these kinds:
-
-1. A value that is not a JSON object.
-2. A JSON object that has no root key of a document type.
-
-The entry SHALL have:
+For an input that names no document type, as item 2 of
+[PRS-013](https://github.com/cairn-proofs/oscal-bindings-specs/blob/v0.7.0%2Boscal.1.2.3/openspec/specs/document-parsing/spec.md#requirement-prs-013-the-root-key-selects-the-document-type-of-the-parse-failures)
+defines it, the binding SHALL report a parse error with exactly one entry. The entry SHALL have:
 
 1. The type `oscal_document_type`.
 2. An empty location.
-3. A message that states that the input is not an OSCAL document because it has no known root key.
-4. For a JSON object with one or more keys, a message that names the keys of the object.
+3. For a JSON object with one or more keys, a message that names the keys of the object.
 
 #### Scenario: An object with no known root key
 

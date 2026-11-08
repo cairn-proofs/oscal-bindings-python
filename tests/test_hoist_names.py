@@ -509,7 +509,7 @@ def test_merge_ignores_title_and_description(
 def test_merge_of_different_bodies_fails_and_names_both_sites(
     schema: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
-    """MDL-007.06: two merged places with different fields abort the hoist."""
+    """MDL-021.03: two merged places with different fields abort the hoist."""
     first, second = _entry(manifest, "MetadataPartyExternalId")["sites"]
     node = manifest_mod.resolve_pointer(schema, second)
     node["properties"]["extra"] = {"$ref": "#/definitions/StringDatatype"}

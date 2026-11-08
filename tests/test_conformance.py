@@ -114,6 +114,10 @@ def _parse(case: dict[str, Any], src: Path) -> None:
     if minimum is not None:
         assert isinstance(error, OscalParseError)
         assert len(error.errors) >= minimum, error.errors
+    maximum = case.get("expected-max-failures")
+    if maximum is not None:
+        assert isinstance(error, OscalParseError)
+        assert len(error.errors) <= maximum, error.errors
     assert ob.validate_oscal(data) is False
 
 
