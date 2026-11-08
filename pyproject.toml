@@ -246,6 +246,7 @@ only-include = [
   "requirements",
   "README.md",
   "DEVELOPING.md",
+  "PERFORMANCE.md",
 ]
 
 [tool.hatch.envs.hatch-build]
