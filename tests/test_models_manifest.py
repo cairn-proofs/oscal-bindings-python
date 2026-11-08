@@ -9,9 +9,10 @@ objects that users get:
 2. Each union alias accepts each variant and rejects the combination of the
    variant properties. ``MappingCollectionMappings`` accepts one ``Mapping`` or
    a non-empty list and round-trips both forms.
-3. Each name that names a different type than in 0.2.x (README, "Upgrading to
-   0.3.0", item 2) validates its own type, rejects the data of the other type,
-   and is the type of the field that holds it.
+3. Each name that names a different type than in 0.2.x (release notes of
+   v0.3.0, "What to change in your code", item 2) validates its own type,
+   rejects the data of the other type, and is the type of the field that holds
+   it.
 """
 
 from __future__ import annotations
