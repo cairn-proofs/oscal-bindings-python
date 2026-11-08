@@ -12,7 +12,7 @@ references:
 
 context: |
   Write all artifacts using the `/asd-ste100` skill. If you can't find it, stop and ask.
-  If you add line breaks to Markdown, break at 120 columns, not 80.
+  Add line breaks to Markdown at 120 columns, not 80.
   List style: prefer NUMBERED lists (`1.`, `2.`) over bullets for any enumerable prose so each item is referenceable.
   Proposals and designs cite GitHub issues, discussions, etc. Specs do not.
 
@@ -23,7 +23,7 @@ rules:
       Historical narration, temporal tags and statements of what changed relative to previous requirements are
       prohibited in specs. You MUST NOT introduce such language. You MUST replace or delete such language when you
       find it in a spec, without changing intent. If that seems unsafe, flag it for user review, but do not ignore
-      it. A spec is not a change log. It defines the intended steady state.
+      the finding. A spec is not a change log. It defines the intended steady state.
     - >-
       Inside requirement text, use NUMBERED lists (`1.`, `2.`) for enumerable prose, such as conditions,
       constraints and allowed values, so each item is referenceable. Never renumber scenario lines.

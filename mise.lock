@@ -2,6 +2,11 @@
 
 lockfile_version = 2
 
+[[tools."npm:@fission-ai/openspec"]]
+version = "1.16.1"
+backend = "npm:@fission-ai/openspec"
+specifiers = ["1.16.1"]
+
 [[tools."pypi:hatch"]]
 version = "1.18.1"
 backend = "pypi:hatch"
