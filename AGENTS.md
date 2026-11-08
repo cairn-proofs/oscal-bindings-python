@@ -12,6 +12,7 @@ Navigation guide for AI agents working in **oscal-bindings** — typed Python da
 - [Repo-Specific Patterns & Gotchas](#repo-specific-patterns--gotchas)
 - [Config-Derived Facts](#config-derived-facts) — things only visible in config files
 - [Deeper Documentation](#deeper-documentation) — the `.agents/summary/` knowledge base
+- [Performance numbers](#performance-numbers) — where they live
 - [Custom Instructions](#custom-instructions) — human/agent-maintained
 
 <!-- meta: orientation -->
@@ -55,6 +56,7 @@ scripts/               # Not a package: scripts import siblings by plain name
   postprocess_models.py# Structure fixes, adds unions/root models, guards against manifest
 tests/                 # One test module per source module + import smoke test
   support/scripts.py   # load_script(): how tests import modules from scripts/
+PERFORMANCE.md        # Every performance number (time, GC, memory, YAML, serialization). Other docs point here; they state none
 requirements.txt       # Lockfile for the default env (hatch-pip-compile output)
 requirements/          # Lockfiles for hatch-test (per Python) and hatch-build
 ```
@@ -135,6 +137,10 @@ A detailed knowledge base lives in `.agents/summary/`. Start with `index.md`, wh
 | `workflows.md` | Codegen, parse, facade, builder, validation, release flows |
 | `dependencies.md` | External deps, toolchain, version support |
 | `review_notes.md` | Consistency/completeness audit |
+
+## Performance numbers
+
+All performance numbers live in [PERFORMANCE.md](PERFORMANCE.md) and nowhere else: a README, DEVELOPING.md, AGENTS.md, or `.agents/summary/` page links there instead of stating a time, a memory figure, or a speedup. A change that moves a number updates PERFORMANCE.md in the same pull request and reports before and after numbers (GC on and off) in the PR. `scripts/bench_serialization.py` and `scripts/bench_memory.py` produce them.
 
 ## Custom Instructions
 <!-- This section is for human and agent-maintained operational knowledge.

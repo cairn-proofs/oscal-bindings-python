@@ -124,7 +124,8 @@ Not part of the installed package. `scripts/` is not a package: a script imports
 | `manifest.py` | Validates `names.json`: JSON Schema (`jsonschema-rs`), format/release, schema sha256 against the schema bytes, unique names, resolvable pointers, type references | `validate_manifest`, `load_validated_manifest(paths, *, schema_bytes=None, schema_path=None)` (no bytes and no path means `paths.schema`), `read_schema_bytes`, `ManifestError` |
 | `hoist_names.py` | Reads the artifact schema from `paths.schema` one time, and writes `build/codegen/oscal_complete_schema.json`, in which each manifest site is `definitions/<Name>` with a `$ref` at the site | `hoist`, `HoistError`, `OUTPUT` |
 | `postprocess_models.py` | Phase 1 structure fixes, adds union aliases / `MappingCollectionMappings` / `OscalDocument`, names scalar aliases, applies three guards against the manifest | `postprocess`, `guard_failures`, `PostprocessError`, `add_union_aliases`, `add_single_or_many`, `rename_document_union`, `scalar_renames`, `collapse_scalar_root_models`, `fix_non_string_patterns`, `scalar_names`, `import_bindings`, `artifact_schema_path`, `load_manifest(schema_bytes)`, `write_atomically`, `parse_args`/`main` (`--models`/`--schema`, each with its own default, `--schema` resolved in `main` to the artifact schema; `--output`, defaulting to `--models`) |
-| `bench_serialization.py` | Serialization benchmark (see `DEVELOPING.md`) | — |
+| `bench_serialization.py` | Parse and serialize time benchmark (numbers in `PERFORMANCE.md`) | — |
+| `bench_memory.py` | Peak-memory benchmark of a parse (numbers in `PERFORMANCE.md`) | — |
 
 ## 9. `tests/` — test suite
 
