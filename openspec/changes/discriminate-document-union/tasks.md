@@ -64,7 +64,7 @@
   script runs. About 95 ms of each run is cyclic GC, which does not depend on the union.
 - [x] 4.3 Run `hatch run release`. Verify that it passes, and that `git diff --exit-code --
   src/oscal_bindings/v1/models.py` is clean after a second `hatch run generate`.
-- [ ] 4.4 Draft the release-notes entry: fewer `OscalParseError.errors` entries for a document fault, each `loc`
+- [x] 4.4 Draft the release-notes entry: fewer `OscalParseError.errors` entries for a document fault, each `loc`
   unchanged, the new `oscal_document_type` error for input with no known root key, the `oneOf` root schema, and the
   parse speed result. Verify that the pull request description holds the entry and cites #41 and #42.
 
