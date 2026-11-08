@@ -36,58 +36,6 @@ To install directly from a Git tag, branch, or commit:
 pip install "git+https://github.com/cairn-proofs/oscal-bindings-python.git@main"
 ```
 
-## Upgrading to 0.3.0
-
-Version 0.3.0 is a breaking release. The class names now follow the naming manifest of the
-[OSCAL bindings specs](https://github.com/cairn-proofs/oscal-bindings-specs), so each OSCAL type has the same name in
-every language binding. The serialized OSCAL JSON does not change. Parsing is stricter where the schema is strict, and
-some parsed values have a different Python type (items 5 to 9). The release has no deprecated aliases, because an alias
-for a reused name would point at the wrong type.
-
-1. About 95 classes have a new name. Some examples:
-
-   | 0.2.x | 0.3.0 |
-   | --- | --- |
-   | `Algorithm` | `HashAlgorithm` |
-   | `Type3` | `DefinedComponentType` |
-   | `ProfileGroup1` | `ProfileGroupWithGroups` |
-   | `Resource` | `BackMatterResource` |
-   | `Rlink` | `BackMatterResourceRlink` |
-
-2. Five names now name a different type. Check each use of these names:
-
-   | Name | Type in 0.3.0 | Name of the 0.2.x type in 0.3.0 |
-   | --- | --- | --- |
-   | `Status` | Status of the system in an SSP | `SystemComponentStatus` |
-   | `Origin` | Origin of a finding, observation, or risk, with `related_tasks` | `PoamItemOrigin` |
-   | `LocalDefinitions` | Local definitions of a POA&M | `AssessmentPlanLocalDefinitions` |
-   | `MergeFlat` | The `flat` directive of a profile merge (no fields) | `MergeWithFlat` |
-   | `MergeCustom` | The `custom` grouping of a profile merge | `MergeWithCustom` |
-
-3. `ExternalId` and `ExternalId1` are one class now: `MetadataPartyExternalId`.
-4. Each union of OSCAL types has a type alias, for example `CatalogGroup` for
-   `CatalogGroupWithControls | CatalogGroupWithGroups`.
-5. Closed enums reject values outside the enum
-   ([#21](https://github.com/cairn-proofs/oscal-bindings-python/issues/21)). For example, a field of type
-   `ParameterSelectionHowMany` accepts `one` and `one-or-more`, and a document with `"how-many": "many"` raises
-   `OscalParseError`.
-6. A closed-enum field holds an `Enum` member, not a `str`. Thus `sel.how_many == "one-or-more"` is `False`. Compare
-   the value with `ParameterSelectionHowMany.one_or_more`, or compare `sel.how_many.value` with the string. An
-   open-enum field, such as `Hash.algorithm`, holds a `str` when it is parsed from a string.
-7. In a profile merge, `combine` and `flat` are the empty models `MergeCombine` and `MergeFlat`, with
-   `extra='forbid'`. They are not `dict` values. Thus `merge.combine["method"]` and `merge.combine == {}` do not work.
-   A non-empty object fails validation, as in 0.2.x.
-8. `MappingCollection.mappings` is always a `MappingCollectionMappings` root model. Read the item or the list
-   through `.root`.
-9. The variants of each union are in manifest order. Data that has no variant property parses as the first variant.
-   For example, a `Parameter` with no `select` and no `values` parses as `ParameterWithSelect`. The serialized JSON
-   does not change.
-10. The strings of `get_supported_element_types()` follow the new class names, for example `rlink` is now
-    `back-matter-resource-rlink`.
-
-The [release notes of v0.3.0](https://github.com/cairn-proofs/oscal-bindings-python/releases/tag/v0.3.0) list each
-renamed, removed, and added name, and each changed element-type string.
-
 ## Import paths
 
 The bindings live under a namespace scoped to the OSCAL **major** version:
