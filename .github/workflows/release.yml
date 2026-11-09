@@ -67,16 +67,24 @@ jobs:
 
       # Refuse files that build.yml's attest job did not sign for this tag.
       # The signer workflow and source ref are fixed here, not read from the release.
+      # The source digest is the commit the tag points to now. The attestation holds
+      # the commit CI built, so a tag moved after CI fails here (M56).
       - name: Verify build provenance
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
+          digest="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)"
+          if ! [[ "$digest" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve tag $TAG to a commit"
+            exit 1
+          fi
           for f in dist/*.whl dist/*.tar.gz; do
             gh attestation verify "$f" \
               --repo cairn-proofs/oscal-bindings-python \
               --signer-workflow cairn-proofs/oscal-bindings-python/.github/workflows/build.yml \
-              --source-ref "refs/tags/$TAG"
+              --source-ref "refs/tags/$TAG" \
+              --source-digest "$digest"
           done
 
       - name: Publish package distributions to PyPI
