@@ -1,0 +1,26 @@
+# Code owners (threat model mitigation M30).
+# The main ruleset requires review from code owners and approval of the most
+# recent reviewable push, so a change to any path below needs the maintainer.
+# These paths hold CI, build and generation code, the spec pin, lockfiles,
+# and the files that agents load as instructions or permissions.
+
+/.github/            @dfkunstler
+/scripts/            @dfkunstler
+/tests/support/      @dfkunstler
+/tests/conftest.py   @dfkunstler
+/pyproject.toml      @dfkunstler
+/requirements.txt    @dfkunstler
+/requirements/       @dfkunstler
+/mise.toml           @dfkunstler
+/mise.lock           @dfkunstler
+/.mise/              @dfkunstler
+/.kiro/              @dfkunstler
+/.claude/            @dfkunstler
+/.mcp.json           @dfkunstler
+/AGENTS.md           @dfkunstler
+/openspec/           @dfkunstler
+/.agents/            @dfkunstler
+
+# Test files that other mitigations add. Owned now so they are covered on creation.
+/tests/test_spec_artifact_pin.py  @dfkunstler
+/tests/test_models_static.py      @dfkunstler
