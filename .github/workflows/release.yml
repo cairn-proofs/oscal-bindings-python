@@ -65,8 +65,24 @@ jobs:
             exit 1
           fi
 
+      # Refuse files that build.yml's attest job did not sign for this tag.
+      # The signer workflow and source ref are fixed here, not read from the release.
+      - name: Verify build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          for f in dist/*.whl dist/*.tar.gz; do
+            gh attestation verify "$f" \
+              --repo cairn-proofs/oscal-bindings-python \
+              --signer-workflow cairn-proofs/oscal-bindings-python/.github/workflows/build.yml \
+              --source-ref "refs/tags/$TAG"
+          done
+
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # uncomment for testing
-        # with:
-        #     repository-url: https://test.pypi.org/legacy/
+        with:
+          attestations: true
+          print-hash: true
+          # uncomment for testing
+          # repository-url: https://test.pypi.org/legacy/
