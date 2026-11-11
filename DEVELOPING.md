@@ -10,6 +10,16 @@ hatch run release                            # generates models, runs tests, bui
 Hatch comes only from mise (see "Locked Environments"). If you have Hatch from pip,
 pipx, or brew, uninstall it so there's a single Hatch on the machine.
 
+### Threat model
+
+The threat model is private, and access to it is optional: you do not need it to build, test or contribute. It lives in
+its own private repo, `oscal-bindings-python-threat-models`, not in this repo. If you have access, clone it **beside**
+this repo, not inside it:
+
+```bash
+gh repo clone cairn-proofs/oscal-bindings-python-threat-models ../oscal-bindings-python-threat-models
+```
+
 ## Development Workflow
 
 ```bash
