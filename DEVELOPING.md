@@ -20,10 +20,6 @@ this repo, not inside it:
 gh repo clone cairn-proofs/oscal-bindings-python-threat-models ../oscal-bindings-python-threat-models
 ```
 
-Commit model changes there with `git -C ../oscal-bindings-python-threat-models ...`. If you have an older nested `./threat-models`
-clone, move it instead: `mv threat-models ../oscal-bindings-python-threat-models`. Maintainers create the private repo for a new project
-with `threat-model-toolkit`'s `scripts/setup-threat-model.sh --create`.
-
 ## Development Workflow
 
 ```bash
