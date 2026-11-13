@@ -3,10 +3,10 @@
 lockfile_version = 2
 
 [[tools."npm:@fission-ai/openspec"]]
-version = "1.16.1"
-aube = { path = ".mise/locks/npm-fission-ai-openspec/1.16.1", digest = "sha256:c69e582354ca07c34d2b54145bf39505174695e5efcf14bda9c15819142d263a" }
+version = "2.0.0"
+aube = { path = ".mise/locks/npm-fission-ai-openspec/2.0.0", digest = "sha256:85843af60902f2ec4c182aa9bd7d7df3503ec67d37ebf518df192ece21669cb0" }
 backend = "npm:@fission-ai/openspec"
-specifiers = ["1.16.1"]
+specifiers = ["2.0"]
 
 [[tools."pypi:hatch"]]
 version = "1.18.1"

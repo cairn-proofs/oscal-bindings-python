@@ -5,12 +5,14 @@
 Defines how the binding selects one OSCAL document type for the validation of a parse input. Also defines the error
 that the binding reports when the input names no document type.
 
+[prs-013]: https://github.com/cairn-proofs/oscal-bindings-specs/blob/v0.7.0%2Boscal.1.2.3/openspec/specs/document-parsing/spec.md#requirement-prs-013-the-root-key-selects-the-document-type-of-the-parse-failures
+
 ## Requirements
 
 ### Requirement: The root key selects one document type
 
 The contract rule for the document type of the parse failures is
-[PRS-013](https://github.com/cairn-proofs/oscal-bindings-specs/blob/v0.7.0%2Boscal.1.2.3/openspec/specs/document-parsing/spec.md#requirement-prs-013-the-root-key-selects-the-document-type-of-the-parse-failures).
+[PRS-013][prs-013].
 For a JSON object input, the binding SHALL meet these conditions:
 
 1. For an object with two or more root keys, the binding selects the document type of the first root key, in input
@@ -42,7 +44,7 @@ For a JSON object input, the binding SHALL meet these conditions:
 ### Requirement: An input with no root key reports one error
 
 For an input that names no document type, as item 2 of
-[PRS-013](https://github.com/cairn-proofs/oscal-bindings-specs/blob/v0.7.0%2Boscal.1.2.3/openspec/specs/document-parsing/spec.md#requirement-prs-013-the-root-key-selects-the-document-type-of-the-parse-failures)
+[PRS-013][prs-013]
 defines it, the binding SHALL report a parse error with exactly one entry. The entry SHALL have:
 
 1. The type `oscal_document_type`.
