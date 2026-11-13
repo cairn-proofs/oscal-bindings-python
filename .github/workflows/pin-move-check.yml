@@ -1,0 +1,41 @@
+name: Pin-move check
+# Once a day, opens an issue in this repository when the store cairn-proofs/oscal-bindings-specs has published a
+# release other than the one that `scripts/spec_artifact.py` pins. The issue is "Move the spec pin to v<version>". The
+# reusable workflow of the store does the work, with this repository's GITHUB_TOKEN, and needs no secret. The pin is
+# read from SPEC_ARTIFACT_VERSION, so no second copy of it exists. Run it by hand with workflow_dispatch.
+on:
+  schedule:
+    - cron: "50 15 * * *"  # 15:50 UTC every day
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/spec_artifact.py
+          sparse-checkout-cone-mode: false
+      - id: read
+        run: |
+          set -euo pipefail
+          version="$(grep -E '^SPEC_ARTIFACT_VERSION = "' scripts/spec_artifact.py | head -n 1 | cut -d'"' -f2)"
+          if [ -z "$version" ]; then
+            echo "::error::SPEC_ARTIFACT_VERSION not found in scripts/spec_artifact.py."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  check:
+    needs: pin
+    permissions:
+      contents: read
+      issues: write
+    # Pinned by commit. Move the pin on purpose, after a look at the change in the store.
+    uses: cairn-proofs/oscal-bindings-specs/.github/workflows/pin-move-check.yml@25e328a8a4abeb1b9a328fc836bafade0b092c2b
+    with:
+      pinned-version: ${{ needs.pin.outputs.version }}
