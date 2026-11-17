@@ -26,18 +26,19 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  # Release-tag preflight, in its own job so it fails fast and in parallel with
+  # the checks. Releases come only from main: a v* tag on any other commit (e.g.
+  # an unmerged branch) would otherwise build a draft release. The checkout is
+  # shallow, so fetch main's full history before asking whether the tagged
+  # commit is reachable from it.
+  tag-check:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v5
 
-      # Releases come only from main: a v* tag on any other commit (e.g. an
-      # unmerged branch) would otherwise build a draft release. The checkout is
-      # shallow, so fetch main's full history before asking whether the tagged
-      # commit is reachable from it. Runs first, before any expensive step.
       - name: Check tagged commit is on main
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -56,10 +57,9 @@ jobs:
         with:
           version: 2026.9.15
 
-      # Fail before the expensive steps if a release tag disagrees with the
+      # Fail before the package is built if a release tag disagrees with the
       # version the packages would be stamped with.
       - name: Check tag matches project version
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -69,26 +69,39 @@ jobs:
             exit 1
           fi
 
-      # generate -> lint -> typing -> security (bandit + pip-audit) ->
-      # tests with coverage (3.11–3.14) -> docs
-      - name: Release checks
-        run: hatch run release
+  # Everything in `hatch run release` except the tests, which run in `test`.
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain (mise)
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5  # v5.0.0
+        with:
+          version: 2026.9.15
 
       # `release` regenerates models.py from the pinned spec artifact. A diff
-      # means the committed file is not what the pin generates.
+      # means the committed file is not what the pin generates. The `test`
+      # jobs run against the committed file, so this check is what ties their
+      # result to the generated one.
+      - name: Generate models
+        run: hatch run generate
+
       - name: Check that the committed models.py matches the generated one
         run: git diff --exit-code -- src/oscal_bindings/v1/models.py
 
-      - name: Build wheel and sdist
-        run: hatch build
+      - name: Lint
+        run: hatch run lint
 
-      # always(): keep partial output for debugging when an earlier step fails.
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: ${{ always() }}
-        with:
-          name: coverage-html
-          path: htmlcov/
+      - name: Typing
+        run: hatch run typing
+
+      - name: Security
+        run: hatch run security
+
+      - name: Docs
+        run: hatch run docs
 
       - name: Upload API docs
         uses: actions/upload-artifact@v4
@@ -96,6 +109,75 @@ jobs:
         with:
           name: api-docs
           path: build/api-docs/
+
+  # One job per Python in the hatch-test matrix, run in parallel. Keep the list
+  # in step with [[tool.hatch.envs.hatch-test.matrix]] in pyproject.toml.
+  # Coverage is measured on the newest Python only (`cover`); keep that entry
+  # in step with the Python in mise.toml.
+  test:
+    name: test (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.11"
+          - python: "3.12"
+          - python: "3.13"
+          - python: "3.14"
+            cover: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain (mise)
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5  # v5.0.0
+        with:
+          version: 2026.9.15
+
+      - name: Test
+        env:
+          PYTHON: ${{ matrix.python }}
+          COVER: ${{ matrix.cover && '--cover' || '' }}
+        run: hatch test $COVER --python "$PYTHON"
+
+      # always(): keep partial output for debugging when a test fails.
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: ${{ always() && matrix.cover }}
+        with:
+          name: coverage-html
+          path: htmlcov/
+
+  # The one required status check (branch protection requires `build`). A job
+  # whose `needs` failed is skipped, and a skipped required check counts as
+  # passing, so this job runs regardless and fails itself if anything upstream
+  # failed. It builds the packages only after every check and every Python in
+  # the matrix has passed, so PyPI still gets files that were tested.
+  build:
+    needs: [tag-check, checks, test]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require upstream jobs
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "upstream results: $RESULTS"
+          case " $RESULTS " in
+            *" failure "*|*" cancelled "*) echo "::error::An upstream job did not succeed"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain (mise)
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5  # v5.0.0
+        with:
+          version: 2026.9.15
+
+      - name: Build wheel and sdist
+        run: hatch build
 
       - name: Upload python packages
         uses: actions/upload-artifact@v4

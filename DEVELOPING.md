@@ -162,8 +162,8 @@ also needs network access to run `generate`, because the sdist does not ship the
 does not need the schema, because the sdist ships `models.py`. `scripts/` is not a package: a script imports its
 siblings by plain name, and tests load scripts through `tests/support/scripts.py`.
 
-CI runs `git diff --exit-code -- src/oscal_bindings/v1/models.py` after `hatch run release` and before `hatch build`.
-A difference fails the `build` job, so the committed `models.py` must be what the pin generates.
+CI runs `git diff --exit-code -- src/oscal_bindings/v1/models.py` after `hatch run generate`, in the `checks` job.
+A difference fails that job (and so `build`), so the committed `models.py` must be what the pin generates.
 
 To change a type name, change the manifest in the store, release a new spec artifact, and move the pin. Never rename a
 manifest type in the post-processor.
@@ -303,8 +303,9 @@ hatch test --all --cover   # with coverage (terminal report + htmlcov/)
 ```
 
 With `--cover`, the combined coverage report prints to the terminal and is also
-written as HTML to `htmlcov/` (git-ignored). CI uploads it as the `coverage-html`
-artifact.
+written as HTML to `htmlcov/` (git-ignored). CI runs one `test` job per Python in
+parallel and measures coverage on 3.14 only; that job uploads the `coverage-html`
+artifact. Keep the CI matrix in `build.yml` in step with the hatch-test matrix.
 
 ## Releasing
 
@@ -314,8 +315,9 @@ after CI.
 1. Bump `version` in `pyproject.toml` and merge it to `main`.
 2. Tag that commit `v<version>` (e.g. `v0.2.0`) and push the tag.
 3. CI (`build.yml`) fails fast if the tagged commit isn't on `main` or the tag isn't
-   `v$(hatch version)`. It then runs the full release chain, builds, and creates a
-   **draft** GitHub release with the wheel and sdist attached.
+   `v$(hatch version)` (the `tag-check` job). The `checks` job and one `test` job per
+   Python run in parallel; `build` then builds the packages only if all passed, and
+   the tag run creates a **draft** GitHub release with the wheel and sdist attached.
 4. Review the draft and publish it. That triggers `release.yml`, which downloads the
    attached files, checks their filenames match the tag, and uploads them to PyPI
    via trusted publishing.
