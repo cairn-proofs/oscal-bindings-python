@@ -15,7 +15,18 @@ context: |
   Add line breaks to Markdown at 120 columns, not 80.
   List style: prefer NUMBERED lists (`1.`, `2.`) over bullets for any enumerable prose so each item is referenceable.
   Proposals and designs cite GitHub issues, discussions, etc. Specs do not.
-
+  When exploring an issue, do not ask for a decision if your recommendation is a logical conclusion of a 
+   decision already made. Escalate decisions to the user only when a conflict arises between precedents, tenets, etc.
+  When exploring, proposing, or designing, NEVER extend the scope beyond what is explicitly stated in the context. 
+   If you find an edge case or ambiguity that seems to justify extending the scope, stop and seek clarification. 
+  Discussion during exploration may raise questions or considerations that are ruled out. Do not include those in
+   the artifacts. Future readers will not understand answers to questions that were never asked.
+  Always propose, spec, and design the smallest, simplest change that solves the problem at hand.
+  When it seems like a requirement or scenario needs an extension or exception, first ask if the problem is better
+   solved by eliminating the requirement or scenario.
+  User time and tokens are constrained resources. Do not waste them on trivial matters. If you're inclined to qualify
+   a matter as a nit, minor, small, or otherwise inconsenquential, then either justify raising it or drop the matter.
+  
 # Per-artifact rules (optional)
 rules:
   specs:
@@ -31,3 +42,14 @@ rules:
       When you reference a section of the proposal, the design or another document in the project, use a link with
       a GitHub-compatible (github-slugger) anchor. Prefer references over duplication. Never copy normative content
       from one spec to another. In spec deltas, write links so that they resolve after archive.
+    - >-
+      The requirements of a spec are in reading order. Identifier order does not matter. A requirement, with its
+      scenarios, cites only requirements above it in its spec file. A requirement uses a term only below the
+      requirement that defines it. A rule that a later requirement makes an exception to states that the exception
+      exists, and cites a requirement above it for the condition. `npm run spec-ids` checks the citations on the main
+      specs. A delta does not get this check, because its order is fixed at the sync. The sync can move a requirement to meet
+      the rule.
+    - >-
+      Scenarios in a requirement can't be renamed in place or removed. Such changes must be made manually in a post-archive step.
+    - >-
+      Place new requirements to minimize inter-spec dependencies when practical and appropriate.

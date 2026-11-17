@@ -9,4 +9,4 @@ uv = "0.12.15"
 # 1.15. Keep the hatch-pip-compile pin in step with pyproject.toml. Bumping hatch
 # also re-locks requirements/requirements-hatch-test.*.txt (see DEVELOPING.md).
 "pypi:hatch" = { version = "1.18.1", with = ["hatch-pip-compile==1.11.8"] }
-"npm:@fission-ai/openspec" = "1.16.1"
+"npm:@fission-ai/openspec" = "2.0"
