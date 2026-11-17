@@ -302,7 +302,7 @@ Each OSCAL document type has a dedicated parser:
 - `parse_plan_of_action_and_milestones(json)` → `PlanOfActionAndMilestonesDocument`
 - `parse_mapping_collection(json)` → `MappingCollectionDocument`
 
-A typed parser raises `OscalDocumentTypeMismatchError` for a document of another type. It is a subclass of `OscalParseError`, so `except OscalParseError` also catches it. `validate_element` raises `OscalUnknownElementTypeError` for an element type that the library does not recognize. That error is a category of its own, outside the parse errors. Test the category of an error with `isinstance`.
+A typed parser raises `OscalDocumentTypeMismatchError` for a document of another type. It is a subclass of `OscalParseError`, so `except OscalParseError` also catches it. `validate_element` raises `OscalUnknownElementTypeError` for an element type that the library does not recognize. That error is a category of its own, outside the parse errors. A file-path parse raises `FileNotFoundError` when no file can exist at the path, and `OscalReadError` for each other read failure (a directory, a permission failure, a loop of symbolic links). `OscalReadError` is a subclass of `OSError`, not of `OscalParseError` or of `FileNotFoundError`, so `except OSError` catches both file categories and `except OscalParseError` catches neither. Test the category of an error with `isinstance`.
 
 ## Building
 

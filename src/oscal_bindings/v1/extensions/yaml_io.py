@@ -145,9 +145,10 @@ def parse_oscal_yaml_file(path: Path | str) -> OscalDocument:
         An :class:`~oscal_bindings.v1.models.OscalDocument` for the document.
 
     Raises:
-        FileNotFoundError: The file does not exist.
-        OscalParseError: The file cannot be read, or its content is not valid
-            OSCAL YAML, as :func:`parse_oscal_yaml` defines.
+        FileNotFoundError: No file can exist at the path.
+        OscalReadError: The file cannot be read for another reason.
+        OscalParseError: The content of the file is not valid OSCAL YAML, as
+            :func:`parse_oscal_yaml` defines.
         ImportError: The ``yaml`` extra is not installed.
     """
     _require_yaml()

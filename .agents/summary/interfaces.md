@@ -122,7 +122,8 @@ sequenceDiagram
 |-----------|----------|
 | Invalid JSON / invalid UTF-8 bytes | `OscalParseError` (from `parse_oscal`) |
 | Schema validation failure | `OscalParseError` with `.errors` = Pydantic error dicts |
-| File missing | `FileNotFoundError` (from `parse_oscal_file`, includes path) |
+| File missing (`ENOENT`, `ENOTDIR`, or an unrepresentable path) | `FileNotFoundError` (from a file-path parse, includes path) |
+| File that cannot be read for another reason (directory, permission, symlink loop, I/O error) | `OscalReadError` (a subclass of `OSError`, outside the parse errors; `filename` and message name the path) |
 | Typed parser, wrong document type | `OscalDocumentTypeMismatchError("Document is not a …")` (subclass of `OscalParseError`) |
 | `assessment_period()` on non-AP/AR | `OscalAccessError` |
 | `OscalDoc(...)` with unrelated object | `TypeError` |

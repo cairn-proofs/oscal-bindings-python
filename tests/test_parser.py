@@ -3,6 +3,7 @@
 import copy
 import gc
 import json
+import os
 import pickle  # nosec B403 - the test pickles its own error entries
 import tempfile
 import tracemalloc
@@ -18,6 +19,7 @@ from oscal_bindings.parser import (
     OscalDocument,
     OscalDocumentTypeMismatchError,
     OscalParseError,
+    OscalReadError,
     parse_catalog,
     parse_component_definition,
     parse_oscal,
@@ -178,6 +180,78 @@ class TestParseOscalFile:
             f.flush()
             result = parse_oscal_file(f.name)
             assert result.root.catalog.uuid == ("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+
+
+class TestParseOscalFileReadFailures:
+    """A file-path parse finds a read failure category from the read (ERR-012)."""
+
+    needs_non_root = pytest.mark.skipif(
+        os.geteuid() == 0, reason="root reads files that deny permission"
+    )
+
+    def test_directory_is_a_read_error(self, tmp_path):
+        with pytest.raises(OscalReadError) as info:
+            parse_oscal_file(tmp_path)
+        error = info.value
+        assert isinstance(error, OSError)
+        assert not isinstance(error, OscalParseError)
+        assert not isinstance(error, FileNotFoundError)
+        assert error.filename == str(tmp_path)
+        assert str(tmp_path) in str(error)
+
+    @needs_non_root
+    def test_file_without_read_permission_is_a_read_error(self, tmp_path):
+        path = tmp_path / "locked.json"
+        path.write_text(MINIMAL_CATALOG, encoding="utf-8")
+        path.chmod(0o000)
+        try:
+            with pytest.raises(OscalReadError) as info:
+                parse_oscal_file(path)
+        finally:
+            path.chmod(0o600)
+        assert str(path) in str(info.value)
+
+    def test_symbolic_link_loop_is_a_read_error(self, tmp_path):
+        first, second = tmp_path / "first.json", tmp_path / "second.json"
+        first.symlink_to(second)
+        second.symlink_to(first)
+        with pytest.raises(OscalReadError) as info:
+            parse_oscal_file(first)
+        assert str(first) in str(info.value)
+
+    @needs_non_root
+    def test_unsearchable_directory_is_a_read_error(self, tmp_path):
+        directory = tmp_path / "closed"
+        directory.mkdir()
+        path = directory / "catalog.json"
+        path.write_text(MINIMAL_CATALOG, encoding="utf-8")
+        directory.chmod(0o000)
+        try:
+            with pytest.raises(OscalReadError) as info:
+                parse_oscal_file(path)
+        finally:
+            directory.chmod(0o700)
+        assert str(path) in str(info.value)
+
+    def test_path_below_a_regular_file_is_not_found(self, tmp_path):
+        regular = tmp_path / "regular.json"
+        regular.write_text(MINIMAL_CATALOG, encoding="utf-8")
+        path = regular / "catalog.json"
+        with pytest.raises(FileNotFoundError) as info:
+            parse_oscal_file(path)
+        assert not isinstance(info.value, OscalReadError)
+        assert str(path) in str(info.value)
+
+    def test_path_with_a_nul_byte_is_not_found(self):
+        with pytest.raises(FileNotFoundError) as info:
+            parse_oscal_file("catalog\x00.json")
+        assert isinstance(info.value.__cause__, ValueError)
+        assert not isinstance(info.value, OscalReadError)
+
+    def test_alias_module_exports_the_same_class(self):
+        import oscal_bindings.v1
+
+        assert OscalReadError is oscal_bindings.v1.OscalReadError
 
 
 class TestSerializeOscal:

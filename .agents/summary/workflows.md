@@ -103,7 +103,7 @@ flowchart TD
     F -->|no| E
 ```
 
-`parse_oscal_file` reads the file as **bytes** (`read_bytes()`) and delegates to `parse_oscal`, so file parsing skips a decode step. A missing file raises `FileNotFoundError` before parsing.
+`parse_oscal_file` reads the file as **bytes** (`read_bytes()`) and delegates to `parse_oscal`, so file parsing skips a decode step. A missing file raises `FileNotFoundError` and any other read failure raises `OscalReadError`, both before parsing; the read itself finds the category, with no `exists()` call.
 
 ## 3. Uniform Access via `OscalDoc`
 

@@ -53,7 +53,8 @@ graph LR
 | Symbol | Kind | Purpose |
 |--------|------|---------|
 | `parse_oscal(data)` | function | `str \| bytes` → `OscalDocument` via `model_validate_json` |
-| `parse_oscal_file(path)` | function | Reads file as **bytes**, delegates to `parse_oscal` |
+| `parse_oscal_file(path)` | function | Reads file as **bytes**, delegates to `parse_oscal`; `FileNotFoundError` for a missing path, `OscalReadError` for another read failure |
+| `OscalReadError` | exception | Subclass of `OSError`; a file-path parse raises it for a read failure that is not a missing path |
 | `serialize_oscal(model, *, indent=2)` | function | `model_dump_json(by_alias=True, exclude_none=True)` |
 | `validate_oscal(data)` | function | Returns `bool`, swallows errors |
 | `parse_catalog`, `parse_profile`, `parse_component_definition`, `parse_system_security_plan`, `parse_assessment_plan`, `parse_assessment_results`, `parse_plan_of_action_and_milestones`, `parse_mapping_collection` | functions | Typed parsers; each `hasattr`-checks `doc.root` for the expected body attr, else raises `OscalParseError` |

@@ -26,7 +26,7 @@ import pytest
 import yaml
 
 import oscal_bindings as ob
-from oscal_bindings import OscalParseError
+from oscal_bindings import OscalParseError, OscalReadError
 from oscal_bindings.v1.extensions import _yaml_loader
 from oscal_bindings.v1.extensions._yaml_loader import _SCHEMA, to_json_text
 from oscal_bindings.v1.extensions.yaml_io import (
@@ -604,6 +604,12 @@ class TestParseOscalYamlFile:
             parse_oscal_yaml_file(missing)
         assert str(missing) in str(info.value)
         assert not isinstance(info.value, OscalParseError)
+
+    def test_directory_reports_read_error(self, tmp_path) -> None:
+        # ERR-012: a read failure that is not a missing path is a read error.
+        with pytest.raises(OscalReadError) as info:
+            parse_oscal_yaml_file(tmp_path)
+        assert str(tmp_path) in str(info.value)
 
 
 # --- Task 3.3: serialize_oscal_yaml -------------------------------------------
