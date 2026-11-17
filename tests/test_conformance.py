@@ -12,22 +12,25 @@ binding keeps its own list.
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 import pytest
 from support.canonical_json import canonicalize
 from support.expected_failures import EXPECTED_FAILURES
-from support.spec_artifact import corpus_root
+from support.spec_artifact import corpus_root, schema_path
 
 import oscal_bindings as ob
 from oscal_bindings import (
     OscalAccessError,
+    OscalBuilderError,
     OscalDoc,
     OscalDocumentTypeMismatchError,
     OscalParseError,
     OscalReadError,
     OscalUnknownElementTypeError,
 )
+from oscal_bindings.models import DocumentId, Hash
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -50,6 +53,7 @@ _CATEGORIES: tuple[tuple[type[BaseException], str], ...] = (
     (FileNotFoundError, "not-found"),
     (OscalReadError, "read-error"),
     (OscalAccessError, "access-error"),
+    (OscalBuilderError, "builder-error"),
     (OscalUnknownElementTypeError, "unknown-element-type"),
     (OscalDocumentTypeMismatchError, "document-type-mismatch"),
     (OscalParseError, "parse-error"),
@@ -184,6 +188,59 @@ def _element_types(case: dict[str, Any]) -> None:
     assert ob.get_supported_element_types() == expected
 
 
+def _build(
+    case: dict[str, Any], builder: Callable[..., Any], arguments: dict[str, Any]
+) -> None:
+    """Run a builder with the keyword arguments of the case, then check the result.
+
+    The result is compared with ``expected-uuid`` or ``expected-element``, or the
+    builder must report ``expected-category``.
+    """
+    if "expected-category" in case:
+        _expect_error(case, lambda: builder(**arguments))
+        return
+    result = builder(**arguments)
+    element = json.loads(result.model_dump_json())
+    if "expected-uuid" in case:
+        assert element["uuid"] == case["expected-uuid"]
+    if "expected-element" in case:
+        generated = (
+            case["operation"] == "build-resource"
+            and "uuid" not in case["expected-element"]
+        )
+        if generated:
+            pattern = json.loads(schema_path().read_text("utf-8"))["definitions"][
+                "UUIDDatatype"
+            ]["pattern"]
+            assert re.fullmatch(pattern, element.pop("uuid"))
+        assert element == case["expected-element"]
+
+
+def _build_hash(case: dict[str, Any]) -> None:
+    _build(case, ob.make_hash, dict(case["arguments"]))
+
+
+def _build_rlink(case: dict[str, Any]) -> None:
+    arguments = dict(case["arguments"])
+    if "media-type" in arguments:
+        arguments["media_type"] = arguments.pop("media-type")
+    if "hashes" in arguments:
+        # The runner gives the builder the element with no validation.
+        arguments["hashes"] = [Hash.model_construct(**h) for h in arguments["hashes"]]
+    _build(case, ob.make_rlink, arguments)
+
+
+def _build_resource(case: dict[str, Any]) -> None:
+    arguments = dict(case["arguments"])
+    if "identifier" in arguments:
+        arguments["uuid"] = arguments.pop("identifier")
+    if "document-ids" in arguments:
+        arguments["document_ids"] = [
+            DocumentId.model_construct(**d) for d in arguments.pop("document-ids")
+        ]
+    _build(case, ob.make_resource, arguments)
+
+
 # Each operation takes the case, and the input path when the case has ``input``.
 OPERATIONS: dict[str, Callable[..., None]] = {
     "round-trip": _round_trip,
@@ -195,6 +252,9 @@ OPERATIONS: dict[str, Callable[..., None]] = {
     "element-types": _element_types,
     "yaml-round-trip": _yaml_round_trip,
     "yaml-parse": _yaml_parse,
+    "build-hash": _build_hash,
+    "build-rlink": _build_rlink,
+    "build-resource": _build_resource,
 }
 
 
@@ -229,11 +289,6 @@ def test_every_expected_failure_names_a_corpus_case() -> None:
     assert stale == [], f"expected failures not in the pinned corpus: {stale}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="builder-error is not mapped yet: "
-    "https://github.com/cairn-proofs/oscal-bindings-python/issues/62",
-)
 def test_every_category_is_mapped() -> None:
     """Each category in the corpus has a branch in ``category``."""
     index = json.loads((corpus_root() / "cases.json").read_text("utf-8"))
@@ -241,6 +296,7 @@ def test_every_category_is_mapped() -> None:
         category(FileNotFoundError()),
         category(OscalReadError()),
         category(OscalAccessError()),
+        category(OscalBuilderError("Invalid Hash")),
         category(OscalDocumentTypeMismatchError("Document is not a Catalog")),
         category(OscalUnknownElementTypeError("Unknown element type: x")),
         category(OscalParseError("Failed to parse")),

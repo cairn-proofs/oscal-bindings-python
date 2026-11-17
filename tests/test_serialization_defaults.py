@@ -12,7 +12,7 @@ behavior, so they fail on the unfixed library and pass once the fix lands:
   ``json.loads(serialize_oscal(doc))``. The same check over the whole corpus is
   in ``tests/test_prop_serialization_defaults.py``.
 - Keyword construction by Python field name equals construction by alias.
-- ``make_resource`` validates ``document_ids`` and raises ``ValidationError``.
+- ``make_resource`` validates ``document_ids`` and raises ``OscalBuilderError``.
 
 Fix-checking unit tests (task 4.1) follow: opt-outs (``by_alias=False``,
 ``exclude_none=False``, ``include``/``exclude``/``exclude_unset``), construction
@@ -37,6 +37,7 @@ from pydantic import BaseModel, RootModel, TypeAdapter, ValidationError
 from support.oscal_shape import DEFAULT_PATHS, assert_valid_oscal_shape
 
 from oscal_bindings import (
+    OscalBuilderError,
     make_resource,
     parse_catalog,
     parse_oscal,
@@ -182,7 +183,7 @@ def test_rlink_media_type_by_name_equals_alias() -> None:
     [pytest.param([], id="empty"), pytest.param(["x"], id="non-DocumentId")],
 )
 def test_make_resource_rejects_invalid_document_ids(document_ids: list[Any]) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(OscalBuilderError):
         make_resource(document_ids=document_ids)
 
 

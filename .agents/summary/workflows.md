@@ -144,12 +144,12 @@ sequenceDiagram
     C->>H: make_hash(digest)          %% default HashAlgorithm.SHA_256
     H-->>C: Hash
     C->>L: make_rlink(href, media_type=, hashes=[Hash])
-    L->>L: BackMatterResourceRlink(href=.., media_type=.., hashes=..)
-    L-->>C: BackMatterResourceRlink
-    C->>R: make_resource(title=, description=, rlinks=[BackMatterResourceRlink])
-    R->>R: uuid = uuid4() if not provided
-    R->>R: BackMatterResource(uuid=.., ..., document_ids=..)
-    R-->>C: BackMatterResource (validated)
+    L->>L: BackMatterResourceRlink.model_validate({href, media-type, hashes})
+    L-->>C: BackMatterResourceRlink (or OscalBuilderError)
+    C->>R: make_resource(title=, description=, rlinks=[BackMatterResourceRlink], key=)
+    R->>R: uuid = uuid5(namespace, key) if key, else uuid4() if not provided
+    R->>R: BackMatterResource.model_validate({uuid, ..., document-ids})
+    R-->>C: BackMatterResource (validated, or OscalBuilderError)
 ```
 
 ## 5. Element-level Validation

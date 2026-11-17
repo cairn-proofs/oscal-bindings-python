@@ -39,6 +39,7 @@ PUBLISHED_ALL = frozenset(
         "MappingCollectionDocument",
         "OscalAccessError",
         "OscalBody",
+        "OscalBuilderError",
         "OscalDoc",
         "OscalDocument",
         "OscalDocumentTypeMismatchError",

@@ -17,6 +17,7 @@ For each category in this list, an error SHALL be in the category exactly when i
 5. Not-found: `FileNotFoundError`.
 6. Read error: `OscalReadError`, a subclass of `OSError`, which is not a subclass of `OscalParseError` or of
    `FileNotFoundError`.
+7. Builder error: `OscalBuilderError`, a subclass of `ValueError`, which is not a subclass of `OscalParseError`.
 
 A caller tests a category with `isinstance`.
 
@@ -40,6 +41,12 @@ A caller tests a category with `isinstance`.
 - **WHEN** the caller parses a file at a path that is a directory
 - **THEN** the error is an instance of `OscalReadError` and an instance of `OSError`
 - **AND** the error is not an instance of `OscalParseError` and not an instance of `FileNotFoundError`
+
+#### Scenario: A builder error is a value error and not a parse error
+
+- **WHEN** the caller builds a hash with the algorithm ` SHA-256`, which has a leading space
+- **THEN** the error is an instance of `OscalBuilderError` and an instance of `ValueError`
+- **AND** the error is not an instance of `OscalParseError`
 
 ### Requirement: A file-path parse finds the category of a read failure from the read
 

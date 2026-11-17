@@ -5,9 +5,14 @@ from __future__ import annotations
 import re
 
 import pytest
-from pydantic import ValidationError
 
-from oscal_bindings import make_hash, make_resource, make_rlink
+from oscal_bindings import (
+    OscalBuilderError,
+    OscalParseError,
+    make_hash,
+    make_resource,
+    make_rlink,
+)
 from oscal_bindings.models import (
     BackMatterResource,
     BackMatterResourceRlink,
@@ -37,9 +42,22 @@ class TestMakeHash:
         h = make_hash(DIGEST, algorithm="SHA-384")
         assert h.algorithm == HashAlgorithm.SHA_384
 
-    def test_invalid_algorithm_string_raises(self):
-        with pytest.raises(ValueError, match="'MD5' is not a valid HashAlgorithm"):
-            make_hash(DIGEST, algorithm="MD5")
+    def test_algorithm_string_equals_enum(self):
+        by_string = make_hash(DIGEST, algorithm="SHA-256")
+        by_enum = make_hash(DIGEST, algorithm=HashAlgorithm.SHA_256)
+        assert by_string == by_enum
+        assert by_string.algorithm is HashAlgorithm.SHA_256
+
+    @pytest.mark.parametrize("algorithm", ["MD5", "SHA-999"])
+    def test_algorithm_that_is_not_named_is_kept_as_given(self, algorithm):
+        assert make_hash(DIGEST, algorithm=algorithm).algorithm == algorithm
+
+    def test_invalid_algorithm_raises_builder_error(self):
+        with pytest.raises(OscalBuilderError) as info:
+            make_hash(DIGEST, algorithm=" SHA-256")
+        assert info.value.errors
+        assert isinstance(info.value, ValueError)
+        assert not isinstance(info.value, OscalParseError)
 
 
 class TestMakeRlink:
@@ -58,6 +76,11 @@ class TestMakeRlink:
         h = make_hash(DIGEST)
         link = make_rlink("https://example.com/a.pdf", hashes=[h])
         assert link.hashes == [h]
+
+    def test_unvalidated_hash_item_raises(self):
+        bad = Hash.model_construct(algorithm=" SHA-256", value="ab")
+        with pytest.raises(OscalBuilderError):
+            make_rlink("https://example.com/a.pdf", hashes=[bad])
 
 
 class TestMakeResource:
@@ -83,7 +106,7 @@ class TestMakeResource:
 
     def test_invalid_title_raises(self):
         # Resource.title is constrained to one-line strings (^[^\n]+$).
-        with pytest.raises(ValidationError):
+        with pytest.raises(OscalBuilderError):
             make_resource(title="line one\nline two")
 
     def test_no_document_ids_by_default(self):
@@ -99,15 +122,15 @@ class TestMakeResource:
     def test_empty_document_ids_raises(self):
         # Resource.document_ids has min_length=1 ("document-ids": [] is
         # invalid OSCAL).
-        with pytest.raises(ValidationError):
+        with pytest.raises(OscalBuilderError):
             make_resource(document_ids=[])
 
     def test_non_document_id_items_raise(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(OscalBuilderError):
             make_resource(document_ids=["x"])  # type: ignore[list-item]
 
     def test_mixed_document_id_items_raise(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(OscalBuilderError):
             make_resource(
                 document_ids=[DocumentId(identifier="x"), "y"]  # type: ignore[list-item]
             )
@@ -131,6 +154,55 @@ class TestMakeResource:
         )
         assert r == expected
         assert r.document_ids == ids
+
+
+class TestMakeResourceKey:
+    def test_same_key_gives_same_uuid(self):
+        a = make_resource(key="https://example.org/a", title="One")
+        b = make_resource(key="https://example.org/a", title="Two")
+        assert a.uuid == b.uuid
+
+    def test_key_gives_uuid_version_5(self):
+        r = make_resource(key="https://example.org/policies/données")
+        assert r.uuid == "daa01937-2576-5dc8-9fb0-4da240946a5e"
+
+    def test_key_with_uuid_raises(self):
+        with pytest.raises(OscalBuilderError) as info:
+            make_resource(key="k", uuid="f47ac10b-58cc-4372-a567-0e02b2c3d479")
+        assert [(e["type"], e["loc"]) for e in info.value.errors] == [
+            ("key_with_uuid", ("key",))
+        ]
+
+    def test_empty_key_raises(self):
+        with pytest.raises(OscalBuilderError) as info:
+            make_resource(key="")
+        assert [(e["type"], e["loc"]) for e in info.value.errors] == [
+            ("empty_key", ("key",))
+        ]
+
+    def test_no_key_and_no_uuid_gives_uuid_version_4(self):
+        assert UUID_RE.match(make_resource().uuid)
+
+    @pytest.mark.parametrize("key", [5, b"abc"])
+    def test_key_that_is_not_a_string_raises(self, key):
+        with pytest.raises(OscalBuilderError) as info:
+            make_resource(key=key)  # type: ignore[arg-type]
+        assert [(e["type"], e["loc"]) for e in info.value.errors] == [
+            ("string_type", ("key",))
+        ]
+
+
+class TestBuilderErrorIsNotParseError:
+    def test_resource_error_is_value_error_not_parse_error(self):
+        with pytest.raises(OscalBuilderError) as info:
+            make_resource(title="line one\nline two")
+        assert isinstance(info.value, ValueError)
+        assert not isinstance(info.value, OscalParseError)
+
+    def test_unvalidated_document_id_item_raises(self):
+        bad = DocumentId.model_construct()
+        with pytest.raises(OscalBuilderError):
+            make_resource(document_ids=[bad])
 
 
 class TestComposability:
