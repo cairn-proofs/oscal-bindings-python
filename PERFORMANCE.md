@@ -10,6 +10,7 @@ Absolute times depend on the machine, so compare ratios. Each section names its 
 - [Memory](#memory)
 - [YAML cost](#yaml-cost)
 - [Serialization](#serialization)
+- [Datatype checks](#datatype-checks)
 - [Design changes with a measured effect](#design-changes-with-a-measured-effect)
 - [How to measure](#how-to-measure)
 
@@ -36,7 +37,7 @@ Peak traced memory of one parse, measured with `tracemalloc` on Python 3.14 (`sc
 
 | Input | Input size | Peak | Factor |
 |---|---|---|---|
-| Catalog, `parse_oscal` | 10.4 MB | 36 MB | about 3.4x |
+| Catalog, `parse_oscal` | 10.4 MB | 35 MB | about 3.4x |
 | Catalog, `parse_oscal_yaml` | 7.3 MB | 83 MB | about 11x |
 | Flow mapping of 150,000 unknown short keys, `parse_oscal` | 2.0 MB | 144 MB | about 72x |
 | Flow mapping of 150,000 unknown short keys, `parse_oscal_yaml` | 1.7 MB | 148 MB | about 87x |
@@ -65,6 +66,26 @@ For the catalog (7.3 MB of YAML), `parse_oscal_yaml` takes 0.8 s with libyaml (`
 | `serialize_oscal(doc)` | 63.1 | 168.4 | 2.7x | 10.44 MB (same) |
 | `doc.model_dump_json()` | 66.1 (invalid) | 165.8 | 2.5x | 4.88 MB (was 7.57 MB) |
 | `pydantic_core.to_json(doc)` | 63.7 (invalid) | 170.6 | 2.7x | 4.88 MB (was 7.53 MB) |
+
+## Datatype checks
+
+The change that enforces the OSCAL datatype constraints (#77) replaced `AnyUrl`, `EmailStr`, and the unchecked `AwareDatetime` and `str` fields with four hand-written types (`v1/_datatypes.py`). Each value of those types now passes one to three `pattern` steps in pydantic-core (the Rust `regex` engine), and a `datetime` that a caller gives in Python input passes one Python call. The target was no measurable slowdown of a parse of the catalog.
+
+`hatch run python scripts/bench_serialization.py`, median of 7 per run, then the median of 3 runs. The runs of the tree before and after the change alternate on one machine. Python 3.14.8, pydantic 2.14.2, pydantic-core 2.50.2. The catalog has 10.4 MB of JSON.
+
+| Path | Before, GC on ms | After, GC on ms | Before, GC off ms | After, GC off ms |
+|---|---:|---:|---:|---:|
+| `parse_oscal(bytes)` | 64.0 | 61.1 | 47.2 | 45.6 |
+| `serialize_oscal(doc, indent=None)` | 135.6 | 132.7 | 128.8 | 125.7 |
+| `serialize_oscal(doc)` | 144.0 | 140.4 | 137.6 | 134.1 |
+| `doc.model_dump_json()` | 142.0 | 138.8 | 135.3 | 132.4 |
+| `pydantic_core.to_json(doc)` | 143.0 | 138.6 | 136.0 | 132.7 |
+
+The after column is 2 to 5% lower in each row, also in the serialization rows that the change does not touch, so read it as no slowdown, not as a speedup. The validation of the four datatypes costs less than the difference between the runs.
+
+`import oscal_bindings` takes 159.5 ms before and 150.0 ms after (median of 9 fresh processes, `python -X importtime`). The runtime no longer imports `email-validator`.
+
+`scripts/bench_memory.py`: the peak of `parse_oscal` for the catalog is 36.5 MB before and 35.3 MB after. The other three rows of [Memory](#memory) are the same.
 
 ## Design changes with a measured effect
 

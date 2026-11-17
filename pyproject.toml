@@ -36,7 +36,7 @@ requires-python = ">=3.11"
 # 2.14.2 is the floor: earlier 2.13/2.14 releases drop a JSON key spelled with a
 # Python field name instead of rejecting it (issue #6, GHSA-qpmf-fgh3-ff25).
 # tests/test_pydantic_version.py states the same range.
-dependencies = ["pydantic[email]>=2.14.2,<3"]
+dependencies = ["pydantic>=2.14.2,<3"]
 
 [project.urls]
 Homepage = "https://github.com/cairn-proofs/oscal-bindings-python"
@@ -47,7 +47,7 @@ Issues = "https://github.com/cairn-proofs/oscal-bindings-python/issues"
 codegen = ["datamodel-code-generator[http,black,isort]==0.83.0"]
 # Optional YAML parse/serialize surface (v1/extensions/yaml_io.py). It imports
 # PyYAML, through v1/extensions/_yaml_loader.py, only when an operation is
-# called. The base install keeps pydantic[email] as its one runtime dependency;
+# called. The base install keeps pydantic as its one runtime dependency;
 # `pip install oscal-bindings[yaml]` adds PyYAML. A range, not a pin: a library
 # extra must let a consumer take a PyYAML security release. The YAML path uses
 # only PyYAML's event API, stable since 3.x. 6.0.1 is the first 6.x that builds

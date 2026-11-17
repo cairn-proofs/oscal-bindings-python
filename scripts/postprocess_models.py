@@ -5,9 +5,12 @@ emits each ``object``, ``document``, and ``enum`` type of the naming manifest
 as a class with its manifest name. This script completes the module:
 
 1. Phase 1 changes structure. It collapses each scalar ``RootModel`` to an
-   ``Annotated`` alias, and it removes ``pattern=`` from the fields of a type
-   that has no regex constraint (``AwareDatetime``, ``AnyUrl``, ``EmailStr``,
-   numbers).
+   ``Annotated`` alias. Then it reads the base type of each
+   ``Annotated[base, ..., Field(..., pattern=P)]`` (``place_patterns``). A
+   ``pattern`` on a ``str`` stays, as ``translate`` of ``regex_translation``
+   writes it for the Rust ``regex`` engine. A ``pattern`` on a number goes,
+   because JSON Schema applies ``pattern`` only to a string. A ``pattern`` on
+   another base, or outside an ``Annotated``, is a step failure that names it.
 2. It adds the manifest types that codegen does not emit with their names:
 
    1. Each ``single-or-many`` entry becomes a ``RootModel`` of the item or a
@@ -63,6 +66,8 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
+
+from regex_translation import RegexTranslationError, translate
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -286,45 +291,192 @@ def ensure_annotated_import(content: str) -> str:
     return content
 
 
-def fix_email_str_patterns(content: str) -> str:
-    """Remove pattern constraints from EmailStr fields (EmailStr validates email)."""
-    content = re.sub(
-        r"(Annotated\[\s*EmailStr,\s*Field\([^)]*?)pattern='[^']*',?\s*",
-        r"\1",
-        content,
+# ---------------------------------------------------------------------------
+# Patterns
+# ---------------------------------------------------------------------------
+
+_LINE_BREAK: Final = re.compile(r"\r\n|\r|\n")
+_NUMBER_BASES: Final = frozenset({"int", "float"})
+
+
+def _line_starts(content: str) -> list[int]:
+    """Return the offset of the start of each line, as ``ast`` counts lines.
+
+    The list is 1-based: ``starts[lineno]``. ``ast`` breaks lines on CR, LF, and
+    CR LF only, unlike ``str.splitlines``.
+    """
+    return [0, 0, *(m.end() for m in _LINE_BREAK.finditer(content))]
+
+
+class _Pattern:
+    """The ``pattern=`` keyword of a ``Field(...)`` call and where it sits."""
+
+    def __init__(
+        self, where: str, base: ast.expr, call: ast.Call, keyword: ast.keyword
+    ) -> None:
+        self.where = where
+        self.base = base
+        self.call = call
+        self.keyword = keyword
+
+    def base_kind(self) -> str | None:
+        """``"str"`` or ``"number"``, or ``None`` for any other base.
+
+        ``None`` members of the base are ignored. A union of ``str`` and a
+        number is no kind: JSON Schema would apply the pattern to the string
+        member only.
+        """
+        names = [_member_text(member) for member in _union_members(self.base)]
+        names = [name for name in names if name != "None"]
+        if names and all(name == "str" for name in names):
+            return "str"
+        if names and all(name in _NUMBER_BASES for name in names):
+            return "number"
+        return None
+
+
+def _union_members(node: ast.expr) -> list[ast.expr]:
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return _union_members(node.left) + _union_members(node.right)
+    return [node]
+
+
+def _member_text(node: ast.expr) -> str:
+    return node.id if isinstance(node, ast.Name) else ast.unparse(node)
+
+
+def _pattern_keywords(node: ast.AST) -> Iterable[ast.keyword]:
+    return (
+        keyword
+        for child in ast.walk(node)
+        if isinstance(child, ast.keyword)
+        for keyword in [child]
+        if keyword.arg == "pattern"
     )
-    return re.sub(r",\s*\)", ")", content)
 
 
-def fix_non_string_patterns(content: str) -> str:
-    """Remove pattern constraints from non-string types that don't support regex."""
-    # AwareDatetime, AnyUrl, int, float, bool, EmailStr don't support pattern
-    # Find pattern='...' in Field() where the type is not str
-    # Strategy: remove all pattern= from Annotated[AwareDatetime|AnyUrl, Field(...)]
-    non_str_types = ["AwareDatetime", "AnyUrl", "int", "float", "bool", "EmailStr"]
+def _find_patterns(tree: ast.Module) -> tuple[list[_Pattern], list[str]]:
+    """Return each pattern of an ``Annotated[base, ..., Field(pattern=...)]``.
 
-    # Find all Field() calls that have pattern= and check if the Annotated type is
-    # non-string
-    lines = content.split("\n")
-    result = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        # Check if this line has a pattern= in a Field
-        if "pattern=" in line and "Field(" in "\n".join(lines[max(0, i - 5) : i + 1]):
-            # Look backwards to find the Annotated type
-            context = "\n".join(lines[max(0, i - 10) : i + 1])
-            # Check if any non-string type is in the Annotated context
-            is_non_string = any(t in context for t in non_str_types)
-            if is_non_string:
-                # Remove the pattern='...' from this line
-                line = re.sub(r"\s*pattern='[^']*',?", "", line)
-                # Clean up empty Field() or trailing commas
-                line = re.sub(r",\s*\)", ")", line)
-                line = re.sub(r"Field\(\s*\)", "Field()", line)
-        result.append(line)
-        i += 1
-    return "\n".join(result)
+    The second value holds the name of each other ``pattern`` keyword.
+    """
+    found: list[_Pattern] = []
+    handled: set[int] = set()
+
+    def visit(node: ast.AST, owner: str | None, where: str) -> None:
+        if isinstance(node, ast.ClassDef):
+            owner, where = node.name, node.name
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            where = f"{owner}.{node.target.id}" if owner else node.target.id
+        elif isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+            where = node.targets[0].id
+        if (
+            isinstance(node, ast.Subscript)
+            and _is_name(node.value, "Annotated")
+            and isinstance(node.slice, ast.Tuple)
+            and len(node.slice.elts) > 1
+        ):
+            base, *metadata = node.slice.elts
+            for call in metadata:
+                if isinstance(call, ast.Call) and _is_name(call.func, "Field"):
+                    for keyword in call.keywords:
+                        if keyword.arg == "pattern":
+                            found.append(_Pattern(where, base, call, keyword))
+                            handled.add(id(keyword))
+        for child in ast.iter_child_nodes(node):
+            visit(child, owner, where)
+
+    visit(tree, None, "<module>")
+    stray = [
+        f"line {keyword.lineno}"
+        for keyword in _pattern_keywords(tree)
+        if id(keyword) not in handled
+    ]
+    return found, stray
+
+
+def place_patterns(content: str, failures: list[str]) -> str:
+    """Keep, translate, or remove each ``pattern=`` by the base of its ``Annotated``.
+
+    For each ``Annotated[base, ..., Field(..., pattern=P, ...)]``:
+
+    1. A ``str`` base keeps the pattern, as ``translate`` of
+       ``regex_translation`` maps it to the Rust ``regex`` dialect.
+    2. An ``int`` or ``float`` base loses it. JSON Schema applies ``pattern`` only
+       to a string.
+    3. Each other base is a failure that names the class, the field, and the
+       base. A ``pattern`` outside such an ``Annotated`` is also a failure.
+
+    ``failures`` collects each failure, so one run reports all of them.
+    """
+    tree = ast.parse(content)
+    found, stray = _find_patterns(tree)
+    failures.extend(
+        f"a pattern outside an Annotated Field ({where})" for where in stray
+    )
+    span = _Spans(content)
+    edits: list[tuple[int, int, str]] = []
+    for item in found:
+        keyword = item.keyword
+        kind = item.base_kind()
+        if kind == "str":
+            value = keyword.value
+            if not (isinstance(value, ast.Constant) and isinstance(value.value, str)):
+                failures.append(f"{item.where}: the pattern is not a string literal")
+                continue
+            try:
+                translated = translate(value.value)
+            except RegexTranslationError as error:
+                failures.append(f"{item.where}: {error}")
+                continue
+            edits.append((*span(value), repr(translated)))
+        elif kind == "number":
+            edits.append(_removal(item, content, span))
+        else:
+            failures.append(
+                f"{item.where}: a pattern on the base {ast.unparse(item.base)}, "
+                "which is not str, int, or float"
+            )
+    return _apply(content, edits)
+
+
+class _Spans:
+    """The ``(start, end)`` offsets in ``content`` of an ``ast`` node."""
+
+    def __init__(self, content: str) -> None:
+        self._content = content
+        self._starts = _line_starts(content)
+
+    def _offset(self, lineno: int, col: int) -> int:
+        # ``col`` is a UTF-8 byte offset into the line.
+        start = self._starts[lineno]
+        line = self._content[start:].split("\n", maxsplit=1)[0].encode()
+        return start + len(line[:col].decode())
+
+    def __call__(self, node: Any) -> tuple[int, int]:
+        if node.end_lineno is None or node.end_col_offset is None:
+            msg = f"the node at line {node.lineno} has no end position"
+            raise ValueError(msg)
+        return (
+            self._offset(node.lineno, node.col_offset),
+            self._offset(node.end_lineno, node.end_col_offset),
+        )
+
+
+def _removal(item: _Pattern, content: str, span: _Spans) -> tuple[int, int, str]:
+    """The edit that removes the ``pattern=`` keyword and one comma."""
+    arguments = sorted(
+        [*item.call.args, *item.call.keywords],
+        key=lambda node: (node.lineno, node.col_offset),
+    )
+    index = arguments.index(item.keyword)
+    start, end = span(item.keyword)
+    if index + 1 < len(arguments):
+        return start, span(arguments[index + 1])[0], ""
+    if index > 0:
+        return span(arguments[index - 1])[1], end, ""
+    trailing = re.match(r"\s*,", content[end:])
+    return start, end + (trailing.end() if trailing else 0), ""
 
 
 # ---------------------------------------------------------------------------
@@ -1023,8 +1175,7 @@ def postprocess(
     )
     content = collapse_scalar_root_models(content, root_models)
     content = ensure_annotated_import(content)
-    content = fix_email_str_patterns(content)
-    content = fix_non_string_patterns(content)
+    content = place_patterns(content, failures)
 
     renames = scalar_renames(content, schema, manifest, failures)
     content = rename_names(content, renames)

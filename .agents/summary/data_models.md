@@ -86,8 +86,11 @@ These recur across document types:
 | By-name input | Constructor kwargs accept names or aliases (`BackMatterResourceRlink(media_type=...)`). `model_validate({...})` stays alias-only (`extra_forbidden` at any depth); JSON input rejects a name key the same way (needs pydantic ≥2.14.2; earlier 2.13/2.14 dropped it, [#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)). No `validate_by_name` in config |
 | Constraints | `Annotated[T, Field(...)]` with `pattern`, `min_length`, etc. (produced by `--field-constraints`) |
 | Scalars | Collapsed to `TypeAlias` (not `RootModel`) — e.g. a `uuid` field is a constrained `str`, accessed directly |
-| Datetimes | `AwareDatetime`; `pattern=` constraints stripped by the post-processor since they're invalid on non-str types |
-| Emails | `EmailStr`; redundant `pattern=` stripped |
+| Patterns | A `pattern=` on a `str` stays, translated from ECMA-262 to the Rust `regex` dialect (`scripts/regex_translation.py`, PRS-007); a pattern on a number is removed |
+| Datetimes | `OscalDateTimeWithTimezone` (`v1/_datatypes.py`): an `AwareDatetime` whose input string must match the OSCAL pattern; in Python input a `datetime` must serialize to text that matches it. The value is a `datetime` (a seventh fraction digit is lost, [#19](https://github.com/cairn-proofs/oscal-bindings-python/issues/19)) |
+| URIs | `OscalUri`: a `str` that matches the OSCAL pattern and the RFC 3986 `URI` grammar; each scheme is valid; the value is the input text, so a serialization writes it as given |
+| URI references | `OscalUriReference`: a `str` that matches the RFC 3986 `URI-reference` grammar; the value is the input text |
+| Emails | `OscalEmailAddress`: a `str` that matches both OSCAL patterns and the RFC 5321 `Mailbox` grammar with the RFC 6531 extension (non-ASCII, one-label domains); the value is the input text, so case and form are kept |
 
 ## Naming
 

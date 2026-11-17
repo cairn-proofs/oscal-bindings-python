@@ -36,6 +36,12 @@ its manifest name. ``hoist`` makes these changes in the copy:
    or a ``oneOf`` below the root and has no ``description`` takes the
    ``description`` of the schema that holds the branch, so each union variant
    class keeps a docstring.
+7. The definitions of the four datatypes of ``HAND_WRITTEN_DATATYPES`` become
+   ``{"type": "string", "customTypePath": "<module>.<Name>"}``, with their
+   ``title`` and ``description`` kept. Codegen then emits the type of
+   ``oscal_bindings.v1._datatypes`` at each site, with no ``pattern`` beside it.
+   The step runs after the closed-enum check of step 4, which reads the original
+   definitions.
 
 Each site is resolved in the working copy when its turn comes. A descendant of
 a site has more pointer tokens than the site, so it is processed first, and no
@@ -87,6 +93,16 @@ _SCHEMA_MAPS: Final = frozenset({"properties", "patternProperties", "definitions
 _PAIR: Final = 2
 # The combinators whose branches are union variants.
 _BRANCHES: Final = frozenset({"anyOf", "oneOf"})
+# The datatypes that the binding writes by hand: definition key -> the type that
+# codegen emits at each site. A pattern cannot define them (design D3).
+HAND_WRITTEN_DATATYPES: Final[dict[str, str]] = {
+    "URIDatatype": "oscal_bindings.v1._datatypes.OscalUri",
+    "URIReferenceDatatype": "oscal_bindings.v1._datatypes.OscalUriReference",
+    "EmailAddressDatatype": "oscal_bindings.v1._datatypes.OscalEmailAddress",
+    "DateTimeWithTimezoneDatatype": (
+        "oscal_bindings.v1._datatypes.OscalDateTimeWithTimezone"
+    ),
+}
 # The keys that a closed-enum allOf object can hold beside its allOf.
 _CLOSED_HOLDER_KEYS: Final = frozenset({"title", "description", "$id", "allOf"})
 
@@ -413,6 +429,22 @@ def _unresolved_refs(node: object, root: object, path: str = "#") -> list[str]:
     return failures
 
 
+def _name_hand_written_datatypes(
+    definitions: dict[str, Any], failures: list[str]
+) -> None:
+    """Replace each definition of ``HAND_WRITTEN_DATATYPES`` with its custom type."""
+    for key, type_path in HAND_WRITTEN_DATATYPES.items():
+        original = definitions.get(key)
+        if not isinstance(original, dict):
+            failures.append(f"the schema has no definition {key!r} to name {type_path}")
+            continue
+        definitions[key] = {
+            **{doc: original[doc] for doc in _DOCS if doc in original},
+            "type": "string",
+            "customTypePath": type_path,
+        }
+
+
 def hoist(schema: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``schema`` with each manifest site hoisted.
 
@@ -446,6 +478,7 @@ def hoist(schema: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
     )
     working["definitions"] = definitions
     _rewrite_refs(working, renames)
+    _name_hand_written_datatypes(working["definitions"], failures)
     failures.extend(_unresolved_refs(working, working))
     if failures:
         raise HoistError(failures)

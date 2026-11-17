@@ -16,7 +16,8 @@ Validator choices:
 - **``format`` is not asserted** (``validate_formats=False``). The schema uses
   ``date-time``, ``email``, ``uri`` and ``uri-reference``; each sits beside a
   ``pattern`` on the same datatype, which is enforced, and the model fields are
-  already ``AwareDatetime`` / ``EmailStr`` / ``AnyUrl``.
+  ``OscalDateTimeWithTimezone`` / ``OscalEmailAddress`` / ``OscalUri`` /
+  ``OscalUriReference``, which check that pattern and the grammar of the datatype.
 
 Negative controls prove the validator is not vacuous: snake_case keys
 (``model_dump(by_alias=False)``), an injected ``null``, and a ``\\p{L}``

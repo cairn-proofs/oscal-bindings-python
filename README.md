@@ -20,7 +20,7 @@ pip install "oscal-bindings[yaml]"
 uv add "oscal-bindings[yaml]"
 ```
 
-The base install keeps a single runtime dependency (`pydantic[email]`). Every import works without the extra. A call to a YAML operation without the extra raises `ImportError` with an install hint.
+The base install keeps a single runtime dependency (`pydantic`). Every import works without the extra. A call to a YAML operation without the extra raises `ImportError` with an install hint.
 
 To install from a local checkout (e.g., as a `uv` workspace path dependency):
 

@@ -1,6 +1,6 @@
 """Guard the supported pydantic version range.
 
-The runtime dependency in ``pyproject.toml`` is ``pydantic[email]>=2.14.2,<3``.
+The runtime dependency in ``pyproject.toml`` is ``pydantic>=2.14.2,<3``.
 2.14.2 is the first release whose JSON validation rejects a key spelled with a
 model's Python field name (``back_matter``) as ``extra_forbidden``. Earlier
 2.13/2.14 releases drop the key and lose its value without an error (issue #6,
@@ -16,7 +16,7 @@ from __future__ import annotations
 import pydantic
 from packaging.version import Version
 
-# Keep in step with ``pydantic[email]`` in pyproject.toml.
+# Keep in step with ``pydantic`` in pyproject.toml.
 SUPPORTED_FROM = Version("2.14.2")
 SUPPORTED_BELOW = Version("3")
 

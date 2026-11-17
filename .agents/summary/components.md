@@ -46,6 +46,19 @@ graph LR
 | `OscalBaseModel.__init__` | Maps field-name kwargs to aliases; leaves the name if the alias is also passed so `extra='forbid'` rejects it. Marked `__pydantic_base_init__ = True` so `model_validate*` doesn't route through it |
 | `_kwarg_aliases(cls)` | `functools.cache`'d `{name: alias}` for alias-differing fields, excluding names that are also some field's alias |
 
+### 1b. `v1/_datatypes.py` — the four datatypes that a pattern does not define (hand-written)
+
+**Responsibility:** The types that the models use for the OSCAL datatypes `uri`, `uri-reference`, `email-address`, and `date-time-with-timezone`. The hoist names each definition with `customTypePath`, so codegen emits these types at each site. Imports only `pydantic`, `pydantic_core`, and stdlib.
+
+| Symbol | Value type | Checks |
+|--------|-----------|--------|
+| `OscalUri` | `str` (the input text) | The OSCAL pattern, then the RFC 3986 `URI` grammar. Each scheme is valid |
+| `OscalUriReference` | `str` (the input text) | The RFC 3986 `URI-reference` grammar |
+| `OscalEmailAddress` | `str` (the input text) | The two OSCAL patterns, then the RFC 5321 `Mailbox` grammar with RFC 6531 |
+| `OscalDateTimeWithTimezone` | `AwareDatetime` | The OSCAL pattern on the input string; in Python input also a `datetime` whose serialization matches it. One `oscal_date_time_with_timezone` error at the field |
+
+Each check runs in pydantic-core with the Rust `regex` engine. The pattern literals are the output of `translate` for the schema patterns; a test fails when one drifts.
+
 ## 2. `v1/parser.py` — Runtime parse/serialize/validate
 
 **Responsibility:** Convert JSON ⇄ models and validate.
@@ -126,8 +139,9 @@ Not part of the installed package. `scripts/` is not a package: a script imports
 | `spec_artifact.py` | The one pin of the spec artifact (`0.8.0+oscal.1.2.3` + sha256), shared by `generate` and the tests; cache `tests/.corpus_cache/`. The artifact supplies the complete OSCAL schema (`artifact_paths(...).schema`), `names.json`, and the corpus, and the pin is the only selector of the OSCAL release | `SPEC_ARTIFACT_VERSION`, `SPEC_ARTIFACT_SHA256`, `SPEC_ARTIFACT`, `OSCAL_RELEASE`, `ensure_spec_artifact`, `artifact_paths`, `ArtifactPaths` |
 | `pinned_archive.py` | Stdlib-only, cross-process-locked download (HTTPS only, HTTPS-only redirects, 64 MiB body cap), sha256 check before extraction, tar-slip-safe extraction with the `data` filter (Python 3.11.4+), atomic publish | `PinnedArchive`, `ensure_pinned_archive`, `http_get`, `build_https_opener`, `CorpusError`, `ResponseTooLargeError`, `FileLock` |
 | `manifest.py` | Validates `names.json`: JSON Schema (`jsonschema-rs`), format/release, schema sha256 against the schema bytes, unique names, resolvable pointers, type references | `validate_manifest`, `load_validated_manifest(paths, *, schema_bytes=None, schema_path=None)` (no bytes and no path means `paths.schema`), `read_schema_bytes`, `ManifestError` |
-| `hoist_names.py` | Reads the artifact schema from `paths.schema` one time, and writes `build/codegen/oscal_complete_schema.json`, in which each manifest site is `definitions/<Name>` with a `$ref` at the site | `hoist`, `HoistError`, `OUTPUT` |
-| `postprocess_models.py` | Phase 1 structure fixes, adds union aliases / `MappingCollectionMappings` / `OscalDocument`, names scalar aliases, applies three guards against the manifest | `postprocess`, `guard_failures`, `PostprocessError`, `add_union_aliases`, `add_single_or_many`, `rename_document_union`, `scalar_renames`, `collapse_scalar_root_models`, `fix_non_string_patterns`, `scalar_names`, `import_bindings`, `artifact_schema_path`, `load_manifest(schema_bytes)`, `write_atomically`, `parse_args`/`main` (`--models`/`--schema`, each with its own default, `--schema` resolved in `main` to the artifact schema; `--output`, defaulting to `--models`) |
+| `hoist_names.py` | Reads the artifact schema from `paths.schema` one time, and writes `build/codegen/oscal_complete_schema.json`, in which each manifest site is `definitions/<Name>` with a `$ref` at the site, and the four hand-written datatypes carry `customTypePath` | `hoist`, `HoistError`, `OUTPUT` |
+| `postprocess_models.py` | Phase 1 structure fixes and pattern placement (`place_patterns`), adds union aliases / `MappingCollectionMappings` / `OscalDocument`, names scalar aliases, applies three guards against the manifest | `postprocess`, `guard_failures`, `PostprocessError`, `add_union_aliases`, `add_single_or_many`, `rename_document_union`, `scalar_renames`, `collapse_scalar_root_models`, `place_patterns`, `scalar_names`, `import_bindings`, `artifact_schema_path`, `load_manifest(schema_bytes)`, `write_atomically`, `parse_args`/`main` (`--models`/`--schema`, each with its own default, `--schema` resolved in `main` to the artifact schema; `--output`, defaulting to `--models`) |
+| `regex_translation.py` | `translate`: maps an ECMA-262 pattern of the schema to the Rust `regex` dialect (`.` and `\s`); errors on lookaround, back-references, `\d`, `\w`, `\b`, an inline flag | `translate`, `RegexTranslationError` |
 | `bench_serialization.py` | Parse and serialize time benchmark (numbers in `PERFORMANCE.md`) | — |
 | `bench_memory.py` | Peak-memory benchmark of a parse (numbers in `PERFORMANCE.md`) | — |
 

@@ -122,8 +122,12 @@ rule for a manifest type. `hatch run generate` runs three steps:
       manifest name.
 3. `scripts/postprocess_models.py` reads `build/codegen/models.py`, completes and checks the module, and writes it to
    `src/oscal_bindings/v1/models.py`.
-   1. Phase 1 changes structure. It collapses each scalar `RootModel` to an `Annotated` alias, and it removes
-      `pattern=` from fields of a type that has no regex constraint (`AwareDatetime`, `AnyUrl`, `EmailStr`, numbers).
+   1. Phase 1 changes structure. It collapses each scalar `RootModel` to an `Annotated` alias. Then it reads the base
+      type of each `Annotated[base, ..., Field(..., pattern=P)]`. A pattern on a `str` stays, as `translate` of
+      `scripts/regex_translation.py` writes it for the Rust `regex` engine (see "Pattern portability (PRS-007)"). A
+      pattern on an `int` or `float` goes, because JSON Schema applies `pattern` only to a string. A pattern on another
+      base, or outside an `Annotated`, fails the step and names the class, the field, and the base. One run reports
+      each failure and writes no `models.py`.
    2. It adds the manifest types that codegen does not emit: one `TypeAlias` per union (`CatalogGroup`), the
       `MappingCollectionMappings` root model, and the `OscalDocument` root model. Each union alias stays a plain union,
       so `isinstance(value, CatalogGroup)` works. Each field that uses an alias is
@@ -167,6 +171,33 @@ A difference fails that job (and so `build`), so the committed `models.py` must 
 
 To change a type name, change the manifest in the store, release a new spec artifact, and move the pin. Never rename a
 manifest type in the post-processor.
+
+## Pattern portability (PRS-007)
+
+PRS-007 requires the binding to document how it maps each OSCAL pattern to its own regex engine, and to keep the sets
+of accepted and rejected values. JSON Schema writes a `pattern` in ECMA-262 with the `u` flag. Pydantic evaluates a
+`pattern` with the Rust `regex` engine of pydantic-core. The two dialects differ for `.` and `\s`, so a pattern that
+Pydantic reads as written accepts values that the schema rejects. For example, `^\S(.*\S)?$` accepts `a<CR>b`.
+
+`translate` in `scripts/regex_translation.py` maps each pattern. It reads the pattern token by token and writes a Rust
+pattern that accepts and rejects the same values. The mapping:
+
+1. `.` outside a class becomes a class that excludes the ECMA-262 line terminators: LF, CR, U+2028, and U+2029. In
+   Rust, `.` excludes only LF.
+2. `\s` outside a class becomes a class of the ECMA-262 white space and line terminators: tab, LF, VT, FF, CR, space,
+   U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, and U+FEFF. `\S` becomes the complement.
+   In Rust, `\s` has U+0085 and no U+FEFF.
+3. Each other token stays: a literal, an escaped literal, a code point escape (`\xHH`, `\uHHHH`, `\u{H...}`), a class,
+   a negated class, `\p{...}`, a group, an alternation, a quantifier, `^`, and `$`. A class holds literals, escaped
+   literals, code point escapes, ranges, and `\p{...}`. Without the multiline flag, `^` and `$` mean the same in both
+   dialects. The output of `translate` holds only these tokens, so `translate` of its own output is the same pattern.
+4. Each other construct is an error that names the pattern: lookaround, a back-reference, `\d`, `\w`, `\b`, `\s`
+   inside a class, and an inline flag. No pattern of the OSCAL 1.2.3 schema uses one. A release that does fails the
+   generation, so the constraint is never dropped silently.
+
+`tests/test_regex_translation.py` holds the ECMA-262 result of each probe for each of the 10 patterns of the pinned
+schema (Node.js with the `u` flag gave them), and it fails when a moved pin adds a pattern that the table does not
+cover.
 
 ## Moving the pin to a new spec artifact
 
@@ -222,7 +253,7 @@ changes only for a new OSCAL **major** version.
 - **Valid OSCAL by default** — `v1/_base.py` defines `OscalBaseModel`, wired in through codegen's `--base-class` so `models.py` stays pristine generator output. It sets `serialize_by_alias=True` (needs pydantic ≥2.11; the floor is now 2.14.2, below) and adds a wrap `model_serializer` that drops None values, so every serialization path, including `pydantic_core.to_json` and `TypeAdapter` calls that never see our kwargs, emits OSCAL keys and no `null`. `serialize_oscal` keeps its explicit `by_alias=True, exclude_none=True`. The wrap serializer costs a Python callback per model node (benchmarks below). Per-field `Field(exclude_if=lambda v: v is None)` measured about 1.35× the pre-fix time in a prototype (the wrap serializer was about 2.4× there), with identical output, but it isn't implemented: the post-processor would have to rewrite all 698 optional fields, and `exclude_if` needs pydantic ≥2.12. It's the documented fallback if serialize time becomes a problem.
   - **Construction by name, validation by alias.** `OscalBaseModel.__init__` maps field-name kwargs to aliases, so `BackMatterResourceRlink(media_type=...)` works. The builders do not construct directly: each validates a JSON-shaped object with `model_validate` one time and raises `OscalBuilderError`. The override carries `__pydantic_base_init__ = True`, the marker `RootModel.__init__` uses. Without it pydantic sets `__pydantic_custom_init__` and routes `model_validate*` through `__init__`: a probe of that variant accepted and kept name-keyed input at every depth, in dict and JSON mode, even with `by_alias=True, by_name=False`. The marker is undocumented, so tests pin it structurally and behaviorally.
   - **Not config `validate_by_name`.** Setting `validate_by_name=True` in the base config, with per-call `by_alias=True, by_name=False` at our validation sites (Option A), was rejected. Alias-only would become opt-in per call, so a user's direct `Model.model_validate` would accept and populate name-keyed OSCAL. Nested plain dicts in constructor kwargs would accept names too. Don't add `validate_by_name`, `validate_by_alias`, or `populate_by_name` to the base config. Revisit if pydantic adds per-mode by-name validation (pydantic#12056).
-  - **Pydantic floor 2.14.2: JSON mode rejects name keys.** pydantic 2.13.x through 2.14.1 had `model_validate_json` silently discard a key equal to the Python name of one of the model's alias-differing fields, instead of reporting `extra_forbidden` ([#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)). pydantic#13275, released in 2.14.2 (GHSA-qpmf-fgh3-ff25), made JSON mode match dict mode, so the runtime range is `pydantic[email]>=2.14.2,<3` and the JSON-mode tests require `extra_forbidden`. The base doesn't change JSON validation either way.
+  - **Pydantic floor 2.14.2: JSON mode rejects name keys.** pydantic 2.13.x through 2.14.1 had `model_validate_json` silently discard a key equal to the Python name of one of the model's alias-differing fields, instead of reporting `extra_forbidden` ([#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)). pydantic#13275, released in 2.14.2 (GHSA-qpmf-fgh3-ff25), made JSON mode match dict mode, so the runtime range is `pydantic>=2.14.2,<3` and the JSON-mode tests require `extra_forbidden`. The base doesn't change JSON validation either way.
   - **Parametrized bases in the models namespace.** Since 2.14, pydantic registers a module-scope parametrization such as `RootModel[Mapping | list[Mapping]]` in the module that writes it, under a non-identifier name (pydantic#13243; 2.14.2 also sets its `__module__` there, pydantic#13994). So the bases of `OscalDocument` and `MappingCollectionMappings` appear in `vars(models)`. `validate_element`'s element map and the module scans in the tests skip any class whose `__pydantic_generic_metadata__["origin"]` is set, and `test_each_parametrized_generic_of_the_module_is_a_manifest_base` keeps that skip limited to those bases. `models.py` is unchanged.
   - **Serialization benchmarks** — the numbers are in [PERFORMANCE.md](PERFORMANCE.md#serialization). The serialize-time regression is accepted as the price of valid OSCAL on every path; parse is unchanged.
 - **YAML scalar typing comes from the schema, not the YAML reader** — the optional YAML path converts a YAML document to JSON text and passes it to `parse_oscal`, so the YAML result equals the JSON result for the same value (YML-004, YML-005). The OSCAL schema at a scalar's location decides its type, not PyYAML's YAML 1.1 resolver. The schema comes from the generated models at run time (`OscalDocument.model_json_schema()`), so no schema artifact ships in the wheel. A scalar keeps its text at a string location, so `version: 1.0` stays `"1.0"` and `yes` stays `"yes"`. A number location takes only the RFC 8259 JSON number grammar (no leading `+`, no leading zero, no hex), and the token goes to the JSON parser as written. A boolean location takes only `true` or `false`. Any other text is a parse error at the scalar's location. A test scans the pinned schema so that the resolver's two tie-breaks (first union branch, type priority) never decide a result.
