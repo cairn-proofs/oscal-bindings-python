@@ -558,6 +558,9 @@ class TestYaml11LineBreaks:
         )
         entry = _yaml_error(f"# {every}\nb: x\x85y\n")
         assert entry["type"] == "yaml_line_break_placeholder"
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(f"# {every}\nb: x\x85y\n")
+        assert info.value.limit == "yaml_line_break_placeholders"
 
 
 # --- Task 3.1, 3.2: parse operations ------------------------------------------
@@ -779,6 +782,31 @@ class TestAliasBudget:
         assert len(md["props"]) == 2_000
 
 
+class TestLimitIdentifier:
+    """The ``limit`` of a YAML limit error (spec error-tests)."""
+
+    @staticmethod
+    def _limit(text: str) -> str | None:
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(text)
+        limit: str | None = info.value.limit
+        return limit
+
+    def test_alias_node_limit(self) -> None:
+        assert self._limit(_wide_alias(999, 101)) == "yaml_alias_nodes"
+
+    def test_alias_character_limit_within_the_node_limit(self) -> None:
+        # 101 aliases charge 101 nodes, far below the node limit.
+        assert self._limit(_scalar_alias(10_000, 101)) == "yaml_alias_characters"
+
+    def test_depth_limit(self) -> None:
+        assert self._limit(_nested(DEPTH_LIMIT + 1)) == "yaml_depth"
+
+    def test_a_failure_that_is_not_a_limit_has_no_limit(self) -> None:
+        text = HEAD + "    remarks: &a [*a]\n"
+        assert self._limit(text) is None
+
+
 class TestDepthLimit:
     def test_input_at_the_depth_limit_is_not_rejected_for_depth(self) -> None:
         assert json.loads(to_json_text(_nested(DEPTH_LIMIT)))
@@ -816,6 +844,8 @@ class TestDepthLimit:
         entry = info.value.errors[0]
         assert entry["loc"][:3] == ("catalog", "metadata", "x")
         assert entry["line"] == 8
+        # The expanded depth is checked in `emit`, not at the compose stage.
+        assert info.value.limit == "yaml_depth"
 
 
 class TestJsonDigitLimit:
@@ -839,6 +869,7 @@ class TestJsonDigitLimit:
                 parse(text)
             (entry,) = info.value.errors
             assert entry["type"] == "json_digit_limit"
+            assert info.value.limit == "json_digits"
             assert entry["msg"] == str(info.value) == JSON_DIGIT_LIMIT_MSG
             assert entry["input"] is None
             assert (entry["line"], entry["column"]) == self._position(text, digits)

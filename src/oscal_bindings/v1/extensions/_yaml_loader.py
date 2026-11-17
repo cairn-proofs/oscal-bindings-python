@@ -98,18 +98,20 @@ def _brief(text: str) -> str:
     return f"{text[:_QUOTE_LIMIT]!r}... ({len(text):,} characters)"
 
 
-def _fail(
+def _fail(  # noqa: PLR0913 -- one keyword for each field of the entry
     kind: str,
     message: str,
     *,
     loc: tuple[str | int, ...] = (),
     at: tuple[int | None, int | None] = (None, None),
     text: str | None = None,
+    limit: str | None = None,
 ) -> NoReturn:
     """Raise a parse error with one entry in the Pydantic entry shape.
 
     ``loc`` is the JSON path, as in a Pydantic entry. ``at`` is the 1-based line
-    and column in the YAML source.
+    and column in the YAML source. ``limit`` is the identifier of the documented
+    limit, for a limit failure only.
     """
     line, column = at
     entry = {
@@ -120,7 +122,7 @@ def _fail(
         "line": line,
         "column": column,
     }
-    raise OscalParseError(message, errors=[entry])
+    raise OscalParseError(message, errors=[entry], limit=limit)
 
 
 # --- Stage 1: YAML 1.1 line-break characters ----------------------------------
@@ -168,6 +170,7 @@ def _shield(text: str) -> tuple[str, dict[int, int] | None]:
             "line_break_placeholder",
             "YAML input holds U+0085, U+2028, or U+2029 and leaves no free "
             "private-use placeholder for it",
+            limit="yaml_line_break_placeholders",
         )
     forward = {ord(ch): cp for ch, cp in zip(_YAML11_BREAKS, chosen, strict=True)}
     restore = {cp: ord(ch) for ch, cp in zip(_YAML11_BREAKS, chosen, strict=True)}
@@ -266,6 +269,7 @@ def _compose_child(
             "depth_limit",
             f"YAML nesting exceeds the depth limit of {DEPTH_LIMIT}",
             at=at,
+            limit="yaml_depth",
         )
     if isinstance(event, AliasEvent):
         target = anchors.get(event.anchor or "")
@@ -555,6 +559,7 @@ class _Walk:
                 f"YAML aliases add more than the limit of {ALIAS_NODE_LIMIT:,} nodes",
                 loc=self.path(slot),
                 at=(line, column),
+                limit="yaml_alias_nodes",
             )
         if self.alias_chars > ALIAS_CHAR_LIMIT:
             _fail(
@@ -563,6 +568,7 @@ class _Walk:
                 f"{ALIAS_CHAR_LIMIT:,} characters",
                 loc=self.path(slot),
                 at=(line, column),
+                limit="yaml_alias_characters",
             )
 
     def run(self, root: _Node) -> str:
@@ -649,6 +655,7 @@ class _Walk:
                 f"YAML nesting exceeds the depth limit of {DEPTH_LIMIT}",
                 loc=self.path(slot),
                 at=(item.line, item.column),
+                limit="yaml_depth",
             )
         if node.kind == _SCALAR:
             if charged:
@@ -688,7 +695,9 @@ class _Walk:
                         "line": node.line,
                         "column": node.column,
                     }
-                    raise OscalParseError(JSON_DIGIT_LIMIT_MSG, errors=[entry])
+                    raise OscalParseError(
+                        JSON_DIGIT_LIMIT_MSG, errors=[entry], limit="json_digits"
+                    )
                 return text
             _fail(
                 "number_grammar",

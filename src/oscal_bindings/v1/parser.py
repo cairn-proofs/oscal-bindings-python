@@ -51,6 +51,12 @@ class _OmittedInput:
 class OscalParseError(Exception):
     """Raised when an OSCAL document cannot be parsed or validated.
 
+    ``limit`` is the identifier of the documented resource limit that stopped the
+    parse, one of ``json_depth``, ``json_digits``, ``yaml_alias_nodes``,
+    ``yaml_alias_characters``, ``yaml_depth``, and ``yaml_line_break_placeholders``.
+    For each other parse error, ``limit`` is ``None``. Test an ``OscalParseError``
+    with ``error.limit is not None``.
+
     ``errors`` holds the structured entries, in the Pydantic entry shape. A
     schema-conformance failure gives one entry for each failing location. The
     ``input`` of such an entry is the failing value when it is a string, a
@@ -71,9 +77,24 @@ class OscalParseError(Exception):
     #: The ``input`` of an entry whose failing value is an object or an array.
     OMITTED_INPUT: ClassVar[Any] = _OmittedInput()
 
-    def __init__(self, message: str, errors: list[Any] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        errors: list[Any] | None = None,
+        *,
+        limit: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.errors = errors or []
+        self.limit = limit
+
+
+class OscalDocumentTypeMismatchError(OscalParseError):
+    """Raised when a typed parser reads a document of another type.
+
+    A subclass of :class:`OscalParseError`, so ``except OscalParseError`` also
+    catches it. A parse error of another kind is not an instance of this class.
+    """
 
 
 #: The JSON depth limit (PRS-010). A value that more than this many arrays and
@@ -97,6 +118,11 @@ _LIMIT_PREFIXES = (
     ("recursion limit exceeded", "json_depth_limit", JSON_DEPTH_LIMIT_MSG),
     ("number out of range", "json_digit_limit", JSON_DIGIT_LIMIT_MSG),
 )
+# The ``limit`` identifier of each JSON limit entry type (design D4).
+_LIMIT_IDENTIFIERS = {
+    "json_depth_limit": "json_depth",
+    "json_digit_limit": "json_digits",
+}
 _POSITION = re.compile(r" at line (\d+) column (\d+)$")
 
 
@@ -180,7 +206,9 @@ def parse_oscal(data: str | bytes) -> OscalDocument:
     # Raised outside the handler, so that neither __cause__ nor __context__
     # holds the ValidationError and its copy of the input.
     if limit is not None:
-        raise OscalParseError(limit["msg"], errors=[limit])
+        raise OscalParseError(
+            limit["msg"], errors=[limit], limit=_LIMIT_IDENTIFIERS[limit["type"]]
+        )
     raise OscalParseError(
         f"Failed to parse OSCAL document: {len(errors)} validation error(s)",
         errors=errors,
@@ -274,7 +302,7 @@ def parse_catalog(data: str | bytes) -> CatalogDocument:
     """Parse an OSCAL Catalog document (accepts `str` or `bytes`)."""
     doc = parse_oscal(data)
     if not hasattr(doc.root, "catalog"):
-        raise OscalParseError("Document is not a Catalog")
+        raise OscalDocumentTypeMismatchError("Document is not a Catalog")
     return cast("CatalogDocument", doc.root)
 
 
@@ -282,7 +310,7 @@ def parse_profile(data: str | bytes) -> ProfileDocument:
     """Parse an OSCAL Profile document (accepts `str` or `bytes`)."""
     doc = parse_oscal(data)
     if not hasattr(doc.root, "profile"):
-        raise OscalParseError("Document is not a Profile")
+        raise OscalDocumentTypeMismatchError("Document is not a Profile")
     return cast("ProfileDocument", doc.root)
 
 
@@ -290,7 +318,7 @@ def parse_component_definition(data: str | bytes) -> ComponentDefinitionDocument
     """Parse an OSCAL Component Definition document (accepts `str` or `bytes`)."""
     doc = parse_oscal(data)
     if not hasattr(doc.root, "component_definition"):
-        raise OscalParseError("Document is not a Component Definition")
+        raise OscalDocumentTypeMismatchError("Document is not a Component Definition")
     return cast("ComponentDefinitionDocument", doc.root)
 
 
@@ -298,7 +326,7 @@ def parse_system_security_plan(data: str | bytes) -> SystemSecurityPlanDocument:
     """Parse an OSCAL System Security Plan document (accepts `str` or `bytes`)."""
     doc = parse_oscal(data)
     if not hasattr(doc.root, "system_security_plan"):
-        raise OscalParseError("Document is not a System Security Plan")
+        raise OscalDocumentTypeMismatchError("Document is not a System Security Plan")
     return cast("SystemSecurityPlanDocument", doc.root)
 
 
@@ -306,7 +334,7 @@ def parse_assessment_plan(data: str | bytes) -> AssessmentPlanDocument:
     """Parse an OSCAL Assessment Plan document (accepts `str` or `bytes`)."""
     doc = parse_oscal(data)
     if not hasattr(doc.root, "assessment_plan"):
-        raise OscalParseError("Document is not an Assessment Plan")
+        raise OscalDocumentTypeMismatchError("Document is not an Assessment Plan")
     return cast("AssessmentPlanDocument", doc.root)
 
 
@@ -314,7 +342,7 @@ def parse_assessment_results(data: str | bytes) -> AssessmentResultsDocument:
     """Parse an OSCAL Assessment Results document (accepts `str` or `bytes`)."""
     doc = parse_oscal(data)
     if not hasattr(doc.root, "assessment_results"):
-        raise OscalParseError("Document is not Assessment Results")
+        raise OscalDocumentTypeMismatchError("Document is not Assessment Results")
     return cast("AssessmentResultsDocument", doc.root)
 
 
@@ -327,7 +355,9 @@ def parse_plan_of_action_and_milestones(
     """
     doc = parse_oscal(data)
     if not hasattr(doc.root, "plan_of_action_and_milestones"):
-        raise OscalParseError("Document is not a Plan of Action and Milestones")
+        raise OscalDocumentTypeMismatchError(
+            "Document is not a Plan of Action and Milestones"
+        )
     return cast("PlanOfActionAndMilestonesDocument", doc.root)
 
 
@@ -335,5 +365,5 @@ def parse_mapping_collection(data: str | bytes) -> MappingCollectionDocument:
     """Parse an OSCAL Mapping Collection document (accepts `str` or `bytes`)."""
     doc = parse_oscal(data)
     if not hasattr(doc.root, "mapping_collection"):
-        raise OscalParseError("Document is not a Mapping Collection")
+        raise OscalDocumentTypeMismatchError("Document is not a Mapping Collection")
     return cast("MappingCollectionDocument", doc.root)

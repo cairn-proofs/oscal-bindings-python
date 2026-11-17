@@ -20,7 +20,13 @@ from support.expected_failures import EXPECTED_FAILURES
 from support.spec_artifact import corpus_root
 
 import oscal_bindings as ob
-from oscal_bindings import OscalAccessError, OscalDoc, OscalParseError
+from oscal_bindings import (
+    OscalAccessError,
+    OscalDoc,
+    OscalDocumentTypeMismatchError,
+    OscalParseError,
+    OscalUnknownElementTypeError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -41,19 +47,17 @@ TYPED_PARSERS: dict[str, Callable[[str | bytes], Any]] = {
 def category(error: BaseException) -> str | None:
     """Map an exception to a corpus error category, or None for any other error.
 
-    The library has no typed error for a document-type mismatch or an unknown
-    element type, so those two categories come from the message prefix.
+    The class of the error is its category. A subclass comes before its parent.
     """
     if isinstance(error, FileNotFoundError):
         return "not-found"
     if isinstance(error, OscalAccessError):
         return "access-error"
+    if isinstance(error, OscalUnknownElementTypeError):
+        return "unknown-element-type"
+    if isinstance(error, OscalDocumentTypeMismatchError):
+        return "document-type-mismatch"
     if isinstance(error, OscalParseError):
-        message = str(error)
-        if message.startswith("Document is not"):
-            return "document-type-mismatch"
-        if message.startswith("Unknown element type"):
-            return "unknown-element-type"
         return "parse-error"
     return None
 
@@ -231,8 +235,8 @@ def test_every_category_is_mapped() -> None:
     mapped = {
         category(FileNotFoundError()),
         category(OscalAccessError()),
-        category(OscalParseError("Document is not a Catalog")),
-        category(OscalParseError("Unknown element type: x")),
+        category(OscalDocumentTypeMismatchError("Document is not a Catalog")),
+        category(OscalUnknownElementTypeError("Unknown element type: x")),
         category(OscalParseError("Failed to parse")),
     }
     assert set(index["categories"]) == mapped

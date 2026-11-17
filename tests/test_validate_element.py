@@ -7,6 +7,7 @@ from oscal_bindings import (
     validate_element,
 )
 from oscal_bindings.parser import OscalParseError
+from oscal_bindings.v1 import OscalUnknownElementTypeError
 
 # Minimal valid observation
 VALID_OBSERVATION = {
@@ -87,7 +88,7 @@ class TestValidateElementEnumAndUnion:
         assert result.errors
 
     def test_root_model_is_not_an_element_type(self):
-        with pytest.raises(OscalParseError, match="Unknown element type"):
+        with pytest.raises(OscalUnknownElementTypeError, match="Unknown element type"):
             validate_element({}, "root-model")
 
 
@@ -95,8 +96,13 @@ class TestValidateElementErrors:
     """Tests for error handling."""
 
     def test_unknown_element_type_raises(self):
-        with pytest.raises(OscalParseError, match="Unknown element type"):
+        with pytest.raises(OscalUnknownElementTypeError, match="Unknown element type"):
             validate_element({}, "nonexistent-type")
+
+    def test_unknown_element_type_is_not_a_parse_error(self):
+        with pytest.raises(OscalUnknownElementTypeError) as excinfo:
+            validate_element({}, "nonexistent-type")
+        assert not isinstance(excinfo.value, OscalParseError)
 
     def test_error_path_populated(self):
         result = validate_element({}, "observation")
