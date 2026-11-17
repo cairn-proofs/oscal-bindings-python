@@ -134,4 +134,4 @@ Both serialize to the value string.
 
 ## Element Validation Model
 
-`v1/extensions/validate_element.py` builds `_ELEMENT_MAP` by introspecting every `BaseModel` subclass in `v1/models.py` (excluding `BaseModel` and `OscalBaseModel` themselves) and converting its class name to kebab-case. So the set of validatable element types is derived directly from the generated model classes — see `get_supported_element_types()` for the live list (includes `catalog`, `metadata`, `observation`, `back-matter`, `back-matter-resource-rlink`, etc.).
+`v1/extensions/validate_element.py` builds `_ELEMENT_MAP` by introspecting each manifest type in `v1/models.py` (a `BaseModel` subclass, an `Enum` subclass, or a union alias) and converting its name to kebab-case. So the set of validatable element types is derived directly from the generated module and covers every manifest type — see `get_supported_element_types()` for the live list (includes `catalog`, `metadata`, `observation`, `back-matter`, `back-matter-resource-rlink`, etc.).

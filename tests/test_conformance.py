@@ -169,13 +169,21 @@ def _validate_element(case: dict[str, Any], src: Path) -> None:
     assert result.valid is case["expected-valid"], result.errors
 
 
-OPERATIONS: dict[str, Callable[[dict[str, Any], Path], None]] = {
+def _element_types(case: dict[str, Any]) -> None:
+    """Compare the list of element types with the expected list, item by item."""
+    expected = json.loads((corpus_root() / case["expected"]).read_text("utf-8"))
+    assert ob.get_supported_element_types() == expected
+
+
+# Each operation takes the case, and the input path when the case has ``input``.
+OPERATIONS: dict[str, Callable[..., None]] = {
     "round-trip": _round_trip,
     "parse": _parse,
     "parse-typed": _parse_typed,
     "parse-file": _parse_file,
     "assessment-period": _assessment_period,
     "validate-element": _validate_element,
+    "element-types": _element_types,
     "yaml-round-trip": _yaml_round_trip,
     "yaml-parse": _yaml_parse,
 }
@@ -184,7 +192,8 @@ OPERATIONS: dict[str, Callable[[dict[str, Any], Path], None]] = {
 def test_case(case: dict[str, Any]) -> None:
     """Run one corpus case and compare its result with the expected result."""
     assert case["operation"] in OPERATIONS, f"unknown operation {case['operation']}"
-    OPERATIONS[case["operation"]](case, corpus_root() / case["input"])
+    inputs = [corpus_root() / case["input"]] if "input" in case else []
+    OPERATIONS[case["operation"]](case, *inputs)
 
 
 def test_yaml_case_with_the_pure_python_parser(

@@ -65,6 +65,32 @@ class TestValidateElementInvalid:
         )
 
 
+class TestValidateElementEnumAndUnion:
+    """Tests for the enum and union element types."""
+
+    def test_enum_accepts_its_string_value(self):
+        assert validate_element("SHA-256", "hash-algorithm").valid is True
+
+    def test_enum_rejects_another_string(self):
+        result = validate_element("sha-256", "hash-algorithm")
+        assert result.valid is False
+        assert result.errors
+
+    def test_union_accepts_a_valid_variant(self):
+        parameter = {"id": "p1", "values": ["a"]}
+        assert validate_element(parameter, "parameter").valid is True
+
+    def test_union_rejects_an_unknown_key(self):
+        parameter = {"id": "p1", "values": ["a"], "unknown-key": 1}
+        result = validate_element(parameter, "parameter")
+        assert result.valid is False
+        assert result.errors
+
+    def test_root_model_is_not_an_element_type(self):
+        with pytest.raises(OscalParseError, match="Unknown element type"):
+            validate_element({}, "root-model")
+
+
 class TestValidateElementErrors:
     """Tests for error handling."""
 
