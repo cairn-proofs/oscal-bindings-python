@@ -38,6 +38,9 @@ flowchart TD
    must be valid for the base datatype. An open-enum site replaces only the `enum` branch of its `anyOf`.
 6. Property `title`/`description` stay beside the `$ref`, and a union branch without a `description` takes that of its
    union, so fields and variant classes keep their docs.
+7. The definitions of the four datatypes `URIDatatype`, `URIReferenceDatatype`, `EmailAddressDatatype`, and
+   `DateTimeWithTimezoneDatatype` become `{"type": "string", "customTypePath": "oscal_bindings.v1._datatypes.<Name>"}`
+   with their `description`. Codegen emits the hand-written type at each site, with no `pattern` beside it.
 
 The output is deterministic: two runs give byte-identical copies.
 
@@ -48,8 +51,8 @@ The output is deterministic: two runs give byte-identical copies.
 1. **`add_single_or_many`** — `MappingCollectionMappings` as `RootModel[Mapping | list[Mapping]]`, replacing the inline
    union of the field.
 2. **Phase 1** — `collapse_scalar_root_models` (scalar `RootModel[...]` → `Annotated` alias, manifest root models
-   kept), `ensure_annotated_import`, `fix_email_str_patterns` / `fix_non_string_patterns` (strip `pattern=` from
-   `EmailStr`, `AwareDatetime`, `AnyUrl`, and numeric fields).
+   kept), `ensure_annotated_import`, `place_patterns` (reads the base type of each `Annotated`: a `str` pattern stays,
+   translated by `regex_translation.translate`; a number pattern goes; a pattern on another base is a failure).
 3. **`scalar_renames`** — each scalar alias is named from its definition key without the `oscal-complete-oscal-<module>:`
    prefix (`LocationUuid`). A target name that is not PascalCase (`[A-Z][A-Za-z0-9]*`), or that a module-level import
    binds, is a failure.

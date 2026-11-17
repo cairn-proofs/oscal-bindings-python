@@ -68,7 +68,6 @@ RAW = (
     HEADER
     + _enum("HashAlgorithm", "sha")
     + _object("Mapping", "uuid: str")
-    # Phase 1 reads the 10 lines above a pattern, so the imports stay out of reach.
     + "\n\nclass OscalCompleteOscalMetadataLocationUuid(RootModel[str]):\n"
     "    root: Annotated[str, Field(pattern='^[0-9a-f]+$', title='Location')]\n"
     + "\n\nclass TokenDatatype(RootModel[str]):\n"
@@ -514,21 +513,153 @@ class TestPhase1:
         result = pp.collapse_scalar_root_models(source, frozenset({"Keep"}))
         assert result == source
 
-    def test_email_pattern_is_removed(self) -> None:
-        source = "x: Annotated[EmailStr, Field(pattern='^.+@.+$', title='E')]"
-        assert pp.fix_email_str_patterns(source) == (
-            "x: Annotated[EmailStr, Field(title='E')]"
-        )
 
-    def test_non_string_pattern_is_removed(self) -> None:
+def _annotated(base: str, *fields: str) -> str:
+    """A field of ``base`` with a multi-line ``Field``, as codegen writes it."""
+    body = "".join(f"        {field},\n" for field in fields)
+    return f"x: Annotated[\n    {base},\n    Field(\n{body}    ),\n]"
+
+
+class TestPlacePatterns:
+    """D1: a pattern stays, goes, or fails by the base of its ``Annotated``."""
+
+    @staticmethod
+    def _place(source: str) -> tuple[str, list[str]]:
+        failures: list[str] = []
+        return pp.place_patterns(source, failures), failures
+
+    def test_string_pattern_stays_and_is_translated(self) -> None:
+        source = _annotated("str", "pattern='^\\\\S(.*\\\\S)?$'", "title='T'")
+        result, failures = self._place(source)
+        assert failures == []
+        assert "pattern='^[^" in result
+        assert "(.*" not in result
+        assert result.count("title='T'") == 1
+
+    def test_optional_string_pattern_stays(self) -> None:
+        source = _annotated("str | None", "pattern='^d$'", "title='T'")
+        assert self._place(source) == (source, [])
+
+    @pytest.mark.parametrize("word", ["integrity", "point", "float", "int", "bool"])
+    def test_a_type_name_in_a_description_does_not_remove_a_string_pattern(
+        self, word: str
+    ) -> None:
+        # The line scan took the substring "int" of "integrity" for the base type
+        # and removed the pattern of 23 str fields (#77).
+        source = _annotated(
+            "str", f"description='Keeps the {word} of the point.'", "pattern='^d$'"
+        )
+        assert self._place(source) == (source, [])
+
+    def test_pattern_on_a_number_goes(self) -> None:
+        for base in ("int", "float", "int | None", "float | None"):
+            source = _annotated(base, "description='D'", "pattern='^d$'", "title='T'")
+            result, failures = self._place(source)
+            assert failures == []
+            assert "pattern" not in result
+            assert ast_parses(result)
+            assert "description='D'" in result
+            assert "title='T'" in result
+
+    @pytest.mark.parametrize(
+        ("source", "expected"),
+        [
+            ("x: Annotated[int, Field(pattern='^d$')]", "x: Annotated[int, Field()]"),
+            (
+                "x: Annotated[int, Field(pattern='^d$', title='T')]",
+                "x: Annotated[int, Field(title='T')]",
+            ),
+            (
+                "x: Annotated[int, Field(title='T', pattern='^d$')]",
+                "x: Annotated[int, Field(title='T')]",
+            ),
+            (
+                "x: Annotated[int, Field(pattern='^d$',)]",
+                "x: Annotated[int, Field()]",
+            ),
+        ],
+    )
+    def test_removal_leaves_valid_source(self, source: str, expected: str) -> None:
+        assert self._place(source) == (expected, [])
+
+    def test_removal_keeps_non_ascii_text_in_place(self) -> None:
+        source = _annotated(
+            "float", "description='Größe é'", "pattern='^d$'", "title='é'"
+        )
+        result, failures = self._place(source)
+        assert failures == []
+        assert "description='Größe é'" in result
+        assert "title='é'" in result
+        assert "pattern" not in result
+
+    def test_a_pattern_on_another_base_fails_and_names_the_site(self) -> None:
         source = (
-            "x: Annotated[\n    AwareDatetime,\n    Field(pattern='^d$', title='T'),\n]"
+            "class A(OscalBaseModel):\n"
+            "    flag: Annotated[bool, Field(pattern='^d$')]\n"
+            "    when: Annotated[AwareDatetime, Field(pattern='^d$')]\n"
+            "    mixed: Annotated[str | int, Field(pattern='^d$')]\n"
+            "    many: Annotated[list[str], Field(pattern='^d$')]\n"
+            "    typed: Annotated[AnyUrl | None, Field(pattern='^d$')]\n"
+            "\n\nAlias = Annotated[bool, Field(pattern='^d$')]\n"
         )
-        assert "pattern=" not in pp.fix_non_string_patterns(source)
+        failures: list[str] = []
+        result = pp.place_patterns(source, failures)
+        assert result == source
+        assert len(failures) == 6
+        for site in ("A.flag", "A.when", "A.mixed", "A.many", "A.typed", "Alias"):
+            assert sum(f.startswith(f"{site}: ") for f in failures) == 1
+        assert any("bool" in f for f in failures)
+        assert any("str | int" in f for f in failures)
+        assert any("AwareDatetime" in f for f in failures)
 
-    def test_string_pattern_stays(self) -> None:
-        source = "x: Annotated[\n    str,\n    Field(pattern='^d$', title='T'),\n]"
-        assert pp.fix_non_string_patterns(source) == source
+    def test_a_pattern_outside_an_annotated_fails(self) -> None:
+        source = "class A(OscalBaseModel):\n    name: str = Field(pattern='^d$')\n"
+        failures: list[str] = []
+        pp.place_patterns(source, failures)
+        assert len(failures) == 1
+        assert "line 2" in failures[0]
+
+    def test_a_pattern_that_cannot_be_translated_fails(self) -> None:
+        source = _annotated("str", "pattern='(?=a)b'")
+        failures: list[str] = []
+        assert pp.place_patterns(source, failures) == source
+        assert len(failures) == 1
+        assert "x: " in failures[0] or "(?=a)b" in failures[0]
+
+    def test_one_run_reports_each_failure_and_writes_no_output(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        raw = (
+            RAW + "\n\nclass Bad(OscalBaseModel):\n"
+            "    flag: Annotated[bool, Field(pattern='^d$')]\n"
+            "    when: Annotated[AwareDatetime, Field(pattern='^d$')]\n"
+        )
+        failures = _failures(raw)
+        assert sum("Bad.flag" in f for f in failures) == 1
+        assert sum("Bad.when" in f for f in failures) == 1
+        monkeypatch.setattr(pp, "load_manifest", lambda _schema: _manifest())
+        (tmp_path / "schema.json").write_text(json.dumps(SCHEMA))
+        (tmp_path / "models.py").write_text(raw)
+        output = tmp_path / "out.py"
+        status = pp.main(
+            [
+                "--models",
+                str(tmp_path / "models.py"),
+                "--schema",
+                str(tmp_path / "schema.json"),
+                "--output",
+                str(output),
+            ]
+        )
+        assert status == 1
+        assert not output.exists()
+
+
+def ast_parses(source: str) -> bool:
+    import ast
+
+    ast.parse(source)
+    return True
 
 
 # ---------------------------------------------------------------------------

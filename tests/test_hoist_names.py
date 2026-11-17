@@ -10,22 +10,39 @@ accepts and rejects the same documents as the artifact schema.
 from __future__ import annotations
 
 import copy
+import enum
+import importlib
 import json
-from typing import TYPE_CHECKING, Any
+import types
+from dataclasses import dataclass
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 import jsonschema_rs
 import pytest
+from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 from support.corpus import AWS_CORPUS, NIST_CORPUS, load_corpus_docs
 from support.scripts import load_script
 from support.spec_artifact import ensure_spec_artifact
 
+from oscal_bindings.v1 import models
+
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
     from pathlib import Path
 
 hoist_mod = load_script("hoist_names")
 manifest_mod = load_script("manifest")
 pin = load_script("spec_artifact")
+translate = load_script("regex_translation").translate
 
 HoistError = hoist_mod.HoistError
 
@@ -618,9 +635,18 @@ def test_schema_without_definitions_fails(manifest: dict[str, Any]) -> None:
 def _validators(
     artifact_schema: dict[str, Any], hoisted: dict[str, Any], *, formats: bool
 ) -> tuple[Any, Any]:
+    """Validators of the artifact schema and of the hoisted copy.
+
+    The hoist replaces the four hand-written datatypes with custom types that no
+    schema validator reads, so the copy here gets their original definitions
+    back. The comparison then covers all the other changes of the hoist.
+    """
+    restored = copy.deepcopy(hoisted)
+    for key in hoist_mod.HAND_WRITTEN_DATATYPES:
+        restored["definitions"][key] = artifact_schema["definitions"][key]
     return (
         jsonschema_rs.Draft7Validator(artifact_schema, validate_formats=formats),
-        jsonschema_rs.Draft7Validator(hoisted, validate_formats=formats),
+        jsonschema_rs.Draft7Validator(restored, validate_formats=formats),
     )
 
 
@@ -751,3 +777,231 @@ def test_closed_enum_values_validate_the_same(
     before, after = _validators(artifact_schema, hoisted, formats=False)
     assert before.is_valid(catalog) is valid
     assert after.is_valid(catalog) is valid
+
+
+# ---------------------------------------------------------------------------
+# Completeness: each string pattern and datatype of the schema reaches a model
+
+DATATYPES = {
+    "URIDatatype": "OscalUri",
+    "URIReferenceDatatype": "OscalUriReference",
+    "EmailAddressDatatype": "OscalEmailAddress",
+    "DateTimeWithTimezoneDatatype": "OscalDateTimeWithTimezone",
+}
+
+
+@dataclass(frozen=True)
+class Site:
+    """A string value that a property of an object definition reaches.
+
+    ``datatype`` is the definition key of one of the four datatypes when the
+    ``$ref`` chain of the site reaches it. ``patterns`` holds each pattern of
+    the chain, in schema form. ``is_enum`` is true when the chain holds an
+    ``enum``.
+    """
+
+    owner: str
+    prop: str
+    datatype: str | None
+    patterns: tuple[str, ...]
+    is_enum: bool
+
+    def __str__(self) -> str:
+        what = self.datatype or ("enum" if self.is_enum else "pattern")
+        return f"{self.owner}.{self.prop} ({what}) {list(self.patterns)}"
+
+
+def _sites_of(
+    definitions: dict[str, Any], node: Any, owner: str, prop: str
+) -> Iterator[Site]:
+    """Yield each string site of ``node``: an ``allOf`` is one, an ``anyOf`` many."""
+    if not isinstance(node, dict):
+        return
+    for member in node.get("anyOf", node.get("oneOf", [])):
+        yield from _sites_of(definitions, member, owner, prop)
+    if "anyOf" in node or "oneOf" in node:
+        return
+    if node.get("type") == "array":
+        yield from _sites_of(definitions, node.get("items"), owner, prop)
+        return
+    datatype: str | None = None
+    patterns: list[str] = []
+    is_enum = False
+    is_string = False
+    pending: list[Any] = [node]
+    while pending:
+        current = pending.pop()
+        if not isinstance(current, dict):
+            continue
+        ref = current.get("$ref")
+        if isinstance(ref, str):
+            key = ref.removeprefix("#/definitions/")
+            if key in DATATYPES:
+                datatype = key
+                is_string = True
+                continue
+            pending.append(definitions[key])
+        is_string = is_string or current.get("type") == "string"
+        is_enum = is_enum or "enum" in current
+        if "pattern" in current:
+            patterns.append(current["pattern"])
+        pending.extend(current.get("allOf", []))
+        # A member of an anyOf below an allOf is its own site.
+        for alternative in current.get("anyOf", []):
+            yield from _sites_of(definitions, alternative, owner, prop)
+    if is_string:
+        yield Site(owner, prop, datatype, tuple(patterns), is_enum)
+
+
+def _schema_sites(hoisted: dict[str, Any]) -> list[Site]:
+    definitions = hoisted["definitions"]
+    sites: list[Site] = []
+    for key, definition in definitions.items():
+        # An object definition has `properties`. Some have no `type` keyword.
+        if not isinstance(definition, dict) or "properties" not in definition:
+            continue
+        for prop, node in definition["properties"].items():
+            sites.extend(_sites_of(definitions, node, key, prop))
+    return sites
+
+
+@dataclass(frozen=True)
+class Leaf:
+    """A leaf type of a model field, with the constraints that apply to it."""
+
+    base: Any
+    markers: tuple[Any, ...]
+    patterns: tuple[str, ...]
+
+
+def _flatten(metadata: Iterable[Any]) -> Iterator[Any]:
+    for item in metadata:
+        if isinstance(item, FieldInfo):
+            yield from _flatten(item.metadata)
+        else:
+            yield item
+
+
+def _leaves(annotation: Any, metadata: tuple[Any, ...] = ()) -> Iterator[Leaf]:
+    """Open ``Annotated``, unions, and lists down to the leaf types.
+
+    The metadata of an ``Annotated`` union applies to each arm, as pydantic
+    applies a ``pattern`` of ``Annotated[str | None, Field(pattern=...)]`` to
+    the ``str``. The metadata of a list applies to the list, not to its items.
+    """
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        base, *extra = get_args(annotation)
+        yield from _leaves(base, (*metadata, *extra))
+    elif origin is Union or origin is types.UnionType:
+        for arm in get_args(annotation):
+            yield from _leaves(arm, metadata)
+    elif origin is list:
+        yield from _leaves(get_args(annotation)[0])
+    elif annotation is not type(None):
+        flat = tuple(_flatten(metadata))
+        patterns = tuple(
+            m.pattern for m in flat if isinstance(getattr(m, "pattern", None), str)
+        )
+        yield Leaf(annotation, flat, patterns)
+
+
+def _is_datatype(leaf: Leaf, name: str) -> bool:
+    """Whether ``leaf`` is the hand-written type ``name`` of ``_datatypes``."""
+    try:
+        module = importlib.import_module("oscal_bindings.v1._datatypes")
+    except ImportError:
+        return False
+    declared = getattr(module, name, None)
+    if declared is None:
+        return False
+    markers = get_args(declared)[1:]
+    return get_args(declared)[0] is leaf.base and all(
+        any(m is marker for m in leaf.markers) for marker in markers
+    )
+
+
+def _model_leaves(owner: str, prop: str) -> list[Leaf] | None:
+    """The leaves of the field of ``owner`` with the alias ``prop``, or ``None``."""
+    cls = getattr(models, owner, None)
+    if not (isinstance(cls, type) and issubclass(cls, BaseModel)):
+        return None
+    hints = get_type_hints(cls, vars(models), include_extras=True)
+    for name, info in cls.model_fields.items():
+        if (info.alias or name) == prop:
+            return list(_leaves(hints[name]))
+    return None
+
+
+def _site_is_covered(site: Site, leaves: list[Leaf]) -> bool:
+    if site.datatype is not None:
+        return any(_is_datatype(leaf, DATATYPES[site.datatype]) for leaf in leaves)
+    if site.is_enum:
+        return any(
+            isinstance(leaf.base, type) and issubclass(leaf.base, enum.Enum)
+            for leaf in leaves
+        )
+    if not site.patterns:
+        return True
+    expected = sorted(translate(p) for p in site.patterns)
+    return any(sorted(leaf.patterns) == expected for leaf in leaves)
+
+
+def test_each_string_site_of_the_schema_reaches_a_model(
+    hoisted: dict[str, Any],
+) -> None:
+    """Design D7: a datatype site has its type, a pattern site its pattern."""
+    sites = _schema_sites(hoisted)
+    assert {s.datatype for s in sites} >= set(DATATYPES), "a datatype has no site"
+    assert sum(1 for s in sites if s.patterns) > 100
+    missing: list[str] = []
+    uncovered: list[str] = []
+    for site in sites:
+        leaves = _model_leaves(site.owner, site.prop)
+        if leaves is None:
+            missing.append(str(site))
+        elif not _site_is_covered(site, leaves):
+            uncovered.append(str(site))
+    assert missing == []
+    assert sorted(set(uncovered)) == []
+
+
+# ---------------------------------------------------------------------------
+# 5.1 The four hand-written datatypes get a custom type
+
+
+@pytest.mark.parametrize("key", sorted(hoist_mod.HAND_WRITTEN_DATATYPES))
+def test_hand_written_datatype_has_its_custom_type(
+    hoisted: dict[str, Any], artifact_schema: dict[str, Any], key: str
+) -> None:
+    original = artifact_schema["definitions"][key]
+    definition = hoisted["definitions"][key]
+    assert definition["customTypePath"] == hoist_mod.HAND_WRITTEN_DATATYPES[key]
+    assert definition["type"] == "string"
+    assert definition["description"] == original["description"]
+    assert definition.get("title") == original.get("title")
+    assert not {"pattern", "format", "allOf"} & set(definition)
+
+
+def test_hand_written_datatypes_are_the_four_with_a_format(
+    artifact_schema: dict[str, Any],
+) -> None:
+    assert set(hoist_mod.HAND_WRITTEN_DATATYPES) == {
+        "DateTimeWithTimezoneDatatype",
+        "EmailAddressDatatype",
+        "URIDatatype",
+        "URIReferenceDatatype",
+    }
+    assert all(
+        "customTypePath" not in definition
+        for definition in artifact_schema["definitions"].values()
+    )
+
+
+def test_a_schema_without_a_hand_written_datatype_fails(
+    schema: dict[str, Any], manifest: dict[str, Any]
+) -> None:
+    del schema["definitions"]["URIDatatype"]
+    with pytest.raises(HoistError) as info:
+        hoist_mod.hoist(schema, manifest)
+    assert any("URIDatatype" in failure for failure in info.value.failures)

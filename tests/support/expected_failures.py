@@ -24,8 +24,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "assessment-period/mixed-offsets": f"{ISSUES}/58",
     "assessment-period/equal-instant": f"{ISSUES}/58",
     "assessment-period/seventh-fraction-digit": f"{ISSUES}/58",
-    # BMB-003: the generated DocumentId.identifier has no pattern, so it accepts "".
-    "build-resource/invalid-document-id": f"{ISSUES}/77",
     # FAC-001 to FAC-003: the runner lacks the facade operation.
     **dict.fromkeys(
         (

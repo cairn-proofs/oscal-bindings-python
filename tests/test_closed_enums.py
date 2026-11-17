@@ -2,7 +2,7 @@
 
 A closed-enum field holds the Enum class, for example ``how_many:
 ParameterSelectionHowMany | None``. An open-enum field is the union of a base
-type (``str`` or ``AnyUrl``) and its Enum class, so it also accepts values
+type (``str`` or ``OscalUri``) and its Enum class, so it also accepts values
 outside the enum. Both serialize to the value string.
 """
 
@@ -57,7 +57,7 @@ class EnumSite:
     field: str
     alias: str
     is_list: bool
-    # The annotation also has a base arm, for example ``str`` or ``AnyUrl``, that
+    # The annotation also has a base arm, for example ``str`` or ``OscalUri``, that
     # takes values outside the enum: an open enum.
     is_open: bool
 
