@@ -21,7 +21,7 @@ pin today's behavior:
 - ``serialize_oscal`` byte-identity (3.1) was checked once against pre-fix
   SHA-256 digests of every corpus doc; it isn't re-tested here because
   ``serialize_oscal`` is a one-line ``model_dump_json`` call.
-- ``get_supported_element_types()`` equals the committed pre-fix snapshot (3.7).
+- ``get_supported_element_types()`` lists each manifest type once (3.7).
 - Builders with valid arguments equal the pre-fix alias-dict construction (3.8).
 - ``OscalDoc`` accessors and attribute access by Python name are unchanged
   (3.9, 3.11).
@@ -38,7 +38,6 @@ import functools
 import importlib
 import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -99,8 +98,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
     from support.corpus import CorpusDoc
-
-SNAPSHOT_PATH = Path(__file__).parent / "support" / "element_types_snapshot.txt"
 
 ROOT_CAUSE_5 = (
     "If this fails after the OscalBaseModel fix, pydantic may no longer honor "
@@ -589,44 +586,22 @@ def test_unknown_key_rejected_at_depth(
 # --- Element types (3.7) -----------------------------------------------------
 
 
-def test_supported_element_types_match_pre_fix_snapshot() -> None:
-    """**Validates: Requirements 3.7**"""
-    snapshot = SNAPSHOT_PATH.read_text(encoding="utf-8").split()
-    assert len(snapshot) == len(set(snapshot)), "duplicate names in the snapshot"
-    current = get_supported_element_types()
-    assert set(current) == set(snapshot), (
-        f"added: {sorted(set(current) - set(snapshot))}; "
-        f"removed: {sorted(set(snapshot) - set(current))}"
-    )
-    assert "oscal-base-model" not in current
-    assert "root-model" in current  # pre-existing quirk, preserved on purpose
-
-
-# Manifest kinds that generate a model class. An ``enum`` entry generates an
-# Enum class, and a ``union`` entry generates a type alias; neither is an
-# element type.
-_ELEMENT_KINDS = frozenset({"object", "document", "document-union", "single-or-many"})
-
-
 def test_element_types_are_manifest_class_names() -> None:
     """Each element-type string is the kebab-case form of a manifest name.
 
-    The kebab-case form comes from ``validate_element``'s own converter. The one
-    exception is ``root-model``: models.py imports pydantic's ``RootModel``, and
-    the element map keeps it (see the snapshot test above). It is not an OSCAL
-    type, so the manifest has no entry for it.
+    The kebab-case form comes from ``validate_element``'s own converter. Every
+    manifest type has an element type, whatever its kind, and no other name is
+    listed.
     """
     pin = load_script("spec_artifact")
     manifest = load_script("manifest").load_validated_manifest(
         pin.artifact_paths(ensure_spec_artifact())
     )
-    kinds = {entry["name"]: entry["kind"] for entry in manifest["types"]}
-    class_names = sorted(n for n, k in kinds.items() if k in _ELEMENT_KINDS)
-    kebab = {_pascal_to_kebab(n): n for n in class_names}
-    assert len(kebab) == len(class_names), "two manifest names share a kebab form"
+    names = sorted(entry["name"] for entry in manifest["types"])
+    kebab = {_pascal_to_kebab(n): n for n in names}
+    assert len(kebab) == len(names), "two manifest names share a kebab form"
 
-    assert _ELEMENT_MAP["root-model"] is RootModel
-    current = set(get_supported_element_types()) - {"root-model"}
+    current = set(get_supported_element_types())
     assert current == set(kebab), (
         f"not from a manifest name: {sorted(current - set(kebab))}; "
         f"manifest names without an element type: {sorted(set(kebab) - current)}"

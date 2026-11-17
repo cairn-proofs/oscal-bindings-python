@@ -85,10 +85,10 @@ graph LR
 **Responsibility:** Validate an arbitrary OSCAL element fragment (a dict) against its model.
 
 - `_pascal_to_kebab(name)` — converts model class names to kebab element types.
-- `_build_element_map()` — introspects `oscal_bindings.v1.models` for all `BaseModel` subclasses except `BaseModel` and `OscalBaseModel` themselves, building `{kebab-name: model class}`; result cached in module-level `_ELEMENT_MAP`. The pre-existing `root-model` entry (from the `RootModel` import) is kept; the set is pinned by `tests/support/element_types_snapshot.txt`.
-- `validate_element` calls `model_validate(element)` with no extra kwargs; dict input stays alias-only from the models' defaults.
+- `_build_element_map()` — introspects `oscal_bindings.v1.models` for each manifest type by its run-time form (a `BaseModel` subclass, an `Enum` subclass, or a `types.UnionType` alias that `models` defines), building `{kebab-name: type}`; result cached in module-level `_ELEMENT_MAP`. The set is pinned by the `element-types/all` corpus case.
+- `validate_element` calls `model_validate(element)` for a model, and a `TypeAdapter` (made on first use, cached in `_ADAPTERS`) for an enum or a union; dict input stays alias-only from the models' defaults.
 - `get_supported_element_types() -> list[str]` — sorted kebab names.
-- `validate_element(element: dict|None, element_type: str) -> ElementValidationResult` — raises `OscalParseError` for unknown types; otherwise returns a result with `valid` and a list of `ValidationError(path, message)`.
+- `validate_element(element: Any, element_type: str) -> ElementValidationResult` — raises `OscalParseError` for unknown types; otherwise returns a result with `valid` and a list of `ValidationError(path, message)`.
 - Dataclasses `ElementValidationResult` and `ValidationError` (re-exported as `ElementValidationError`).
 
 ## 6. `v1/__init__.py` — version package surface

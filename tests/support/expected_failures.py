@@ -26,8 +26,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     "assessment-period/mixed-offsets": f"{ISSUES}/58",
     "assessment-period/equal-instant": f"{ISSUES}/58",
     "assessment-period/seventh-fraction-digit": f"{ISSUES}/58",
-    # ELV-002: one element-type name for each manifest type.
-    "element-types/all": f"{ISSUES}/59",
     # BMB-004, ERR-013: resource identifier from a key, builder-error category.
     "build-resource/key": f"{ISSUES}/62",
     "build-resource/key-with-title": f"{ISSUES}/62",
