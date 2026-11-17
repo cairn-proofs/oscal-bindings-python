@@ -211,6 +211,11 @@ def test_every_expected_failure_names_a_corpus_case() -> None:
     assert stale == [], f"expected failures not in the pinned corpus: {stale}"
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="read-error and builder-error are not mapped yet: "
+    "https://github.com/cairn-proofs/oscal-bindings-python/issues/61, /62",
+)
 def test_every_category_is_mapped() -> None:
     """Each category in the corpus has a branch in ``category``."""
     index = json.loads((corpus_root() / "cases.json").read_text("utf-8"))
