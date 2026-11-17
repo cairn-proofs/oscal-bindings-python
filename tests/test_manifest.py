@@ -184,23 +184,51 @@ def test_nam_003_04_item_and_member_references_must_name_an_entry(
     )
 
 
-def test_nam_003_05_unknown_format_version_is_rejected(
+def test_nam_022_01_unsupported_format_version_is_stated(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
     manifest["format"] = 2
-    _assert_fails(
-        _validate(released, manifest), "[names.schema.json] names.json/format"
-    )
+    assert _validate(released, manifest) == [
+        "[manifest] format 2 is not supported (supported: 1)"
+    ]
 
 
-def test_nam_003_05_unknown_format_version_is_rejected_without_json_schema(
+def test_nam_022_02_format_version_is_the_first_check(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
     manifest["format"] = 2
-    _assert_fails(
-        _validate(released, manifest, names_schema={}),
-        "format 2 is not supported",
-    )
+    manifest["unknown"] = True
+    manifest["oscal-release"] = "1.2.4"
+    assert _validate(released, manifest) == [
+        "[manifest] format 2 is not supported (supported: 1)"
+    ]
+
+
+@pytest.mark.parametrize("fmt", [True, "1", 1.5, None, [1]])
+def test_format_value_of_other_type_is_not_supported(
+    released: dict[str, Any], manifest: dict[str, Any], fmt: object
+) -> None:
+    manifest["format"] = fmt
+    assert _validate(released, manifest) == [
+        f"[manifest] format {fmt!r} is not supported (supported: 1)"
+    ]
+
+
+def test_nam_021_01_manifest_without_format_is_invalid(
+    released: dict[str, Any], manifest: dict[str, Any]
+) -> None:
+    del manifest["format"]
+    manifest["unknown"] = True
+    assert _validate(released, manifest) == [
+        "[manifest] names.json has no format member"
+    ]
+
+
+@pytest.mark.parametrize("value", [[], "names", 1, None])
+def test_nam_021_01_manifest_that_is_not_an_object_is_invalid(
+    released: dict[str, Any], value: object
+) -> None:
+    assert _validate(released, value) == ["[manifest] names.json is not a JSON object"]
 
 
 def test_other_oscal_release_is_rejected(

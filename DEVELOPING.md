@@ -107,8 +107,8 @@ rule for a manifest type. `hatch run generate` runs three steps:
 1. `scripts/hoist_names.py` writes `build/codegen/oscal_complete_schema.json` (git-ignored).
    1. It fetches the spec artifact that `scripts/spec_artifact.py` pins (`0.8.0+oscal.1.2.3`, by sha256) through
       `scripts/pinned_archive.py`.
-   2. `scripts/manifest.py` validates `names.json`: its JSON Schema from the same artifact (with `jsonschema-rs`), the
-      format version and OSCAL release, the sha256 of the artifact schema, unique names, and pointers that resolve.
+   2. `scripts/manifest.py` validates `names.json`: the format version first (NAM-022), then its JSON Schema from the
+      same artifact (with `jsonschema-rs`), the OSCAL release, the sha256 of the artifact schema, unique names, and pointers that resolve.
    3. It copies the complete OSCAL schema of the same artifact (`artifact_paths(...).schema`) and moves each manifest
       site into `definitions/<Name>`, with a `$ref` at each site. It reads the schema bytes one time: the manifest
       check hashes them, and the hoist parses the same bytes. A merge of sites with different bodies fails and names

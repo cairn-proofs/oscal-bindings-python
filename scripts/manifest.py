@@ -5,11 +5,13 @@ the schema sites of each OSCAL type. Generation reads names from it, so it must
 reject an invalid manifest before it uses one string of it. ``validate_manifest``
 applies these checks in order and returns every failure:
 
+0. ``names.json`` is a JSON object with a ``format`` member, and ``format``
+   is a supported format version (NAM-021, NAM-022). A failure here stops the
+   validation: the other checks apply only to a format that this module reads.
 1. ``names.json`` conforms to ``names.schema.json`` of the same artifact. A
    failure here stops the validation, because the later checks assume the
    shape that the JSON Schema defines.
-2. ``format`` is a supported format version, and ``oscal-release`` is the
-   release of the schema that generation uses.
+2. ``oscal-release`` is the release of the schema that generation uses.
 3. ``schema.sha256`` is the sha256 of the schema bytes that generation reads.
    The caller gives these bytes, or ``load_validated_manifest`` reads them one
    time, so the check hashes the same bytes that the caller parses.
@@ -281,6 +283,24 @@ def _cross_failures(manifest: dict[str, object], schema: object) -> list[str]:
     return failures
 
 
+def _format_failure(manifest: object) -> str | None:
+    """Return the format version failure of ``manifest``, or ``None``.
+
+    NAM-022: a consumer reads ``format`` before any JSON Schema check, and
+    states the unsupported value. NAM-021: a manifest that is not a JSON object,
+    or has no ``format`` member, is invalid.
+    """
+    if not isinstance(manifest, dict):
+        return "[manifest] names.json is not a JSON object"
+    if "format" not in manifest:
+        return "[manifest] names.json has no format member"
+    fmt = manifest["format"]
+    if isinstance(fmt, bool) or fmt not in SUPPORTED_FORMATS:
+        supported = ", ".join(str(f) for f in SUPPORTED_FORMATS)
+        return f"[manifest] format {fmt!r} is not supported (supported: {supported})"
+    return None
+
+
 def validate_manifest(
     manifest: object,
     names_schema: dict[str, object],
@@ -293,18 +313,13 @@ def validate_manifest(
     ``names.schema.json``. ``schema_bytes`` are the bytes of the complete OSCAL
     schema that codegen reads, and ``release`` is its OSCAL release.
     """
+    format_failure = _format_failure(manifest)
+    if format_failure is not None:
+        return [format_failure]
     failures = _schema_failures(manifest, names_schema)
-    if failures:
+    if failures or not isinstance(manifest, dict):
         return failures
-    if not isinstance(manifest, dict):
-        return ["[manifest] names.json is not a JSON object"]
 
-    fmt = manifest.get("format")
-    if isinstance(fmt, bool) or fmt not in SUPPORTED_FORMATS:
-        supported = ", ".join(str(f) for f in SUPPORTED_FORMATS)
-        failures.append(
-            f"[manifest] format {fmt!r} is not supported (supported: {supported})"
-        )
     oscal_release = manifest.get("oscal-release")
     if oscal_release != release:
         failures.append(f"[manifest] oscal-release {oscal_release!r} is not {release}")
