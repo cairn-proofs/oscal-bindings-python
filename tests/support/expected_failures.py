@@ -18,4 +18,44 @@ EXPECTED_FAILURES: dict[str, str] = {
     # A round trip keeps six datetime fraction digits and drops the seventh.
     "round-trip/seven-fraction-digits": f"{ISSUES}/19",
     "yaml-round-trip/string-scalars": f"{ISSUES}/19",
+    # PRS-014: only failures of the selected nested-union branch.
+    "parse/closed-enum-out-of-set": f"{ISSUES}/69",
+    # ERR-012: read-error category for a file path that cannot be read.
+    "parse-file/directory": f"{ISSUES}/61",
+    # FAC-007: datetime bounds from assessment_period().
+    "assessment-period/mixed-offsets": f"{ISSUES}/58",
+    "assessment-period/equal-instant": f"{ISSUES}/58",
+    "assessment-period/seventh-fraction-digit": f"{ISSUES}/58",
+    # ELV-002: one element-type name for each manifest type.
+    "element-types/all": f"{ISSUES}/59",
+    # BMB-004, ERR-013: resource identifier from a key, builder-error category.
+    "build-resource/key": f"{ISSUES}/62",
+    "build-resource/key-with-title": f"{ISSUES}/62",
+    "build-resource/non-ascii-key": f"{ISSUES}/62",
+    "build-resource/key-and-identifier": f"{ISSUES}/62",
+    "build-resource/empty-key": f"{ISSUES}/62",
+    # FAC-001 to FAC-003, BMB-001 to BMB-003: the runner lacks these operations.
+    **dict.fromkeys(
+        (
+            "facade/catalog",
+            "facade/profile",
+            "facade/component-definition",
+            "facade/system-security-plan",
+            "facade/assessment-plan",
+            "facade/assessment-results",
+            "facade/plan-of-action-and-milestones",
+            "facade/mapping-collection",
+            "facade/missing-file",
+            "build-hash/default-algorithm",
+            "build-hash/algorithm-string",
+            "build-hash/off-list-algorithm",
+            "build-hash/invalid-algorithm",
+            "build-rlink/reference-only",
+            "build-rlink/media-type-and-hashes",
+            "build-resource/generated-identifier",
+            "build-resource/omitted-inputs",
+            "build-resource/invalid-document-id",
+        ),
+        f"{ISSUES}/63",
+    ),
 }
