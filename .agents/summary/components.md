@@ -79,9 +79,10 @@ graph LR
 
 | Function | Notes |
 |----------|-------|
-| `make_hash(value, algorithm=HashAlgorithm.SHA_256)` | Accepts enum or string (`"SHA-256"`); coerces string via `HashAlgorithm(...)` |
-| `make_rlink(href, *, media_type=None, hashes=None)` | `BackMatterResourceRlink(href=..., media_type=..., hashes=...)` — by-name kwargs via `OscalBaseModel` |
-| `make_resource(*, title, description, rlinks, uuid, document_ids)` | Generates a UUID4 when `uuid` omitted; one `BackMatterResource(...)` call, so `document_ids` is validated at construction (`[]` or non-`DocumentId` items raise `ValidationError`) |
+| `OscalBuilderError(message, errors)` | A `ValueError` that is not an `OscalParseError`; `errors` holds the Pydantic-shaped entries |
+| `make_hash(value, algorithm=HashAlgorithm.SHA_256)` | Accepts enum or string; a string that is a `HashAlgorithm` value gives the member, any other string goes to the model as is; one `model_validate` call |
+| `make_rlink(href, *, media_type=None, hashes=None)` | One `model_validate` of a JSON-shaped object; items of `hashes` are validated, also an item made with `model_construct` |
+| `make_resource(*, title, description, rlinks, uuid, key, document_ids)` | `key` gives the UUID version 5 of the key (an empty key, or a key with `uuid`, raises `OscalBuilderError`); with neither, a UUID4; one `model_validate` call, so `rlinks` and `document_ids` items are validated (`[]` or non-`DocumentId` items raise `OscalBuilderError`) |
 
 ## 5. `v1/extensions/validate_element.py` — element-level validation
 

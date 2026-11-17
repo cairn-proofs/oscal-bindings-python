@@ -1,4 +1,5 @@
 from oscal_bindings.v1.extensions.builders import (
+    OscalBuilderError,
     make_hash,
     make_resource,
     make_rlink,
@@ -33,6 +34,7 @@ __all__ = [
     "ElementValidationResult",
     "OscalAccessError",
     "OscalBody",
+    "OscalBuilderError",
     "OscalDoc",
     "OscalUnknownElementTypeError",
     "OscalWrapper",

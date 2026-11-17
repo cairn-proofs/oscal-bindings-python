@@ -61,7 +61,7 @@ OscalDoc.assessment_period() -> tuple[date | None, date | None]   # AP/AR only
 ```python
 make_hash(value: str, algorithm: str | HashAlgorithm = HashAlgorithm.SHA_256) -> Hash
 make_rlink(href: str, *, media_type: str | None = None, hashes: list[Hash] | None = None) -> BackMatterResourceRlink
-make_resource(*, title=None, description=None, rlinks=None, uuid=None, document_ids=None) -> BackMatterResource
+make_resource(*, title=None, description=None, rlinks=None, uuid=None, key=None, document_ids=None) -> BackMatterResource
 ```
 
 ### Element validation
@@ -128,7 +128,7 @@ sequenceDiagram
 | `assessment_period()` on non-AP/AR | `OscalAccessError` |
 | `OscalDoc(...)` with unrelated object | `TypeError` |
 | `validate_element` unrecognized element type | `OscalUnknownElementTypeError` (outside the parse errors) |
-| Builders with invalid input | `pydantic.ValidationError` |
+| Builders with invalid input (also an empty `key`, or a `key` with a `uuid`) | `OscalBuilderError` (a `ValueError`, outside the parse errors; `.errors` = entries) |
 | `validate_oscal` on invalid input | returns `False` (never raises) |
 
 ## Code-Generation Interface (build-time)

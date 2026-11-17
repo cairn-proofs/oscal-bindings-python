@@ -159,6 +159,22 @@ resource = make_resource(
     ],
 )
 # resource.uuid is a freshly generated UUID4
+
+# A key gives a stable identifier: the UUID version 5 of the key.
+make_resource(key="https://example.org/policies/access-control").uuid
+# '51beb3e9-30bb-535f-ba49-e68d4661aaa9'
+```
+
+An invalid input raises `OscalBuilderError`, a `ValueError` that is not an `OscalParseError`. Its `errors` attribute
+holds the structured entries. An empty `key`, or a `key` with a `uuid`, is invalid.
+
+```python
+from oscal_bindings import OscalBuilderError, make_hash
+
+try:
+    make_hash(digest, algorithm=" SHA-256")
+except OscalBuilderError as e:
+    print(e.errors)
 ```
 
 ### Serialization
