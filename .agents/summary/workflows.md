@@ -22,8 +22,9 @@ flowchart TD
 
 ### 1a. Hoist (`scripts/hoist_names.py`)
 
-1. `load_validated_manifest` (`scripts/manifest.py`) checks `names.json` in order: the manifest JSON Schema of the same
-   artifact (`jsonschema-rs`), the format version and OSCAL release, `schema.sha256` against the artifact schema bytes,
+1. `load_validated_manifest` (`scripts/manifest.py`) checks `names.json` in order: the format version (a JSON object with
+   a supported `format`; a failure stops the checks, NAM-022), the manifest JSON Schema of the same artifact
+   (`jsonschema-rs`), the OSCAL release, `schema.sha256` against the artifact schema bytes,
    then unique names, pointers that occur once and resolve, and type references that name an entry. It raises
    `ManifestError` with every failure. The hoist reads the schema bytes from `paths.schema` one time and parses the
    same bytes that the check hashed.
