@@ -8,7 +8,7 @@ supported element types is a bounded follow-on: add the name to
 class to `_LEAF_MODELS` below.
 
 Property 9 checks that any element type name outside
-`get_supported_element_types()` is rejected with `OscalParseError`.
+`get_supported_element_types()` is rejected with `OscalUnknownElementTypeError`.
 
 Example counts come from the ``ci`` Hypothesis profile registered in
 ``tests/conftest.py`` (``max_examples=100``); no per-test ``@settings``.
@@ -24,7 +24,7 @@ from hypothesis import strategies as st
 from strategies import LEAF_ELEMENT_TYPES, leaf_instance_strategy
 
 from oscal_bindings.v1 import (
-    OscalParseError,
+    OscalUnknownElementTypeError,
     get_supported_element_types,
     validate_element,
 )
@@ -114,5 +114,5 @@ def test_validate_element_rejects_unknown_types(
 
     **Validates: Requirements 9.3**
     """
-    with pytest.raises(OscalParseError):
+    with pytest.raises(OscalUnknownElementTypeError):
         validate_element(element, element_type)

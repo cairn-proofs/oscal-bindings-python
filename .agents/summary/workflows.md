@@ -99,7 +99,7 @@ flowchart TD
     E --> F{"typed parser?"}
     F -->|"parse_catalog etc."| G["hasattr(doc.root, 'catalog')?"]
     G -->|yes| H["return doc.root (CatalogDocument)"]
-    G -->|no| I["raise OscalParseError('Document is not a Catalog')"]
+    G -->|no| I["raise OscalDocumentTypeMismatchError('Document is not a Catalog')"]
     F -->|no| E
 ```
 
@@ -157,7 +157,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     A["validate_element(element, 'observation')"] --> B{"element_type in _ELEMENT_MAP?"}
-    B -->|no| C["raise OscalParseError('Unknown element type')"]
+    B -->|no| C["raise OscalUnknownElementTypeError('Unknown element type')"]
     B -->|yes| D["model_class.model_validate(element)"]
     D -->|ok| E["ElementValidationResult(valid=True)"]
     D -->|PydanticValidationError| F["ElementValidationResult(valid=False,<br/>errors=[ValidationError(path, message)])"]

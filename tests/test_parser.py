@@ -16,6 +16,7 @@ from support.spec_artifact import corpus_root
 from oscal_bindings import OscalDoc
 from oscal_bindings.parser import (
     OscalDocument,
+    OscalDocumentTypeMismatchError,
     OscalParseError,
     parse_catalog,
     parse_component_definition,
@@ -329,6 +330,26 @@ class TestTypedParsers:
         with pytest.raises(OscalParseError, match="not a Catalog"):
             parse_catalog(MINIMAL_PROFILE)
 
+    def test_wrong_type_is_a_document_type_mismatch(self):
+        with pytest.raises(
+            OscalDocumentTypeMismatchError, match="not a Catalog"
+        ) as excinfo:
+            parse_catalog(MINIMAL_PROFILE)
+        assert isinstance(excinfo.value, OscalParseError)
+
+    def test_invalid_json_is_not_a_document_type_mismatch(self):
+        with pytest.raises(OscalParseError) as excinfo:
+            parse_catalog("{not json")
+        assert not isinstance(excinfo.value, OscalDocumentTypeMismatchError)
+
+    def test_mismatch_error_is_the_same_class_on_both_paths(self):
+        import oscal_bindings.parser as legacy
+        from oscal_bindings import v1
+
+        assert (
+            legacy.OscalDocumentTypeMismatchError is v1.OscalDocumentTypeMismatchError
+        )
+
     def test_parse_profile_valid(self):
         result = parse_profile(MINIMAL_PROFILE)
         assert result.profile.uuid == "f47ac10b-58cc-4372-a567-0e02b2c3d479"
@@ -552,6 +573,46 @@ class TestJsonDigitLimit:
         text = json.dumps(doc).replace('"start": 1', f'"start": {PAST_DIGIT_LIMIT}')
         entry = _limit_error(parse_oscal, text)
         assert entry["type"] == "json_digit_limit"
+
+
+class TestLimitIdentifier:
+    """The ``limit`` of an ``OscalParseError`` (spec error-tests)."""
+
+    @staticmethod
+    def _error(
+        text: str, parse: Callable[[str], object] = parse_oscal
+    ) -> OscalParseError:
+        with pytest.raises(OscalParseError) as info:
+            parse(text)
+        return info.value
+
+    def test_json_depth(self) -> None:
+        assert self._error(_deep_catalog(PAST_DEPTH_LIMIT)).limit == "json_depth"
+
+    def test_json_digits(self) -> None:
+        assert self._error(_component(PAST_DIGIT_LIMIT)).limit == "json_digits"
+
+    def test_schema_failure_has_no_limit(self) -> None:
+        text = json.dumps({"catalog": {"uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479"}})
+        assert self._error(text).limit is None
+
+    def test_invalid_json_has_no_limit(self) -> None:
+        assert self._error("{not json").limit is None
+
+    def test_document_type_mismatch_has_no_limit(self) -> None:
+        error = self._error(MINIMAL_PROFILE, parse_catalog)
+        assert isinstance(error, OscalDocumentTypeMismatchError)
+        assert error.limit is None
+
+    def test_a_yaml_alias_cycle_has_no_limit(self) -> None:
+        from oscal_bindings.v1 import parse_oscal_yaml
+
+        head = (
+            "catalog:\n  uuid: f47ac10b-58cc-4372-a567-0e02b2c3d479\n"
+            "  metadata:\n    title: T\n"
+        )
+        error = self._error(head + "    remarks: &a [*a]\n", parse_oscal_yaml)
+        assert error.limit is None
 
 
 class TestJsonLimitErrorShape:

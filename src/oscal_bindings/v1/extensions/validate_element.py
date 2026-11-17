@@ -10,10 +10,16 @@ from pydantic import BaseModel, Field, TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
 import oscal_bindings.v1.models as _models
-from oscal_bindings.v1.parser import OscalParseError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+class OscalUnknownElementTypeError(Exception):
+    """Raised when ``validate_element`` gets an unrecognized element type.
+
+    Not a subclass of :class:`OscalParseError`: it is a category of its own.
+    """
 
 
 @dataclass
@@ -112,10 +118,10 @@ def validate_element(element: Any, element_type: str) -> ElementValidationResult
         ElementValidationResult with valid=True or valid=False with errors.
 
     Raises:
-        OscalParseError: If element_type is not recognized.
+        OscalUnknownElementTypeError: If element_type is not recognized.
     """
     if element_type not in _ELEMENT_MAP:
-        raise OscalParseError(
+        raise OscalUnknownElementTypeError(
             f'Unknown element type: "{element_type}". '
             "Supported types include: "
             f"{', '.join(sorted(list(_ELEMENT_MAP.keys())[:10]))}..."

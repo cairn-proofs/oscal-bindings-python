@@ -123,10 +123,10 @@ sequenceDiagram
 | Invalid JSON / invalid UTF-8 bytes | `OscalParseError` (from `parse_oscal`) |
 | Schema validation failure | `OscalParseError` with `.errors` = Pydantic error dicts |
 | File missing | `FileNotFoundError` (from `parse_oscal_file`, includes path) |
-| Typed parser, wrong document type | `OscalParseError("Document is not a …")` |
+| Typed parser, wrong document type | `OscalDocumentTypeMismatchError("Document is not a …")` (subclass of `OscalParseError`) |
 | `assessment_period()` on non-AP/AR | `OscalAccessError` |
 | `OscalDoc(...)` with unrelated object | `TypeError` |
-| `validate_element` unknown element type | `OscalParseError` |
+| `validate_element` unrecognized element type | `OscalUnknownElementTypeError` (outside the parse errors) |
 | Builders with invalid input | `pydantic.ValidationError` |
 | `validate_oscal` on invalid input | returns `False` (never raises) |
 
