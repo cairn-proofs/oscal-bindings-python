@@ -43,6 +43,7 @@ PUBLISHED_ALL = frozenset(
         "OscalDocument",
         "OscalDocumentTypeMismatchError",
         "OscalParseError",
+        "OscalReadError",
         "OscalUnknownElementTypeError",
         "OscalWrapper",
         "PlanOfActionAndMilestonesDocument",

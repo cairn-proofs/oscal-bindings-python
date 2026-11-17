@@ -25,6 +25,7 @@ from oscal_bindings import (
     OscalDoc,
     OscalDocumentTypeMismatchError,
     OscalParseError,
+    OscalReadError,
     OscalUnknownElementTypeError,
 )
 
@@ -44,21 +45,25 @@ TYPED_PARSERS: dict[str, Callable[[str | bytes], Any]] = {
 }
 
 
+#: Each class with its category. A subclass comes before its parent.
+_CATEGORIES: tuple[tuple[type[BaseException], str], ...] = (
+    (FileNotFoundError, "not-found"),
+    (OscalReadError, "read-error"),
+    (OscalAccessError, "access-error"),
+    (OscalUnknownElementTypeError, "unknown-element-type"),
+    (OscalDocumentTypeMismatchError, "document-type-mismatch"),
+    (OscalParseError, "parse-error"),
+)
+
+
 def category(error: BaseException) -> str | None:
     """Map an exception to a corpus error category, or None for any other error.
 
     The class of the error is its category. A subclass comes before its parent.
     """
-    if isinstance(error, FileNotFoundError):
-        return "not-found"
-    if isinstance(error, OscalAccessError):
-        return "access-error"
-    if isinstance(error, OscalUnknownElementTypeError):
-        return "unknown-element-type"
-    if isinstance(error, OscalDocumentTypeMismatchError):
-        return "document-type-mismatch"
-    if isinstance(error, OscalParseError):
-        return "parse-error"
+    for error_class, name in _CATEGORIES:
+        if isinstance(error, error_class):
+            return name
     return None
 
 
@@ -226,14 +231,15 @@ def test_every_expected_failure_names_a_corpus_case() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="read-error and builder-error are not mapped yet: "
-    "https://github.com/cairn-proofs/oscal-bindings-python/issues/61, /62",
+    reason="builder-error is not mapped yet: "
+    "https://github.com/cairn-proofs/oscal-bindings-python/issues/62",
 )
 def test_every_category_is_mapped() -> None:
     """Each category in the corpus has a branch in ``category``."""
     index = json.loads((corpus_root() / "cases.json").read_text("utf-8"))
     mapped = {
         category(FileNotFoundError()),
+        category(OscalReadError()),
         category(OscalAccessError()),
         category(OscalDocumentTypeMismatchError("Document is not a Catalog")),
         category(OscalUnknownElementTypeError("Unknown element type: x")),

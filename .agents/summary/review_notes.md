@@ -17,7 +17,7 @@ Cross-document facts were verified against the source files (`v1/parser.py`, `v1
 | Top level is a pure re-export; `__all__` derived from `v1.__all__` | ✅ | codebase_info, architecture, components, interfaces, index agree; asserted by `tests/test_oscal_bindings.py` |
 | Active schema release `1.2.3` / `__oscal_schema_version__` | ✅ | index, codebase_info, architecture, data_models, workflows, dependencies agree; tests assert it against the release of the pin and the artifact schema `$id` |
 | Names come only from `names.json` (hoist + post-processor guards; no naming rule in the binding) | ✅ | architecture, workflows, interfaces, components, data_models, index agree |
-| Exceptions `OscalParseError` (with `.errors`) / `OscalAccessError` | ✅ | Consistent; `validate_element` raises `OscalUnknownElementTypeError` for an unrecognized type, a separate category |
+| Exceptions `OscalParseError` (with `.errors`) / `OscalAccessError` / `OscalReadError` (read failure, beside `FileNotFoundError`) | ✅ | Consistent; `validate_element` raises `OscalUnknownElementTypeError` for an unrecognized type, a separate category |
 | `serialize_oscal` defaults (`indent=2`, `by_alias`, `exclude_none`) | ✅ | Matches source |
 | Two `RootModel`s: `OscalDocument`, `MappingCollectionMappings` | ✅ | architecture, components, data_models, workflows agree |
 | Single runtime dependency (Pydantic v2) | ✅ | dependencies.md matches `pyproject.toml` |

@@ -97,6 +97,20 @@ class OscalDocumentTypeMismatchError(OscalParseError):
     """
 
 
+class OscalReadError(OSError):
+    """Raised when a file-path parse cannot read the file at a path (ERR-012).
+
+    A subclass of :class:`OSError`, so ``except OSError`` catches it and
+    :class:`FileNotFoundError`, the not-found error. It is not a parse error
+    and not a not-found error: it is not an instance of
+    :class:`OscalParseError` or of :class:`FileNotFoundError`. A path that the
+    platform reports as missing raises :class:`FileNotFoundError`. Each other
+    read failure (a directory, a permission failure, a loop of symbolic links,
+    an I/O error) raises this error. Its ``errno``, ``strerror``, and
+    ``filename`` come from the failure, and its message names the path.
+    """
+
+
 #: The JSON depth limit (PRS-010). A value that more than this many arrays and
 #: objects hold is a parse error. pydantic-core's JSON parser sets the value,
 #: and tests pin it at the boundary.
@@ -225,9 +239,10 @@ def parse_oscal_file(path: Path | str) -> OscalDocument:
         An OscalDocument instance representing the parsed document.
 
     Raises:
-        OscalParseError: If the file cannot be read or its contents do not
-            conform to the OSCAL schema.
-        FileNotFoundError: If the file does not exist.
+        OscalParseError: If the contents of the file do not conform to the
+            OSCAL schema.
+        FileNotFoundError: If no file can exist at the path.
+        OscalReadError: If the file cannot be read for another reason.
     """
     return parse_oscal(_read_oscal_file(path))
 
@@ -236,20 +251,22 @@ def _read_oscal_file(path: Path | str) -> bytes:
     """Read an OSCAL file for a file parser (PRS-002).
 
     Shared by :func:`parse_oscal_file` and the YAML file parser, so both report
-    a missing file and a read failure the same way.
+    a missing file and a read failure the same way. The error of the read
+    itself finds the category, with no ``exists()`` call before it.
 
     Raises:
-        FileNotFoundError: The file does not exist.
-        OscalParseError: The file exists but cannot be read.
+        FileNotFoundError: No file can exist at the path (``ENOENT``,
+            ``ENOTDIR``, or a path that the operating system cannot
+            represent).
+        OscalReadError: The read failed for another reason.
     """
     file_path = Path(path)
-    if not file_path.exists():
-        raise FileNotFoundError(f"OSCAL file not found: {file_path}")
-
     try:
         return file_path.read_bytes()
+    except (FileNotFoundError, NotADirectoryError, ValueError) as e:
+        raise FileNotFoundError(f"OSCAL file not found: {file_path}") from e
     except OSError as e:
-        raise OscalParseError(f"Failed to read file: {e}") from e
+        raise OscalReadError(e.errno, e.strerror, str(file_path)) from e
 
 
 def serialize_oscal(model: OscalDocument, *, indent: int | None = 2) -> str:
