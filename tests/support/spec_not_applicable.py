@@ -79,7 +79,8 @@ NOT_APPLICABLE: dict[str, str] = {
         "limit stops an element nested about 500 levels or more, and the result "
         "is an invalid result with a recursion error, where ELV-004 allows only "
         "a documented limit and ERR-011 requires the limit-exceeded error. This "
-        "scenario needs a real test once the limit is documented and reported."
+        "scenario needs a real test once the limit is documented and reported "
+        "(issue #89)."
     ),
     # -- error-model --------------------------------------------------------------
     "ERR-001.08": (
@@ -98,7 +99,8 @@ NOT_APPLICABLE: dict[str, str] = {
         "limit stops an element nested about 500 levels or more, and the result "
         "is an invalid result with a recursion error, where ELV-004 allows only "
         "a documented limit and ERR-011 requires the limit-exceeded error. This "
-        "scenario needs a real test once the limit is documented and reported."
+        "scenario needs a real test once the limit is documented and reported "
+        "(issue #89)."
     ),
     "ERR-011.02": (
         "KNOWN GAP, not a rule that is out of scope: validate_element has a "
@@ -106,7 +108,8 @@ NOT_APPLICABLE: dict[str, str] = {
         "limit stops an element nested about 500 levels or more, and the result "
         "is an invalid result with a recursion error, where ELV-004 allows only "
         "a documented limit and ERR-011 requires the limit-exceeded error. This "
-        "scenario needs a real test once the limit is documented and reported."
+        "scenario needs a real test once the limit is documented and reported "
+        "(issue #89)."
     ),
     # -- model-derivation ---------------------------------------------------------
     "MDL-007.01": (
