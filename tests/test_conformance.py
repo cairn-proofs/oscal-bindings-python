@@ -16,7 +16,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from support.canonical_json import canonicalize
+from support.canonical_json import canonicalize, normalize_datetime
 from support.expected_failures import EXPECTED_FAILURES
 from support.spec_artifact import corpus_root, schema_path
 
@@ -170,7 +170,22 @@ def _parse_file(case: dict[str, Any], src: Path) -> None:
 
 def _assessment_period(case: dict[str, Any], src: Path) -> None:
     doc = OscalDoc(ob.parse_oscal(src.read_bytes()))
-    _expect_error(case, doc.assessment_period)
+    if "expected-category" in case:
+        _expect_error(case, doc.assessment_period)
+        return
+    # Normalize each bound as docs/canonical-json.md states, then compare it with
+    # the value of `expected-period` (FAC-007).
+    expected = case["expected-period"]
+    got = doc.assessment_period()
+    for name, bound in zip(("start", "end"), got, strict=True):
+        want = expected[name]
+        if want is None:
+            assert bound is None, f"{name}: expected no bound, got {bound}"
+            continue
+        assert bound is not None, f"{name}: expected {want}, got no bound"
+        assert normalize_datetime(bound.to_string()) == normalize_datetime(want), (
+            f"{name}: {bound.to_string()} != {want}"
+        )
 
 
 def _facade(case: dict[str, Any], src: Path) -> None:

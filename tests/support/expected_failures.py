@@ -14,9 +14,4 @@ from __future__ import annotations
 ISSUES = "https://github.com/cairn-proofs/oscal-bindings-python/issues"
 
 # Corpus case id -> issue that tracks the defect.
-EXPECTED_FAILURES: dict[str, str] = {
-    # FAC-007: datetime bounds from assessment_period().
-    "assessment-period/mixed-offsets": f"{ISSUES}/58",
-    "assessment-period/equal-instant": f"{ISSUES}/58",
-    "assessment-period/seventh-fraction-digit": f"{ISSUES}/58",
-}
+EXPECTED_FAILURES: dict[str, str] = {}

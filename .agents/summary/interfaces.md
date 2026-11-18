@@ -53,7 +53,7 @@ OscalDoc(wrapper)                    # wraps OscalWrapper or OscalDocument
 OscalDoc.from_json(data: str | bytes) -> OscalDoc
 OscalDoc.from_file(path) -> OscalDoc
 # properties: .wrapper .body .metadata .oscal_version .uuid
-OscalDoc.assessment_period() -> tuple[date | None, date | None]   # AP/AR only
+OscalDoc.assessment_period() -> tuple[OscalDateTime | None, OscalDateTime | None]   # AP/AR only
 ```
 
 ### Builders

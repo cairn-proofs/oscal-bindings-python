@@ -24,7 +24,7 @@
     { "name": "parse_plan_of_action_and_milestones_yaml", "requirements": ["YML-007"] },
     { "name": "parse_mapping_collection_yaml", "requirements": ["YML-007"] },
     { "name": "serialize_oscal_yaml", "requirements": ["YML-008"] },
-    { "name": "OscalDoc", "requirements": ["FAC-001", "FAC-002", "FAC-003", "FAC-004", "PRS-013"] },
+    { "name": "OscalDoc", "requirements": ["FAC-001", "FAC-002", "FAC-003", "FAC-004", "FAC-005", "FAC-006", "FAC-007", "PRS-013"] },
     { "name": "OscalWrapper", "requirements": ["FAC-001"] },
     { "name": "OscalBody", "requirements": ["FAC-001"] },
     { "name": "OscalAccessError", "requirements": ["ERR-001", "FAC-004"] },

@@ -128,19 +128,23 @@ from oscal_bindings import OscalDoc, parse_oscal_file
 doc = OscalDoc(parse_oscal_file("ssp.json"))
 ```
 
-For Assessment Plans and Assessment Results, `assessment_period()` returns the `(start, end)` date range:
+For Assessment Plans and Assessment Results, `assessment_period()` returns the `(start, end)` bounds as datetimes (`OscalDateTime`, see [Datetimes](#datetimes)), or `None` for a bound that no value gives. The start is the earliest start and the end is the latest end, ordered by instant with every fraction digit, so `2026-03-01T23:00:00-05:00` is later than `2026-03-02T01:00:00Z`. When two values share the earliest (or the latest) instant, the bound is the first of them in document order, and a task comes before its nested tasks. A bound keeps the offset it was written with. It is not converted to UTC:
 
 ```python
 from oscal_bindings import OscalAccessError
 
 doc = OscalDoc.from_file("assessment-results.json")
-start, end = doc.assessment_period()       # (date(2025, 1, 5), date(2025, 1, 30))
+start, end = doc.assessment_period()       # (OscalDateTime(2025, 1, 5, ...), OscalDateTime(2025, 1, 30, ...))
+start.to_string()                          # "2025-01-05T00:00:00Z", as the document wrote it
+start.date()                               # date(2025, 1, 5), if you need a calendar date
 
 try:
     OscalDoc.from_file("catalog.json").assessment_period()
 except OscalAccessError as e:
     print(e)                               # only defined for AP / AR
 ```
+
+Before this version the bounds were `date` values. A `datetime` never equals a `date`, so a caller that compared a bound with a `date` calls `.date()` on the bound first. Compare two bounds with `<`, `==` and `>`: `end - start` is a `timedelta` of microseconds and drops the digits beyond the sixth.
 
 ### Building back-matter resources
 
