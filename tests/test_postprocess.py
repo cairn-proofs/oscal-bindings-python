@@ -17,6 +17,7 @@ import sys
 import typing
 from typing import TYPE_CHECKING, Any
 
+import pydantic_core
 import pytest
 from pydantic import RootModel, Tag, TypeAdapter, ValidationError
 from support.scripts import load_script
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 pp: ModuleType = load_script("postprocess_models")
+#: What a plain ``x: T | None = None`` field becomes (issue #8).
+NONE_FIELD = " = Field(default=None, exclude_if=omit_none)"
 PostprocessError = pp.PostprocessError
 
 HEADER = (
@@ -193,7 +196,10 @@ class TestUnionAliases:
     def test_inline_unions_of_the_variant_set_use_the_alias(self, done: str) -> None:
         """The match ignores the order of the names and keeps ``None``."""
         field = "Annotated[Group, Field(union_mode='left_to_right')]"
-        assert f"groups: list[{field}] | None = None" in done
+        assert (
+            f"groups: list[{field}] | None = Field(default=None, exclude_if=omit_none)"
+            in done
+        )
         assert f"list[{field}] | None,\n" in done
         assert "Group: TypeAlias = GroupWithControls | GroupWithGroups" in done
         assert "GroupWithGroups | GroupWithControls" not in done
@@ -224,7 +230,7 @@ class TestUnionAliases:
             {"name": "Other", "kind": "object"}, {"name": "Wider", "kind": "object"}
         )
         result = pp.postprocess(source, manifest, SCHEMA)
-        assert "x: GroupWithControls | None = None" in result
+        assert "x: GroupWithControls | None" + NONE_FIELD in result
         assert "y: GroupWithControls | GroupWithGroups | Mapping" in result
 
     def test_a_long_alias_is_wrapped(self) -> None:
@@ -284,7 +290,7 @@ class TestOscalDocument:
         ) in done
         assert (
             "from oscal_bindings.v1._base import OscalBaseModel, "
-            "root_key_discriminator\n"
+            "omit_none, root_key_discriminator\n"
         ) in done
 
     def test_a_long_tagged_member_is_split_as_black_splits_it(self) -> None:
@@ -401,7 +407,10 @@ class TestMappingCollectionMappings:
         assert "MappingCollectionMappings1" not in done
 
     def test_field_takes_the_entry_name(self, done: str) -> None:
-        assert "mappings: MappingCollectionMappings\n" in done
+        assert (
+            "mappings: MappingCollectionMappings = Field(exclude_if=omit_none)\n"
+            in done
+        )
 
     def test_one_item_or_a_non_empty_list_validates(self, generated: Any) -> None:
         cls = generated.MappingCollection
@@ -426,14 +435,14 @@ class TestMappingCollectionMappings:
 class TestScalarAliases:
     def test_namespaced_scalar_keeps_its_local_name(self, done: str) -> None:
         assert "LocationUuid = Annotated[str, Field(pattern=" in done
-        assert "location: LocationUuid | None = None" in done
+        assert "location: LocationUuid | None" + NONE_FIELD in done
         assert "OscalCompleteOscal" not in done
 
     def test_scalar_without_a_prefix_keeps_its_name(self, done: str) -> None:
         assert "TokenDatatype = Annotated[str, Field(pattern=" in done
 
     def test_open_enum_field_keeps_the_base_alias(self, done: str) -> None:
-        assert "algorithm: TokenDatatype | HashAlgorithm | None = None" in done
+        assert "algorithm: TokenDatatype | HashAlgorithm | None" + NONE_FIELD in done
 
     @pytest.mark.parametrize(
         ("local", "published"),
@@ -1204,3 +1213,143 @@ class TestRerun:
         err = capsys.readouterr().err
         assert self.EXPECTED[0] in err
         assert f"{models_path} was not written" in err
+
+
+class TestExcludeIf:
+    """`add_exclude_if` drops each ``None`` in pydantic-core (issue #8)."""
+
+    @staticmethod
+    def _run(body: str) -> tuple[str, list[str]]:
+        failures: list[str] = []
+        return pp.add_exclude_if(HEADER + _object("A", body), failures), failures
+
+    def test_annotated_field_gets_the_argument(self) -> None:
+        result, failures = self._run(
+            "x: Annotated[str | None, Field(title='X', min_length=1)] = None"
+        )
+        assert "Field(title='X', min_length=1, exclude_if=omit_none)" in result
+        assert failures == []
+
+    def test_multi_line_field_gets_its_own_line(self) -> None:
+        result, _ = self._run(
+            "x: Annotated[\n        str | None,\n        Field(\n"
+            "            title='X',\n            min_length=1,\n        ),\n"
+            "    ] = None"
+        )
+        assert "min_length=1,\n            exclude_if=omit_none,\n" in result
+
+    def test_plain_none_field_becomes_a_field_call(self) -> None:
+        result, _ = self._run("x: str | None = None")
+        assert "x: str | None = Field(default=None, exclude_if=omit_none)" in result
+
+    def test_required_annotated_field_gets_the_argument(self) -> None:
+        result, failures = self._run("x: Annotated[str, Field(title='X')]")
+        assert "Field(title='X', exclude_if=omit_none)" in result
+        assert failures == []
+
+    def test_required_plain_field_becomes_a_field_call(self) -> None:
+        result, _ = self._run("x: str")
+        assert "x: str = Field(exclude_if=omit_none)" in result
+
+    @pytest.mark.parametrize(
+        ("body", "expected"),
+        [
+            ("x: str | None = Field(None, title='X')", "title='X', exclude_if"),
+            ("x: str | None = Field(default=None)", "default=None, exclude_if"),
+            ("x: str | None = Field()", "Field(exclude_if=omit_none)"),
+            ("x: str | None = Field(None)", "Field(None, exclude_if=omit_none)"),
+        ],
+    )
+    def test_a_field_call_as_the_default_gets_the_argument(
+        self, body: str, expected: str
+    ) -> None:
+        result, failures = self._run(body)
+        assert expected in result
+        assert failures == []
+
+    def test_a_field_that_has_it_is_left_alone(self) -> None:
+        body = "x: Annotated[str | None, Field(exclude_if=omit_none)] = None"
+        result, _ = self._run(body)
+        assert result.count("exclude_if=omit_none") == 1
+
+    def test_annotated_field_without_a_field_is_a_failure(self) -> None:
+        _, failures = self._run("x: Annotated[str | None, 'note'] = None")
+        assert failures == ["A.x: an Annotated field without a Field"]
+
+    def test_a_default_that_is_not_none_is_a_failure(self) -> None:
+        _, failures = self._run("x: int = 3")
+        assert failures == ["A.x: a default that is not None and not a Field"]
+
+    def test_failure_reaches_postprocess(self) -> None:
+        source = RAW + _object("Other", "x: int = 3")
+        manifest = _manifest(
+            {"name": "Other", "kind": "object"},
+        )
+        with pytest.raises(PostprocessError, match=r"Other\.x"):
+            pp.postprocess(source, manifest, SCHEMA)
+
+    def test_root_models_are_left_alone(self) -> None:
+        source = HEADER + "\n\nclass R(RootModel[int]):\n    root: int\n"
+        assert pp.add_exclude_if(source, []) == source
+
+    def test_result_is_valid_python_and_idempotent(self) -> None:
+        once, _ = self._run("x: str | None = None\n    y: str")
+        assert pp.add_exclude_if(once, []) == once
+
+    def test_every_field_of_the_committed_models_has_it(self) -> None:
+        """No field of an `OscalBaseModel` subclass keeps a ``None`` in its output."""
+        missing = [
+            f"{cls.__name__}.{name}"
+            for cls in vars(models).values()
+            if isinstance(cls, type)
+            and issubclass(cls, models.OscalBaseModel)
+            and cls.__module__ == models.__name__
+            for name, field in cls.model_fields.items()
+            if field.exclude_if is not models.omit_none
+        ]
+        assert missing == []
+
+    def test_none_in_a_required_field_is_dropped(self) -> None:
+        """`model_construct` and an assignment can put ``None`` in a required field."""
+        rlink = models.BackMatterResourceRlink.model_construct(href=None)
+        assert rlink.model_dump_json() == "{}"
+        assert rlink.model_dump() == {}
+        rlink = models.BackMatterResourceRlink(href="https://example.com/x")
+        rlink.href = None  # type: ignore[assignment]
+        assert rlink.model_dump() == {}
+        assert pydantic_core.to_json(rlink) == b"{}"
+
+    def test_serialization_schema_keeps_the_required_fields(self) -> None:
+        """`exclude_if` drops ``required`` from the schema; the hook restores it."""
+        schema = models.BackMatterResourceRlink.model_json_schema(mode="serialization")
+        assert schema["required"] == ["href"]
+        by_name = models.BackMatterResourceRlink.model_json_schema(
+            mode="serialization", by_alias=False
+        )
+        assert by_name["required"] == ["href"]
+        validation = models.Hash.model_json_schema(mode="validation")
+        assert validation["required"] == ["algorithm", "value"]
+
+    def test_every_required_field_is_required_in_the_serialization_schema(
+        self,
+    ) -> None:
+        wrong = []
+        for cls in vars(models).values():
+            if not (
+                isinstance(cls, type)
+                and issubclass(cls, models.OscalBaseModel)
+                and cls.__module__ == models.__name__
+            ):
+                continue
+            required = [
+                f.alias or name
+                for name, f in cls.model_fields.items()
+                if f.is_required()
+            ]
+            schema = cls.model_json_schema(mode="serialization")
+            if "$ref" in schema:  # a recursive model: the body is under $defs
+                schema = schema["$defs"][schema["$ref"].rsplit("/", 1)[-1]]
+            listed = schema.get("required", [])
+            if listed != required:
+                wrong.append(cls.__name__)
+        assert wrong == []

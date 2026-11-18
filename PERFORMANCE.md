@@ -58,7 +58,7 @@ For the catalog (7.3 MB of YAML), `parse_oscal_yaml` takes 0.8 s with libyaml (`
 
 ## Serialization
 
-`hatch run python scripts/bench_serialization.py`, median of 7 per run; "after" is the median of 3 runs, which varied by up to about 30% on the compact row. Python 3.12.14, pydantic 2.13.5, pydantic-core 2.46.5. These numbers come from the change that made every serialization path emit valid OSCAL (issue #5). The serialize-time regression is accepted as the price of valid OSCAL on every path; parse is unchanged. Before, `model_dump_json()` and `to_json` emitted invalid OSCAL (Python names, `null`s), so those rows are not like-for-like. If serialize time becomes a problem, the fallback is per-field `exclude_if` (about 1.35x in the prototype, needs pydantic 2.12 or later).
+`hatch run python scripts/bench_serialization.py`, median of 7 per run; "after" is the median of 3 runs, which varied by up to about 30% on the compact row. Python 3.12.14, pydantic 2.13.5, pydantic-core 2.46.5. These numbers come from the change that made every serialization path emit valid OSCAL (issue #5). The serialize-time regression is accepted as the price of valid OSCAL on every path; parse is unchanged. Before, `model_dump_json()` and `to_json` emitted invalid OSCAL (Python names, `null`s), so those rows are not like-for-like. The per-field `exclude_if` change below (issue #8) removed most of this regression.
 
 | Path | Before ms | After ms | Ratio | Output after |
 |------|----------:|---------:|------:|-------------:|
@@ -68,21 +68,37 @@ For the catalog (7.3 MB of YAML), `parse_oscal_yaml` takes 0.8 s with libyaml (`
 | `doc.model_dump_json()` | 66.1 (invalid) | 165.8 | 2.5x | 4.88 MB (was 7.57 MB) |
 | `pydantic_core.to_json(doc)` | 63.7 (invalid) | 170.6 | 2.7x | 4.88 MB (was 7.53 MB) |
 
+### Per-field `exclude_if` (issue #8)
+
+`omit_none` as `Field(exclude_if=...)` on each of the 982 fields of the object models (698 optional, 284 required) replaced the wrap `model_serializer` of `OscalBaseModel`, so pydantic-core drops a `None` and no Python callback runs per model node. A required field has it too, so a `None` that a caller sets by `model_construct` or by assignment is dropped as before. Output is byte-identical, and `model_json_schema` is unchanged in both modes: `OscalBaseModel.__get_pydantic_json_schema__` lists the required fields again in the serialization schema, which pydantic otherwise drops for a field with `exclude_if`. The hook runs when a schema is built, not when a value is serialized.
+
+`hatch run python scripts/bench_serialization.py` on the NIST SP 800-53 rev5 catalog (10.4 MB of JSON), median of 7 per run, then the median of 3 runs. The runs of `main` and the branch alternate on one machine. Python 3.13.18, pydantic 2.14.3, pydantic-core 2.50.4.
+
+| Path | Before, GC on ms | After, GC on ms | Before, GC off ms | After, GC off ms | Ratio, GC on |
+|---|---:|---:|---:|---:|---:|
+| `parse_oscal(bytes)` | 190.0 | 183.7 | 129.3 | 132.4 | 0.97x (noise) |
+| `serialize_oscal(doc, indent=None)` | 311.6 | 72.5 | 292.8 | 63.5 | 0.23x |
+| `serialize_oscal(doc)` | 341.1 | 100.4 | 329.2 | 95.6 | 0.29x |
+| `doc.model_dump_json()` | 327.2 | 77.3 | 314.4 | 69.3 | 0.24x |
+| `pydantic_core.to_json(doc)` | 332.6 | 72.3 | 314.6 | 68.0 | 0.22x |
+
+Compact serialization is about 4.3x faster with the GC on and 4.6x with it off. Parse is not touched by the change; its row differs by run-to-run noise. Covering the 284 required fields costs about 5% against a version that covered the 698 optional fields only. The absolute times are higher than in the tables above because this machine and Python are different, so compare the ratios.
+
 ### Datetime fraction digits (issue #19)
 
 The date-time fields are `OscalDateTime`, a `datetime` subclass that keeps every fraction digit of the text. A parse of a datetime now calls a Python wrap validator, and a JSON serialization of one calls a Python function. The NIST SP 800-53 rev5 catalog has 8 datetime fields, so the test is whether a parse and a serialization of a real document move.
 
-`hatch run python scripts/bench_serialization.py` on that catalog (10.4 MB of JSON), median of 7 per run, then the median of 3 runs. The runs of `main` and the branch alternate on one machine. Python 3.13.18, pydantic 2.14.3, pydantic-core 2.50.4.
+`hatch run python scripts/bench_serialization.py` on that catalog (10.4 MB of JSON), median of 7 per run, then the median of 3 runs. The runs of `main` (with the `exclude_if` change above) and the branch alternate on one machine. Python 3.13.18, pydantic 2.14.3, pydantic-core 2.50.4.
 
 | Path | Before, GC on ms | After, GC on ms | Before, GC off ms | After, GC off ms |
 |---|---:|---:|---:|---:|
-| `parse_oscal(bytes)` | 189.7 | 184.2 | 135.5 | 136.2 |
-| `serialize_oscal(doc, indent=None)` | 318.3 | 309.8 | 295.8 | 290.2 |
-| `serialize_oscal(doc)` | 347.1 | 347.8 | 319.8 | 340.6 |
-| `doc.model_dump_json()` | 326.5 | 314.8 | 309.6 | 299.6 |
-| `pydantic_core.to_json(doc)` | 330.8 | 326.3 | 310.4 | 310.4 |
+| `parse_oscal(bytes)` | 184.1 | 183.3 | 131.2 | 131.7 |
+| `serialize_oscal(doc, indent=None)` | 69.5 | 70.0 | 59.2 | 59.9 |
+| `serialize_oscal(doc)` | 104.3 | 101.8 | 91.6 | 96.8 |
+| `doc.model_dump_json()` | 72.5 | 74.3 | 64.3 | 64.7 |
+| `pydantic_core.to_json(doc)` | 76.9 | 74.8 | 62.5 | 63.7 |
 
-No row moves beyond the run-to-run noise of this machine. The compact output is 54 bytes longer, because the type writes a datetime as the text wrote it: the catalog writes eight of them with a zero fraction (`.000000`) that the old type dropped. A document with many datetimes pays one Python call for each; the cost for such a document is not measured here.
+No row moves beyond the run-to-run noise of this machine: the largest difference is 6%, in `serialize_oscal(doc)` with the GC off, and the runs of one tree differ by as much. The compact output is 54 bytes longer, because the type writes a datetime as the text wrote it: the catalog writes eight of them with a zero fraction (`.000000`) that the old type dropped. A document with many datetimes pays one Python call for each; the cost for such a document is not measured here.
 
 ## Datatype checks
 
