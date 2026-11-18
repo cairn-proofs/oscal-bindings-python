@@ -22,19 +22,4 @@ EXPECTED_FAILURES: dict[str, str] = {
     "assessment-period/mixed-offsets": f"{ISSUES}/58",
     "assessment-period/equal-instant": f"{ISSUES}/58",
     "assessment-period/seventh-fraction-digit": f"{ISSUES}/58",
-    # FAC-001 to FAC-003: the runner lacks the facade operation.
-    **dict.fromkeys(
-        (
-            "facade/catalog",
-            "facade/profile",
-            "facade/component-definition",
-            "facade/system-security-plan",
-            "facade/assessment-plan",
-            "facade/assessment-results",
-            "facade/plan-of-action-and-milestones",
-            "facade/mapping-collection",
-            "facade/missing-file",
-        ),
-        f"{ISSUES}/63",
-    ),
 }

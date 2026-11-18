@@ -28,6 +28,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Topic :: Security",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Typing :: Typed",
@@ -35,6 +36,8 @@ classifiers = [
 requires-python = ">=3.11"
 # 2.14.2 is the floor: earlier 2.13/2.14 releases drop a JSON key spelled with a
 # Python field name instead of rejecting it (issue #6, GHSA-qpmf-fgh3-ff25).
+# That floor also covers Python 3.15, which needs pydantic >=2.14 (the first
+# pydantic-core with cp315 wheels is 2.48.0; 2.14 pins core 2.50).
 # tests/test_pydantic_version.py states the same range.
 dependencies = ["pydantic>=2.14.2,<3"]
 
@@ -110,6 +113,7 @@ lock = [
     "hatch env run --env hatch-test.py3.12 -- python --version",
     "hatch env run --env hatch-test.py3.13 -- python --version",
     "hatch env run --env hatch-test.py3.14 -- python --version",
+    "hatch env run --env hatch-test.py3.15 -- python --version",
     "hatch env run --env hatch-build -- python --version",
     "hatch env run --env security -- python --version",
 ]
@@ -146,7 +150,7 @@ cov-combine = "coverage combine"
 cov-report = ["coverage report", "coverage html"]
 
 [[tool.hatch.envs.hatch-test.matrix]]
-python = ["3.11", "3.12", "3.13", "3.14"]
+python = ["3.11", "3.12", "3.13", "3.14", "3.15"]
 
 [tool.pytest.ini_options]
 addopts = ["--durations=5", "--color=yes"]
@@ -282,7 +286,7 @@ scan-code = "bandit -c pyproject.toml -r src scripts"
 # datamodel-code-generator 0.59.0: 10 IDs from PyPI vs 12 from OSV). With OSV,
 # --require-hashes checks hash presence only (pip-audit warns); hash validity is
 # enforced where it matters, when uv installs from these lockfiles.
-scan-deps = "pip-audit -s osv --strict --disable-pip --require-hashes -r requirements.txt -r requirements/requirements-hatch-test.py3.11.txt -r requirements/requirements-hatch-test.py3.12.txt -r requirements/requirements-hatch-test.py3.13.txt -r requirements/requirements-hatch-test.py3.14.txt -r requirements/requirements-hatch-build.txt -r requirements/requirements-security.txt"
+scan-deps = "pip-audit -s osv --strict --disable-pip --require-hashes -r requirements.txt -r requirements/requirements-hatch-test.py3.11.txt -r requirements/requirements-hatch-test.py3.12.txt -r requirements/requirements-hatch-test.py3.13.txt -r requirements/requirements-hatch-test.py3.14.txt -r requirements/requirements-hatch-test.py3.15.txt -r requirements/requirements-hatch-build.txt -r requirements/requirements-security.txt"
 
 [tool.bandit]
 # Each skip needs a justification.
