@@ -214,6 +214,14 @@ doc = parse_oscal_yaml_file("catalog.yaml")  # a missing path raises FileNotFoun
 yaml_string = serialize_oscal_yaml(doc)
 ```
 
+Each document type also has a typed YAML parser, as the JSON functions do: `parse_catalog_yaml`, `parse_profile_yaml`, `parse_component_definition_yaml`, `parse_system_security_plan_yaml`, `parse_assessment_plan_yaml`, `parse_assessment_results_yaml`, `parse_plan_of_action_and_milestones_yaml`, and `parse_mapping_collection_yaml`. Each parses as `parse_oscal_yaml` does and returns the wrapper (`CatalogDocument`, ...), or raises `OscalDocumentTypeMismatchError` for a document of another type. They need the `yaml` extra too.
+
+```python
+from oscal_bindings import parse_catalog_yaml
+
+catalog = parse_catalog_yaml(yaml_string)  # CatalogDocument
+```
+
 The input is one YAML 1.2 document in UTF-8. A stream with no document or more than one, a duplicate mapping key, or invalid UTF-8 is an `OscalParseError`, the same error the JSON functions raise. An error that the YAML layer finds has an entry in `errors` (one for each scalar that fits no grammar, and one for any other failure), with the same `type`, `loc`, `msg`, and `input` keys as a schema-validation entry. Its `loc` is the JSON path of the failing node from the root key, such as `('component-definition', 'components', 0, ...)`, without the class-name segment that a schema-validation entry starts with. Its `line` and `column` give the position in the YAML text. Its message quotes at most 40 characters of input, and `input` holds the whole text. A scalar at a location that takes no scalar, such as `metadata: 5`, reads as its text, so a schema-validation entry for it has the `input` `"5"` where the JSON path has `5`.
 
 The OSCAL schema, not the YAML reader, decides the type of each scalar at its location. A value keeps its text unless the location is a number or a boolean, so `version: 1.0` at a string location stays the string `"1.0"`, and `yes` stays `"yes"`. A number location takes only the JSON number grammar (no leading `+`, no leading zero, no hexadecimal), and a boolean location takes only `true` or `false`; any other text is a parse error that names the scalar's location. The error holds one entry for each such scalar, and the entries of the schema check for the rest of the document, so one parse shows every failure. A YAML tag does not change a value, and the key `<<` is an ordinary field, so a merge key is rejected as an unknown field. The characters U+0085, U+2028, and U+2029 are content, as YAML 1.2 defines, not line breaks. A `%YAML 1.1` or `%YAML 1.2` directive is accepted, and both read as YAML 1.2. Any other version is a parse error.
@@ -286,11 +294,11 @@ The parse operations apply six documented limits (PRS-010 of the spec store). An
 | Limit | Value | Measure | Operations | Entry `type` | `limit` |
 |---|---|---|---|---|---|
 | JSON depth | 200 levels | The number of arrays and objects that hold a value in the JSON text. Arrays and objects count the same. | `parse_oscal`, `parse_oscal_file`, the eight typed parsers, `OscalDoc.from_json`, `OscalDoc.from_file`, `validate_oscal` | `json_depth_limit` | `json_depth` |
-| JSON digits | 4,300 digits | The digits of the integer part of one JSON number, at any location. A sign, a fraction, and an exponent do not count. | The operations of the JSON depth limit, and `parse_oscal_yaml` and `parse_oscal_yaml_file` at each number location | `json_digit_limit` | `json_digits` |
-| Alias nodes | 100,000 nodes | The scalars, sequences, mappings, and mapping keys that aliases add to one YAML input | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_alias_budget` | `yaml_alias_nodes` |
-| Alias characters | 1,000,000 characters | The characters of scalar text and key text that aliases add to one YAML input | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_alias_budget` | `yaml_alias_characters` |
-| YAML depth | 128 levels | The number of sequences and mappings that hold a node, after alias expansion | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_depth_limit` | `yaml_depth` |
-| Line-break placeholders | about 137,000 private-use characters | The free private-use characters that a YAML input with U+0085, U+2028, or U+2029 leaves for them | `parse_oscal_yaml`, `parse_oscal_yaml_file` | `yaml_line_break_placeholder` | `yaml_line_break_placeholders` |
+| JSON digits | 4,300 digits | The digits of the integer part of one JSON number, at any location. A sign, a fraction, and an exponent do not count. | The operations of the JSON depth limit, and `parse_oscal_yaml`, `parse_oscal_yaml_file`, and the eight typed YAML parsers at each number location | `json_digit_limit` | `json_digits` |
+| Alias nodes | 100,000 nodes | The scalars, sequences, mappings, and mapping keys that aliases add to one YAML input | `parse_oscal_yaml`, `parse_oscal_yaml_file`, the eight typed YAML parsers | `yaml_alias_budget` | `yaml_alias_nodes` |
+| Alias characters | 1,000,000 characters | The characters of scalar text and key text that aliases add to one YAML input | `parse_oscal_yaml`, `parse_oscal_yaml_file`, the eight typed YAML parsers | `yaml_alias_budget` | `yaml_alias_characters` |
+| YAML depth | 128 levels | The number of sequences and mappings that hold a node, after alias expansion | `parse_oscal_yaml`, `parse_oscal_yaml_file`, the eight typed YAML parsers | `yaml_depth_limit` | `yaml_depth` |
+| Line-break placeholders | about 137,000 private-use characters | The free private-use characters that a YAML input with U+0085, U+2028, or U+2029 leaves for them | `parse_oscal_yaml`, `parse_oscal_yaml_file`, the eight typed YAML parsers | `yaml_line_break_placeholder` | `yaml_line_break_placeholders` |
 
 pydantic-core's JSON parser sets the two JSON limits, and the binding cannot change them. The YAML depth limit is lower than the JSON depth limit, so deep YAML input always gets the YAML depth error. For a JSON limit, the entry's `line` and `column` give the position in the JSON text, and `column` counts UTF-8 bytes. For a YAML input, they give the position in the YAML source. No limit bounds the input size. See [Performance](#performance) for the memory that a parse uses.
 
@@ -318,7 +326,7 @@ Each OSCAL document type has a dedicated parser:
 - `parse_plan_of_action_and_milestones(json)` → `PlanOfActionAndMilestonesDocument`
 - `parse_mapping_collection(json)` → `MappingCollectionDocument`
 
-A typed parser raises `OscalDocumentTypeMismatchError` for a document of another type. It is a subclass of `OscalParseError`, so `except OscalParseError` also catches it. `validate_element` raises `OscalUnknownElementTypeError` for an element type that the library does not recognize. That error is a category of its own, outside the parse errors. A file-path parse raises `FileNotFoundError` when no file can exist at the path, and `OscalReadError` for each other read failure (a directory, a permission failure, a loop of symbolic links). `OscalReadError` is a subclass of `OSError`, not of `OscalParseError` or of `FileNotFoundError`, so `except OSError` catches both file categories and `except OscalParseError` catches neither. Test the category of an error with `isinstance`.
+A typed parser (JSON or YAML) raises `OscalDocumentTypeMismatchError` for a document of another type. It is a subclass of `OscalParseError`, so `except OscalParseError` also catches it. `validate_element` raises `OscalUnknownElementTypeError` for an element type that the library does not recognize. That error is a category of its own, outside the parse errors. A file-path parse raises `FileNotFoundError` when no file can exist at the path, and `OscalReadError` for each other read failure (a directory, a permission failure, a loop of symbolic links). `OscalReadError` is a subclass of `OSError`, not of `OscalParseError` or of `FileNotFoundError`, so `except OSError` catches both file categories and `except OscalParseError` catches neither. Test the category of an error with `isinstance`.
 
 ## Building
 
