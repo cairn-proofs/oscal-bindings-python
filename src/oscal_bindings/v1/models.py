@@ -239,6 +239,7 @@ class MergeWithFlat(OscalBaseModel):
         Field(
             description='Directs that controls appear without any grouping structure.',
             title='Flat Without Grouping',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -610,6 +611,7 @@ class ParameterGuideline(OscalBaseModel):
         Field(
             description='Prose permits multiple paragraphs, lists, tables etc.',
             title='Guideline Text',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -667,6 +669,7 @@ class MetadataPartyExternalId(OscalBaseModel):
         Field(
             description='Indicates the type of external identifier.',
             title='External Identifier Schema',
+            exclude_if=omit_none,
         ),
     ]
     id: Annotated[
@@ -674,6 +677,7 @@ class MetadataPartyExternalId(OscalBaseModel):
         Field(
             description='A non-empty string with leading and trailing whitespace disallowed. Whitespace is: U+9, U+10, U+32 or [ \n\t]+',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -741,6 +745,7 @@ class BackMatterResourceBase64(OscalBaseModel):
             description='Binary data encoded using the Base 64 encoding algorithm as defined by RFC4648.',
             json_schema_extra={'contentEncoding': 'base64'},
             pattern='^[0-9A-Za-z+/]+={0,2}$',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -758,6 +763,7 @@ class Link(OscalBaseModel):
         Field(
             description='A resolvable URL reference to a resource.',
             title='Hypertext Reference',
+            exclude_if=omit_none,
         ),
     ]
     rel: Annotated[
@@ -812,6 +818,7 @@ class Hash(OscalBaseModel):
         Field(
             description='The digest method by which a hash is derived.',
             title='Hash algorithm',
+            exclude_if=omit_none,
         ),
     ]
     value: Annotated[
@@ -819,6 +826,7 @@ class Hash(OscalBaseModel):
         Field(
             description='A non-empty string with leading and trailing whitespace disallowed. Whitespace is: U+9, U+10, U+32 or [ \n\t]+',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -840,6 +848,7 @@ class TelephoneNumber(OscalBaseModel):
         Field(
             description='A non-empty string with leading and trailing whitespace disallowed. Whitespace is: U+9, U+10, U+32 or [ \n\t]+',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -875,6 +884,7 @@ class DocumentId(OscalBaseModel):
         Field(
             description='A non-empty string with leading and trailing whitespace disallowed. Whitespace is: U+9, U+10, U+32 or [ \n\t]+',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -889,13 +899,14 @@ class QualifierItem(OscalBaseModel):
     )
     subject: Annotated[
         QualifierItemSubject,
-        Field(description='The focus of the qualifier.', title='Subject'),
+        Field(description='The focus of the qualifier.', title='Subject', exclude_if=omit_none),
     ]
     predicate: Annotated[
         QualifierItemPredicate,
         Field(
             description='The predicate describes how the qualifer applies to the subject.',
             title='Predicate',
+            exclude_if=omit_none,
         ),
     ]
     category: Annotated[
@@ -903,6 +914,7 @@ class QualifierItem(OscalBaseModel):
         Field(
             description='The category expresses the resolvable nature of the predicate.',
             title='Category',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -910,6 +922,7 @@ class QualifierItem(OscalBaseModel):
         Field(
             description='Details that outline what requirements must be met, or cannot be met. If the qualifier identifies a gap, this should idenfity the gap, and any incompatibilities.',
             title='Description of the qualifier',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -962,6 +975,7 @@ class Coverage(OscalBaseModel):
         Field(
             alias='target-coverage',
             description='A real number expressed using a whole and optional fractional part separated by a period.',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -988,6 +1002,7 @@ class MergeWithAsIs(OscalBaseModel):
             alias='as-is',
             description='Indicates that the controls selected should retain their original grouping as defined in the import source.',
             title='Group As-Is',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -1071,6 +1086,7 @@ class ImportComponentDefinition(OscalBaseModel):
         Field(
             description='A link to a resource that defines a set of components and/or capabilities to import into this collection.',
             title='Hyperlink Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1098,6 +1114,7 @@ class IncorporatesComponent(OscalBaseModel):
             description='A machine-oriented identifier reference to a component.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Reference',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -1105,6 +1122,7 @@ class IncorporatesComponent(OscalBaseModel):
         Field(
             description='A description of the component, including information about its function.',
             title='Component Description',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -1119,7 +1137,7 @@ class SystemComponentStatus(OscalBaseModel):
     )
     state: Annotated[
         SystemComponentStatusState,
-        Field(description='The operational status.', title='State'),
+        Field(description='The operational status.', title='State', exclude_if=omit_none),
     ]
     remarks: Annotated[
         str | None,
@@ -1184,6 +1202,7 @@ class ImplementationStatus(OscalBaseModel):
         Field(
             description='Identifies the implementation status of the control or control objective.',
             title='Implementation State',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1221,9 +1240,10 @@ class SetParameter(OscalBaseModel):
             description="A human-oriented reference to a parameter within a control, who's catalog has been imported into the current implementation context.",
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Parameter ID',
+            exclude_if=omit_none,
         ),
     ]
-    values: Annotated[list[StringDatatype], Field(min_length=1)]
+    values: Annotated[list[StringDatatype], Field(min_length=1, exclude_if=omit_none)]
     remarks: Annotated[
         str | None,
         Field(
@@ -1256,6 +1276,7 @@ class SystemId(OscalBaseModel):
         Field(
             description='A non-empty string with leading and trailing whitespace disallowed. Whitespace is: U+9, U+10, U+32 or [ \n\t]+',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -1273,6 +1294,7 @@ class ImportProfile(OscalBaseModel):
         Field(
             description="A resolvable URL reference to the profile or catalog to use as the system's control baseline.",
             title='Profile Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1298,6 +1320,7 @@ class InformationTypeCategorization(OscalBaseModel):
         Field(
             description='Specifies the information type identification system used.',
             title='Information Type Identification System',
+            exclude_if=omit_none,
         ),
     ]
     information_type_ids: Annotated[
@@ -1320,6 +1343,7 @@ class SecurityImpactLevel(OscalBaseModel):
             description='A target-level of confidentiality for the system, based on the sensitivity of information within the system.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Security Objective: Confidentiality',
+            exclude_if=omit_none,
         ),
     ]
     security_objective_integrity: Annotated[
@@ -1329,6 +1353,7 @@ class SecurityImpactLevel(OscalBaseModel):
             description='A target-level of integrity for the system, based on the sensitivity of information within the system.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Security Objective: Integrity',
+            exclude_if=omit_none,
         ),
     ]
     security_objective_availability: Annotated[
@@ -1338,6 +1363,7 @@ class SecurityImpactLevel(OscalBaseModel):
             description='A target-level of availability for the system, based on the sensitivity of information within the system.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Security Objective: Availability',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -1351,7 +1377,7 @@ class Status(OscalBaseModel):
         extra='forbid',
     )
     state: Annotated[
-        StatusState, Field(description='The current operating status.', title='State')
+        StatusState, Field(description='The current operating status.', title='State', exclude_if=omit_none)
     ]
     remarks: Annotated[
         str | None,
@@ -1376,6 +1402,7 @@ class ImportSsp(OscalBaseModel):
         Field(
             description='A resolvable URL reference to the system security plan for the system being assessed.',
             title='System Security Plan Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1403,6 +1430,7 @@ class TaskDependency(OscalBaseModel):
             description='A machine-oriented identifier reference to a unique task.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Task Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1429,11 +1457,12 @@ class TaskTimingAtFrequency(OscalBaseModel):
             description='The task must occur after the specified period has elapsed.',
             ge=1,
             title='Period',
+            exclude_if=omit_none,
         ),
     ]
     unit: Annotated[
         TaskTimingAtFrequencyUnit,
-        Field(description='The unit of time for the period.', title='Time Unit'),
+        Field(description='The unit of time for the period.', title='Time Unit', exclude_if=omit_none),
     ]
     remarks: Annotated[
         str | None,
@@ -1458,6 +1487,7 @@ class TaskTimingDateRange(OscalBaseModel):
         Field(
             description='The task must occur on or after the specified date.',
             title='Start Date Condition',
+            exclude_if=omit_none,
         ),
     ]
     end: Annotated[
@@ -1465,6 +1495,7 @@ class TaskTimingDateRange(OscalBaseModel):
         Field(
             description='The task must occur on or before the specified date.',
             title='End Date Condition',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1490,6 +1521,7 @@ class TaskTimingOnDate(OscalBaseModel):
         Field(
             description='The task must occur on the specified date.',
             title='On Date Condition',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1516,6 +1548,7 @@ class TaskTimingWithAtFrequency(OscalBaseModel):
             alias='at-frequency',
             description='The task is intended to occur at the specified frequency.',
             title='Frequency Condition',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -1534,6 +1567,7 @@ class TaskTimingWithDateRange(OscalBaseModel):
             alias='within-date-range',
             description='The task is intended to occur within the specified date range.',
             title='On Date Range Condition',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -1552,6 +1586,7 @@ class TaskTimingWithOnDate(OscalBaseModel):
             alias='on-date',
             description='The task is intended to occur on the specified date.',
             title='On Date Condition',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -1578,6 +1613,7 @@ class AssessmentCommonSelectControlById(OscalBaseModel):
             description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     statement_ids: Annotated[
@@ -1600,6 +1636,7 @@ class SelectObjectiveById(OscalBaseModel):
             description='Points to an assessment objective.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Objective ID',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1627,6 +1664,7 @@ class AssessmentSubjectPlaceholderSource(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference (in this or other OSCAL instances) an assessment activity to be performed as part of the event. The locally defined UUID of the task can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Task Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1652,6 +1690,7 @@ class FindingTargetStatus(OscalBaseModel):
         Field(
             description='An indication as to whether the objective is satisfied or not.',
             title='Objective Status State',
+            exclude_if=omit_none,
         ),
     ]
     reason: Annotated[
@@ -1687,6 +1726,7 @@ class RelatedObservation(OscalBaseModel):
             description='A machine-oriented identifier reference to an observation defined in the list of observations.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Observation Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1714,6 +1754,7 @@ class AssociatedRisk(OscalBaseModel):
             description='A machine-oriented identifier reference to a risk defined in the list of risks.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Risk Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1739,6 +1780,7 @@ class ThreatId(OscalBaseModel):
         Field(
             description='Specifies the source of the threat information.',
             title='Threat Type Identification System',
+            exclude_if=omit_none,
         ),
     ]
     href: Annotated[
@@ -1752,7 +1794,7 @@ class ThreatId(OscalBaseModel):
     id: Annotated[
         OscalUri,
         Field(
-            description='A universal resource identifier (URI) formatted according to RFC3986.'
+            description='A universal resource identifier (URI) formatted according to RFC3986.', exclude_if=omit_none
         ),
     ]
 
@@ -1772,6 +1814,7 @@ class LoggedBy(OscalBaseModel):
             description='A machine-oriented identifier reference to the party who is making the log entry.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Party UUID Reference',
+            exclude_if=omit_none,
         ),
     ]
     role_id: Annotated[
@@ -1807,6 +1850,7 @@ class ImportAp(OscalBaseModel):
         Field(
             description='A resolvable URL reference to the assessment plan governing the assessment activities.',
             title='Assessment Plan Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1834,6 +1878,7 @@ class PoamItemRelatedFinding(OscalBaseModel):
             description='A machine-oriented identifier reference to a finding defined in the list of findings.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Finding Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1860,6 +1905,7 @@ class ParameterConstraintTest(OscalBaseModel):
             description='A formal (executable) expression of a constraint.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Constraint test',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -1936,6 +1982,7 @@ class BackMatterResourceRlink(OscalBaseModel):
         Field(
             description='A resolvable URL pointing to the referenced resource.',
             title='Hypertext Reference',
+            exclude_if=omit_none,
         ),
     ]
     media_type: Annotated[
@@ -1965,6 +2012,7 @@ class Property(OscalBaseModel):
             description="A textual label, within a namespace, that identifies a specific attribute, characteristic, or quality of the property's containing object.",
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Property Name',
+            exclude_if=omit_none,
         ),
     ]
     uuid: Annotated[
@@ -1990,6 +2038,7 @@ class Property(OscalBaseModel):
             description='Indicates the value of the attribute, characteristic, or quality.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Property Value',
+            exclude_if=omit_none,
         ),
     ]
     class_: Annotated[
@@ -2036,11 +2085,12 @@ class ResponsibleParty(OscalBaseModel):
             description='A reference to a role performed by a party.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Responsible Role',
+            exclude_if=omit_none,
         ),
     ]
     party_uuids: Annotated[
         list[PartyUuid],
-        Field(alias='party-uuids', min_length=1),
+        Field(alias='party-uuids', min_length=1, exclude_if=omit_none),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2068,6 +2118,7 @@ class Action(OscalBaseModel):
             description='A unique identifier that can be used to reference this defined action elsewhere in an OSCAL document. A UUID should be consistently used for a given location across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Action Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     date: Annotated[
@@ -2084,6 +2135,7 @@ class Action(OscalBaseModel):
             description='The type of action documented by the assembly, such as an approval.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Action Type',
+            exclude_if=omit_none,
         ),
     ]
     system: Annotated[
@@ -2091,6 +2143,7 @@ class Action(OscalBaseModel):
         Field(
             description='Specifies the action type system used.',
             title='Action Type System',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2123,6 +2176,7 @@ class ResponsibleRole(OscalBaseModel):
             description='A human-oriented identifier reference to a role performed.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Responsible Role ID',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2206,7 +2260,7 @@ class MappingItem(OscalBaseModel):
     )
     type: Annotated[
         MappingItemType,
-        Field(description='The semantic type of the subject.', title='Subject Type'),
+        Field(description='The semantic type of the subject.', title='Subject Type', exclude_if=omit_none),
     ]
     id_ref: Annotated[
         str,
@@ -2215,6 +2269,7 @@ class MappingItem(OscalBaseModel):
             description='A reference to an identified subject that is of the specified type .',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Subject Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2247,13 +2302,14 @@ class MappingResourceReference(OscalBaseModel):
     ] = None
     type: Annotated[
         TokenDatatype | MappingResourceReferenceType,
-        Field(description='The semantic type of the resource.', title='Resource Type'),
+        Field(description='The semantic type of the resource.', title='Resource Type', exclude_if=omit_none),
     ]
     href: Annotated[
         OscalUriReference,
         Field(
             description='A resolvable URL reference to the base catalog or profile that this profile is tailoring.',
             title='Catalog or Profile Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2282,11 +2338,12 @@ class GapSummary(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this mapping gap summary elsewhere in this or other OSCAL instances. The locally defined UUID of the SSP can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance).This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Gap Summary Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     unmapped_controls: Annotated[
         list[ControlCommonSelectControlById],
-        Field(alias='unmapped-controls', min_length=1),
+        Field(alias='unmapped-controls', min_length=1, exclude_if=omit_none),
     ]
 
 
@@ -2327,7 +2384,7 @@ class ImportWithIncludeAll(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    include_all: Annotated[IncludeAll, Field(alias='include-all')]
+    include_all: Annotated[IncludeAll, Field(alias='include-all', exclude_if=omit_none)]
     exclude_controls: Annotated[
         list[ControlCommonSelectControlById] | None,
         Field(alias='exclude-controls', min_length=1, exclude_if=omit_none),
@@ -2352,7 +2409,7 @@ class ImportWithIncludeControls(OscalBaseModel):
     ] = None
     include_controls: Annotated[
         list[ControlCommonSelectControlById],
-        Field(alias='include-controls', min_length=1),
+        Field(alias='include-controls', min_length=1, exclude_if=omit_none),
     ]
     exclude_controls: Annotated[
         list[ControlCommonSelectControlById] | None,
@@ -2379,7 +2436,7 @@ class InsertControlsWithIncludeAll(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    include_all: Annotated[IncludeAll, Field(alias='include-all')]
+    include_all: Annotated[IncludeAll, Field(alias='include-all', exclude_if=omit_none)]
     exclude_controls: Annotated[
         list[ControlCommonSelectControlById] | None,
         Field(alias='exclude-controls', min_length=1, exclude_if=omit_none),
@@ -2404,7 +2461,7 @@ class InsertControlsWithIncludeControls(OscalBaseModel):
     ] = None
     include_controls: Annotated[
         list[ControlCommonSelectControlById],
-        Field(alias='include-controls', min_length=1),
+        Field(alias='include-controls', min_length=1, exclude_if=omit_none),
     ]
     exclude_controls: Annotated[
         list[ControlCommonSelectControlById] | None,
@@ -2433,6 +2490,7 @@ class ComponentDefinitionStatement(OscalBaseModel):
             description='A human-oriented identifier reference to a control statement.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Statement Reference',
+            exclude_if=omit_none,
         ),
     ]
     uuid: Annotated[
@@ -2441,6 +2499,7 @@ class ComponentDefinitionStatement(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this control statement elsewhere in this or other OSCAL instances. The UUID of the control statement in the source OSCAL instance is sufficient to reference the data item locally or globally (e.g., in an imported OSCAL instance).',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Control Statement Reference Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -2448,6 +2507,7 @@ class ComponentDefinitionStatement(OscalBaseModel):
         Field(
             description='A summary of how the containing control statement is implemented by the component or capability.',
             title='Statement Implementation Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2519,6 +2579,7 @@ class AuthorizedPrivilege(OscalBaseModel):
             description='A human readable name for the privilege.',
             pattern='^[^\\n]+$',
             title='Privilege Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -2531,7 +2592,7 @@ class AuthorizedPrivilege(OscalBaseModel):
     ] = None
     functions_performed: Annotated[
         list[FunctionPerformed],
-        Field(alias='functions-performed', min_length=1),
+        Field(alias='functions-performed', min_length=1, exclude_if=omit_none),
     ]
 
 
@@ -2550,6 +2611,7 @@ class InventoryItemImplementedComponent(OscalBaseModel):
             description='A machine-oriented identifier reference to a component that is implemented as part of an inventory item.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2583,6 +2645,7 @@ class Impact(OscalBaseModel):
             description='The prescribed base (Confidentiality, Integrity, or Availability) security impact level.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Base Level (Confidentiality, Integrity, or Availability)',
+            exclude_if=omit_none,
         ),
     ]
     selected: Annotated[
@@ -2619,6 +2682,7 @@ class Diagram(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this diagram elsewhere in this or other OSCAL instances. The locally defined UUID of the diagram can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Diagram ID',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -2659,6 +2723,7 @@ class NetworkArchitecture(OscalBaseModel):
         Field(
             description="A summary of the system's network architecture.",
             title='Network Architecture Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2687,6 +2752,7 @@ class DataFlow(OscalBaseModel):
         Field(
             description="A summary of the system's data flow.",
             title='Data Flow Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2716,6 +2782,7 @@ class SystemImplementationLeveragedAuthorization(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope and can be used to reference this leveraged authorization elsewhere in this or other OSCAL instances. The locally defined UUID of the leveraged authorization can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Leveraged Authorization Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -2724,6 +2791,7 @@ class SystemImplementationLeveragedAuthorization(OscalBaseModel):
             description='A human readable name for the leveraged authorization in the context of the system.',
             pattern='^[^\\n]+$',
             title='title field',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2735,6 +2803,7 @@ class SystemImplementationLeveragedAuthorization(OscalBaseModel):
             description='A machine-oriented identifier reference to the party that manages the leveraged system.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='party-uuid field',
+            exclude_if=omit_none,
         ),
     ]
     date_authorized: Annotated[
@@ -2744,6 +2813,7 @@ class SystemImplementationLeveragedAuthorization(OscalBaseModel):
             description='The date the system received its authorization.',
             pattern='^(((2000|2400|2800|(19|2[0-9](0[48]|[2468][048]|[13579][26])))-02-29)|(((19|2[0-9])[0-9]{2})-02-(0[1-9]|1[0-9]|2[0-8]))|(((19|2[0-9])[0-9]{2})-(0[13578]|10|12)-(0[1-9]|[12][0-9]|3[01]))|(((19|2[0-9])[0-9]{2})-(0[469]|11)-(0[1-9]|[12][0-9]|30)))(Z|(-((0[0-9]|1[0-2]):00|0[39]:30)|\\+((0[0-9]|1[0-4]):00|(0[34569]|10):30|(0[58]|12):45)))?$',
             title='System Authorization Date',
+            exclude_if=omit_none,
         ),
     ]
     remarks: Annotated[
@@ -2770,6 +2840,7 @@ class ByComponentExportProvided(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this provided entry elsewhere in this or other OSCAL instances. The locally defined UUID of the provided entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Provided Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -2777,6 +2848,7 @@ class ByComponentExportProvided(OscalBaseModel):
         Field(
             description='An implementation statement that describes the aspects of the control or control statement implementation that can be provided to another system leveraging this system.',
             title='Provided Control Implementation Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2808,6 +2880,7 @@ class ByComponentExportResponsibility(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this responsibility elsewhere in this or other OSCAL instances. The locally defined UUID of the responsibility can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Responsibility Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     provided_uuid: Annotated[
@@ -2825,6 +2898,7 @@ class ByComponentExportResponsibility(OscalBaseModel):
         Field(
             description='An implementation statement that describes the aspects of the control or control statement implementation that a leveraging system must implement to satisfy the control provided by a leveraged system.',
             title='Control Implementation Responsibility Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2856,6 +2930,7 @@ class ByComponentInherited(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this inherited entry elsewhere in this or other OSCAL instances. The locally defined UUID of the inherited control implementation can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Inherited Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     provided_uuid: Annotated[
@@ -2873,6 +2948,7 @@ class ByComponentInherited(OscalBaseModel):
         Field(
             description='An implementation statement that describes the aspects of a control or control statement implementation that a leveraging system is inheriting from a leveraged system.',
             title='Inherited Control Implementation Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2896,6 +2972,7 @@ class ByComponentSatisfied(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this satisfied control implementation entry elsewhere in this or other OSCAL instances. The locally defined UUID of the control implementation can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Satisfied Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     responsibility_uuid: Annotated[
@@ -2913,6 +2990,7 @@ class ByComponentSatisfied(OscalBaseModel):
         Field(
             description='An implementation statement that describes the aspects of a control or control statement implementation that a leveraging system is implementing based on a requirement from a leveraged system.',
             title='Satisfied Control Implementation Responsibility Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -2948,7 +3026,7 @@ class ControlObjectiveSelectionWithIncludeAll(OscalBaseModel):
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    include_all: Annotated[IncludeAll, Field(alias='include-all')]
+    include_all: Annotated[IncludeAll, Field(alias='include-all', exclude_if=omit_none)]
     exclude_objectives: Annotated[
         list[SelectObjectiveById] | None,
         Field(alias='exclude-objectives', min_length=1, exclude_if=omit_none),
@@ -2982,7 +3060,7 @@ class ControlObjectiveSelectionWithIncludeObjectives(OscalBaseModel):
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     include_objectives: Annotated[
-        list[SelectObjectiveById], Field(alias='include-objectives', min_length=1)
+        list[SelectObjectiveById], Field(alias='include-objectives', min_length=1, exclude_if=omit_none)
     ]
     exclude_objectives: Annotated[
         list[SelectObjectiveById] | None,
@@ -3022,7 +3100,7 @@ class ControlSelectionWithIncludeAll(OscalBaseModel):
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    include_all: Annotated[IncludeAll, Field(alias='include-all')]
+    include_all: Annotated[IncludeAll, Field(alias='include-all', exclude_if=omit_none)]
     exclude_controls: Annotated[
         list[AssessmentCommonSelectControlById] | None,
         Field(alias='exclude-controls', min_length=1, exclude_if=omit_none),
@@ -3057,7 +3135,7 @@ class ControlSelectionWithIncludeControls(OscalBaseModel):
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     include_controls: Annotated[
         list[AssessmentCommonSelectControlById],
-        Field(alias='include-controls', min_length=1),
+        Field(alias='include-controls', min_length=1, exclude_if=omit_none),
     ]
     exclude_controls: Annotated[
         list[AssessmentCommonSelectControlById] | None,
@@ -3093,6 +3171,7 @@ class AssessmentSubjectPlaceholder(OscalBaseModel):
             description='A machine-oriented, globally unique identifier for a set of assessment subjects that will be identified by a task or an activity that is part of a task. The locally defined UUID of the assessment subject placeholder can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Subject Placeholder Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -3103,7 +3182,7 @@ class AssessmentSubjectPlaceholder(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    sources: Annotated[list[AssessmentSubjectPlaceholderSource], Field(min_length=1)]
+    sources: Annotated[list[AssessmentSubjectPlaceholderSource], Field(min_length=1, exclude_if=omit_none)]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     remarks: Annotated[
@@ -3131,6 +3210,7 @@ class SelectSubjectById(OscalBaseModel):
             description="A machine-oriented identifier reference to a component, inventory-item, location, party, user, or resource using it's UUID.",
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Subject Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     type: Annotated[
@@ -3138,6 +3218,7 @@ class SelectSubjectById(OscalBaseModel):
         Field(
             description='Used to indicate the type of object pointed to by the uuid-ref within a subject.',
             title='Subject Universally Unique Identifier Reference Type',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -3167,6 +3248,7 @@ class SubjectReference(OscalBaseModel):
             description="A machine-oriented identifier reference to a component, inventory-item, location, party, user, or resource using it's UUID.",
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Subject Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     type: Annotated[
@@ -3174,6 +3256,7 @@ class SubjectReference(OscalBaseModel):
         Field(
             description='Used to indicate the type of object pointed to by the uuid-ref within a subject.',
             title='Subject Universally Unique Identifier Reference Type',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -3212,6 +3295,7 @@ class AssessmentPlatformUsesComponent(OscalBaseModel):
             description='A machine-oriented identifier reference to a component that is implemented as part of an inventory item.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -3242,6 +3326,7 @@ class FindingTarget(OscalBaseModel):
         Field(
             description='Identifies the type of the target.',
             title='Finding Target Type',
+            exclude_if=omit_none,
         ),
     ]
     target_id: Annotated[
@@ -3251,6 +3336,7 @@ class FindingTarget(OscalBaseModel):
             description='A machine-oriented identifier reference for a specific target qualified by the type.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Finding Target Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -3277,6 +3363,7 @@ class FindingTarget(OscalBaseModel):
         Field(
             description='A determination of if the objective is satisfied or not within a given system.',
             title='Objective Status',
+            exclude_if=omit_none,
         ),
     ]
     implementation_status: Annotated[
@@ -3313,6 +3400,7 @@ class ObservationRelevantEvidence(OscalBaseModel):
         Field(
             description='A human-readable description of this evidence.',
             title='Relevant Evidence Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -3336,7 +3424,7 @@ class OriginActor(OscalBaseModel):
         extra='forbid',
     )
     type: Annotated[
-        OriginActorType, Field(description='The kind of actor.', title='Actor Type')
+        OriginActorType, Field(description='The kind of actor.', title='Actor Type', exclude_if=omit_none)
     ]
     actor_uuid: Annotated[
         str,
@@ -3345,6 +3433,7 @@ class OriginActor(OscalBaseModel):
             description='A machine-oriented identifier reference to the tool or person based on the associated type.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Actor Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     role_id: Annotated[
@@ -3375,6 +3464,7 @@ class RiskMitigatingFactor(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this mitigating factor elsewhere in this or other OSCAL instances. The locally defined UUID of the mitigating factor can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Mitigating Factor Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     implementation_uuid: Annotated[
@@ -3392,6 +3482,7 @@ class RiskMitigatingFactor(OscalBaseModel):
         Field(
             description='A human-readable description of this mitigating factor.',
             title='Mitigating Factor Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -3413,6 +3504,7 @@ class CharacterizationFacet(OscalBaseModel):
             description='The name of the risk metric within the specified system.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Facet Name',
+            exclude_if=omit_none,
         ),
     ]
     system: Annotated[
@@ -3420,6 +3512,7 @@ class CharacterizationFacet(OscalBaseModel):
         Field(
             description='Specifies the naming system under which this risk metric is organized, which allows for the same names to be used in different systems controlled by different parties. This avoids the potential of a name clash.',
             title='Naming System',
+            exclude_if=omit_none,
         ),
     ]
     value: Annotated[
@@ -3428,6 +3521,7 @@ class CharacterizationFacet(OscalBaseModel):
             description='Indicates the value of the facet.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Facet Value',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -3456,6 +3550,7 @@ class ResponseRequiredAsset(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this required asset elsewhere in this or other OSCAL instances. The locally defined UUID of the asset can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Required Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     subjects: Annotated[list[SubjectReference] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -3473,6 +3568,7 @@ class ResponseRequiredAsset(OscalBaseModel):
         Field(
             description='A human-readable description of this required asset.',
             title='Description of Required Asset',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -3509,6 +3605,7 @@ class AssessmentPart(OscalBaseModel):
         Field(
             description="A textual label that uniquely identifies the part's semantic type.",
             title='Part Name',
+            exclude_if=omit_none,
         ),
     ]
     ns: Annotated[
@@ -3562,7 +3659,7 @@ class ResultAttestation(OscalBaseModel):
     responsible_parties: Annotated[
         list[ResponsibleParty] | None, Field(alias='responsible-parties', min_length=1, exclude_if=omit_none)
     ] = None
-    parts: Annotated[list[AssessmentPart], Field(min_length=1)]
+    parts: Annotated[list[AssessmentPart], Field(min_length=1, exclude_if=omit_none)]
 
 
 class PoamItemOrigin(OscalBaseModel):
@@ -3573,7 +3670,7 @@ class PoamItemOrigin(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    actors: Annotated[list[OriginActor], Field(min_length=1)]
+    actors: Annotated[list[OriginActor], Field(min_length=1, exclude_if=omit_none)]
 
 
 class Part(OscalBaseModel):
@@ -3599,6 +3696,7 @@ class Part(OscalBaseModel):
             description="A textual label that uniquely identifies the part's semantic type, which exists in a value space qualified by the ns.",
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Part Name',
+            exclude_if=omit_none,
         ),
     ]
     ns: Annotated[
@@ -3674,6 +3772,7 @@ class MetadataLocation(OscalBaseModel):
             description='A unique ID for the location, for reference.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Location Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -3889,6 +3988,7 @@ class MetadataRevision(OscalBaseModel):
             description='Used to distinguish a specific revision of an OSCAL document from other previous and future versions.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Document Version',
+            exclude_if=omit_none,
         ),
     ]
     oscal_version: Annotated[
@@ -3927,6 +4027,7 @@ class MetadataRole(OscalBaseModel):
             description='A unique identifier for the role.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Role Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -3935,6 +4036,7 @@ class MetadataRole(OscalBaseModel):
             description='A name given to the role, which may be used by a tool for display and navigation.',
             pattern='^[^\\n]+$',
             title='Role Title',
+            exclude_if=omit_none,
         ),
     ]
     short_name: Annotated[
@@ -3981,6 +4083,7 @@ class BackMatterResourceCitation(OscalBaseModel):
             description='A line of citation text.',
             pattern='^[^\\n]+$',
             title='Citation Text',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -4133,6 +4236,7 @@ class ComponentDefinitionImplementedRequirement(OscalBaseModel):
             description='Provides a globally unique means to identify a given control implementation by a component.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Control Implementation Identifier',
+            exclude_if=omit_none,
         ),
     ]
     control_id: Annotated[
@@ -4142,6 +4246,7 @@ class ComponentDefinitionImplementedRequirement(OscalBaseModel):
             description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -4149,6 +4254,7 @@ class ComponentDefinitionImplementedRequirement(OscalBaseModel):
         Field(
             description='A suggestion from the supplier (e.g., component vendor or author) for how the specified control may be implemented if the containing component or capability is instantiated in a system security plan.',
             title='Control Implementation Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -4186,6 +4292,7 @@ class SystemComponent(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this component elsewhere in this or other OSCAL instances. The locally defined UUID of the component can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Identifier',
+            exclude_if=omit_none,
         ),
     ]
     type: Annotated[
@@ -4193,6 +4300,7 @@ class SystemComponent(OscalBaseModel):
         Field(
             description='A category describing the purpose of the component.',
             title='Component Type',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -4201,6 +4309,7 @@ class SystemComponent(OscalBaseModel):
             description='A human readable name for the system component.',
             pattern='^[^\\n]+$',
             title='Component Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -4208,6 +4317,7 @@ class SystemComponent(OscalBaseModel):
         Field(
             description='A description of the component, including information about its function.',
             title='Component Description',
+            exclude_if=omit_none,
         ),
     ]
     purpose: Annotated[
@@ -4226,6 +4336,7 @@ class SystemComponent(OscalBaseModel):
         Field(
             description='Describes the operational status of the system component.',
             title='Status',
+            exclude_if=omit_none,
         ),
     ]
     responsible_roles: Annotated[
@@ -4256,6 +4367,7 @@ class SystemUser(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this user class elsewhere in this or other OSCAL instances. The locally defined UUID of the system user can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='User Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -4319,6 +4431,7 @@ class InventoryItem(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this inventory item elsewhere in this or other OSCAL instances. The locally defined UUID of the inventory item can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Inventory Item Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -4326,6 +4439,7 @@ class InventoryItem(OscalBaseModel):
         Field(
             description='A summary of the inventory item stating its purpose within the system.',
             title='Inventory Item Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -4370,6 +4484,7 @@ class InformationType(OscalBaseModel):
             description='A human readable name for the information type. This title should be meaningful within the context of the system.',
             pattern='^[^\\n]+$',
             title='title field',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -4377,6 +4492,7 @@ class InformationType(OscalBaseModel):
         Field(
             description='A summary of how this information type is used within the system.',
             title='Information Type Description',
+            exclude_if=omit_none,
         ),
     ]
     categorizations: Annotated[
@@ -4406,6 +4522,7 @@ class AuthorizationBoundary(OscalBaseModel):
         Field(
             description="A summary of the system's authorization boundary.",
             title='Authorization Boundary Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -4436,7 +4553,7 @@ class SystemImplementation(OscalBaseModel):
         Field(alias='leveraged-authorizations', min_length=1, exclude_if=omit_none),
     ] = None
     users: Annotated[list[SystemUser] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    components: Annotated[list[SystemComponent], Field(min_length=1)]
+    components: Annotated[list[SystemComponent], Field(min_length=1, exclude_if=omit_none)]
     inventory_items: Annotated[
         list[InventoryItem] | None, Field(alias='inventory-items', min_length=1, exclude_if=omit_none)
     ] = None
@@ -4510,6 +4627,7 @@ class LocalObjective(OscalBaseModel):
             description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -4522,7 +4640,7 @@ class LocalObjective(OscalBaseModel):
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    parts: Annotated[list[Part], Field(min_length=1)]
+    parts: Annotated[list[Part], Field(min_length=1, exclude_if=omit_none)]
     remarks: Annotated[
         str | None,
         Field(
@@ -4547,6 +4665,7 @@ class AssessmentMethod(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment method elsewhere in this or other OSCAL instances. The locally defined UUID of the assessment method can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Method Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -4559,7 +4678,7 @@ class AssessmentMethod(OscalBaseModel):
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    part: AssessmentPart
+    part: AssessmentPart = Field(exclude_if=omit_none)
     remarks: Annotated[
         str | None,
         Field(
@@ -4596,7 +4715,7 @@ class AssessmentSubjectWithIncludeAll(OscalBaseModel):
     ] = None
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    include_all: Annotated[IncludeAll, Field(alias='include-all')]
+    include_all: Annotated[IncludeAll, Field(alias='include-all', exclude_if=omit_none)]
     exclude_subjects: Annotated[
         list[SelectSubjectById] | None, Field(alias='exclude-subjects', min_length=1, exclude_if=omit_none)
     ] = None
@@ -4637,7 +4756,7 @@ class AssessmentSubjectWithIncludeSubjects(OscalBaseModel):
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     include_subjects: Annotated[
-        list[SelectSubjectById], Field(alias='include-subjects', min_length=1)
+        list[SelectSubjectById], Field(alias='include-subjects', min_length=1, exclude_if=omit_none)
     ]
     exclude_subjects: Annotated[
         list[SelectSubjectById] | None, Field(alias='exclude-subjects', min_length=1, exclude_if=omit_none)
@@ -4672,6 +4791,7 @@ class AssessmentPlatform(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment platform elsewhere in this or other OSCAL instances. The locally defined UUID of the assessment platform can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Platform Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -4722,6 +4842,7 @@ class PoamItem(OscalBaseModel):
             description='The title or name for this POA&M item .',
             pattern='^[^\\n]+$',
             title='POA&M Item Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -4729,6 +4850,7 @@ class PoamItem(OscalBaseModel):
         Field(
             description='A human-readable description of POA&M item.',
             title='POA&M Item Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -4912,6 +5034,7 @@ class BackMatterResource(OscalBaseModel):
             description='A unique identifier for a resource.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Resource Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -4976,6 +5099,7 @@ class Map(OscalBaseModel):
             description='The unique identifier for the mapping entry.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Mapping Entry Identifier',
+            exclude_if=omit_none,
         ),
     ]
     ns: Annotated[
@@ -5001,10 +5125,11 @@ class Map(OscalBaseModel):
             description='The relationship type for the mapping entry, which describes the relationship between the effective requirements of the specified source and target sets in the context of the matching-rationale method globaly defined in the provenance unless overwritten locally in the map. The relationship type and the matching-rationale must be used together. However, more than one matching-rationale method may apply to a source and target pair.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Mapping Entry Relationship',
+            exclude_if=omit_none,
         ),
     ]
-    sources: Annotated[list[MappingItem], Field(min_length=1)]
-    targets: Annotated[list[MappingItem], Field(min_length=1)]
+    sources: Annotated[list[MappingItem], Field(min_length=1, exclude_if=omit_none)]
+    targets: Annotated[list[MappingItem], Field(min_length=1, exclude_if=omit_none)]
     qualifiers: Annotated[list[QualifierItem] | None, Field(min_length=1, exclude_if=omit_none)] = None
     confidence_score: Annotated[
         Annotated[ConfidenceScore, Field(union_mode='left_to_right')] | None,
@@ -5041,6 +5166,7 @@ class MappingProvenance(OscalBaseModel):
         Field(
             description='The method used to complete the overall mapping.',
             title='Method',
+            exclude_if=omit_none,
         ),
     ]
     matching_rationale: Annotated[
@@ -5049,12 +5175,13 @@ class MappingProvenance(OscalBaseModel):
             alias='matching-rationale',
             description='The method used for relating controls within the mapping. The supported methods are aligned with the NIST Interagency Report (IR) 8477, Section 4.3 Set Theory Relationship Mapping.',
             title='Matching',
+            exclude_if=omit_none,
         ),
     ]
     status: Annotated[
         MappingStatus,
         Field(
-            description='The current status of this mapping document.', title='Status'
+            description='The current status of this mapping document.', title='Status', exclude_if=omit_none
         ),
     ]
     confidence_score: Annotated[
@@ -5073,6 +5200,7 @@ class MappingProvenance(OscalBaseModel):
             alias='mapping-description',
             description='Description of the context and intended use of the mapping set.',
             title='Mapping Description',
+            exclude_if=omit_none,
         ),
     ]
     responsible_parties: Annotated[
@@ -5104,6 +5232,7 @@ class ComponentDefinitionControlImplementation(OscalBaseModel):
             description='Provides a means to identify a set of control implementations that are supported by a given component or capability.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Control Implementation Set Identifier',
+            exclude_if=omit_none,
         ),
     ]
     source: Annotated[
@@ -5111,6 +5240,7 @@ class ComponentDefinitionControlImplementation(OscalBaseModel):
         Field(
             description='A reference to an OSCAL catalog or profile providing the referenced control or subcontrol definition.',
             title='Source Resource Reference',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -5118,6 +5248,7 @@ class ComponentDefinitionControlImplementation(OscalBaseModel):
         Field(
             description='A description of how the specified set of controls are implemented for the containing component or capability.',
             title='Control Implementation Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5127,7 +5258,7 @@ class ComponentDefinitionControlImplementation(OscalBaseModel):
     ] = None
     implemented_requirements: Annotated[
         list[ComponentDefinitionImplementedRequirement],
-        Field(alias='implemented-requirements', min_length=1),
+        Field(alias='implemented-requirements', min_length=1, exclude_if=omit_none),
     ]
 
 
@@ -5142,7 +5273,7 @@ class SystemInformation(OscalBaseModel):
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     information_types: Annotated[
-        list[InformationType], Field(alias='information-types', min_length=1)
+        list[InformationType], Field(alias='information-types', min_length=1, exclude_if=omit_none)
     ]
 
 
@@ -5161,6 +5292,7 @@ class ByComponent(OscalBaseModel):
             description='A machine-oriented identifier reference to the component that is implementing a given control.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     uuid: Annotated[
@@ -5169,6 +5301,7 @@ class ByComponent(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this by-component entry elsewhere in this or other OSCAL instances. The locally defined UUID of the by-component entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='By-Component Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -5176,6 +5309,7 @@ class ByComponent(OscalBaseModel):
         Field(
             description='An implementation statement that describes how a control or a control statement is implemented within the referenced system component.',
             title='Control Implementation Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5229,7 +5363,7 @@ class ReviewedControls(OscalBaseModel):
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     control_selections: Annotated[
         list[Annotated[ControlSelection, Field(union_mode='left_to_right')]],
-        Field(alias='control-selections', min_length=1),
+        Field(alias='control-selections', min_length=1, exclude_if=omit_none),
     ]
     control_objective_selections: Annotated[
         list[
@@ -5258,7 +5392,7 @@ class AssessmentAssets(OscalBaseModel):
     )
     components: Annotated[list[SystemComponent] | None, Field(min_length=1, exclude_if=omit_none)] = None
     assessment_platforms: Annotated[
-        list[AssessmentPlatform], Field(alias='assessment-platforms', min_length=1)
+        list[AssessmentPlatform], Field(alias='assessment-platforms', min_length=1, exclude_if=omit_none)
     ]
 
 
@@ -5277,11 +5411,12 @@ class RelatedTaskIdentifiedSubject(OscalBaseModel):
             description='A machine-oriented identifier reference to a unique assessment subject placeholder defined by this task.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Subject Placeholder Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     subjects: Annotated[
         list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]],
-        Field(min_length=1),
+        Field(min_length=1, exclude_if=omit_none),
     ]
 
 
@@ -5324,6 +5459,7 @@ class Metadata(OscalBaseModel):
             description='A name given to the document, which may be used by a tool for display and navigation.',
             pattern='^[^\\n]+$',
             title='Document Title',
+            exclude_if=omit_none,
         ),
     ]
     published: Annotated[
@@ -5340,6 +5476,7 @@ class Metadata(OscalBaseModel):
             alias='last-modified',
             description='The date and time the document was last stored for later retrieval.',
             title='Last Modified Timestamp',
+            exclude_if=omit_none,
         ),
     ]
     version: Annotated[
@@ -5348,6 +5485,7 @@ class Metadata(OscalBaseModel):
             description='Used to distinguish a specific revision of an OSCAL document from other previous and future versions.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Document Version',
+            exclude_if=omit_none,
         ),
     ]
     oscal_version: Annotated[
@@ -5357,6 +5495,7 @@ class Metadata(OscalBaseModel):
             description='The OSCAL model version the document was authored against and will conform to as valid.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='OSCAL Version',
+            exclude_if=omit_none,
         ),
     ]
     revisions: Annotated[list[MetadataRevision] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5410,6 +5549,7 @@ class Mapping(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this mapping definition elsewhere in this or other OSCAL instances. The locally defined UUID of the mapping can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same mapping across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Mapping Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     method: Annotated[
@@ -5435,9 +5575,9 @@ class Mapping(OscalBaseModel):
             description='The current status of this mapping document.', title='Status', exclude_if=omit_none
         ),
     ] = None
-    source_resource: Annotated[MappingResourceReference, Field(alias='source-resource')]
-    target_resource: Annotated[MappingResourceReference, Field(alias='target-resource')]
-    maps: Annotated[list[Map], Field(min_length=1)]
+    source_resource: Annotated[MappingResourceReference, Field(alias='source-resource', exclude_if=omit_none)]
+    target_resource: Annotated[MappingResourceReference, Field(alias='target-resource', exclude_if=omit_none)]
+    maps: Annotated[list[Map], Field(min_length=1, exclude_if=omit_none)]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     remarks: Annotated[
@@ -5508,6 +5648,7 @@ class ProfileGroupWithInsertControls(OscalBaseModel):
             description='A name to be given to the group for use in display.',
             pattern='^[^\\n]+$',
             title='Group Title',
+            exclude_if=omit_none,
         ),
     ]
     params: Annotated[
@@ -5579,6 +5720,7 @@ class DefinedComponent(OscalBaseModel):
             description='Provides a globally unique means to identify a given component.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Identifier',
+            exclude_if=omit_none,
         ),
     ]
     type: Annotated[
@@ -5586,6 +5728,7 @@ class DefinedComponent(OscalBaseModel):
         Field(
             description='A category describing the purpose of the component.',
             title='Component Type',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -5594,6 +5737,7 @@ class DefinedComponent(OscalBaseModel):
             description='A human readable name for the component.',
             pattern='^[^\\n]+$',
             title='Component Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -5601,6 +5745,7 @@ class DefinedComponent(OscalBaseModel):
         Field(
             description='A description of the component, including information about its function.',
             title='Component Description',
+            exclude_if=omit_none,
         ),
     ]
     purpose: Annotated[
@@ -5646,6 +5791,7 @@ class Capability(OscalBaseModel):
             description='Provides a globally unique means to identify a given capability.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Capability Identifier',
+            exclude_if=omit_none,
         ),
     ]
     name: Annotated[
@@ -5654,12 +5800,13 @@ class Capability(OscalBaseModel):
             description="The capability's human-readable name.",
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='Capability Name',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
         str,
         Field(
-            description='A summary of the capability.', title='Capability Description'
+            description='A summary of the capability.', title='Capability Description', exclude_if=omit_none
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5690,7 +5837,7 @@ class SystemCharacteristics(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    system_ids: Annotated[list[SystemId], Field(alias='system-ids', min_length=1)]
+    system_ids: Annotated[list[SystemId], Field(alias='system-ids', min_length=1, exclude_if=omit_none)]
     system_name: Annotated[
         str,
         Field(
@@ -5698,6 +5845,7 @@ class SystemCharacteristics(OscalBaseModel):
             description='The full name of the system.',
             pattern='^[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}]([^\\n\\r\\u{2028}\\u{2029}]*[^\\t\\n\\x0b\\x0c\\r \\u{a0}\\u{1680}\\u{2000}-\\u{200a}\\u{2028}\\u{2029}\\u{202f}\\u{205f}\\u{3000}\\u{feff}])?$',
             title='System Name - Full',
+            exclude_if=omit_none,
         ),
     ]
     system_name_short: Annotated[
@@ -5711,7 +5859,7 @@ class SystemCharacteristics(OscalBaseModel):
         ),
     ] = None
     description: Annotated[
-        str, Field(description='A summary of the system.', title='System Description')
+        str, Field(description='A summary of the system.', title='System Description', exclude_if=omit_none)
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5735,13 +5883,13 @@ class SystemCharacteristics(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    system_information: Annotated[SystemInformation, Field(alias='system-information')]
+    system_information: Annotated[SystemInformation, Field(alias='system-information', exclude_if=omit_none)]
     security_impact_level: Annotated[
         SecurityImpactLevel | None, Field(alias='security-impact-level', exclude_if=omit_none)
     ] = None
-    status: Status
+    status: Status = Field(exclude_if=omit_none)
     authorization_boundary: Annotated[
-        AuthorizationBoundary, Field(alias='authorization-boundary')
+        AuthorizationBoundary, Field(alias='authorization-boundary', exclude_if=omit_none)
     ]
     network_architecture: Annotated[
         NetworkArchitecture | None, Field(alias='network-architecture', exclude_if=omit_none)
@@ -5775,6 +5923,7 @@ class SspStatement(OscalBaseModel):
             description='A human-oriented identifier reference to a control statement.',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Statement Reference',
+            exclude_if=omit_none,
         ),
     ]
     uuid: Annotated[
@@ -5783,6 +5932,7 @@ class SspStatement(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this control statement elsewhere in this or other OSCAL instances. The UUID of the control statement in the source OSCAL instance is sufficient to reference the data item locally or globally (e.g., in an imported OSCAL instance).',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Control Statement Reference Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5817,6 +5967,7 @@ class ActivityStep(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this step elsewhere in this or other OSCAL instances. The locally defined UUID of the step (in a series of steps) can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Step Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -5833,6 +5984,7 @@ class ActivityStep(OscalBaseModel):
         Field(
             description='A human-readable description of this step.',
             title='Step Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5868,6 +6020,7 @@ class TaskAssociatedActivity(OscalBaseModel):
             description='A machine-oriented identifier reference to an activity defined in the list of activities.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Activity Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5877,7 +6030,7 @@ class TaskAssociatedActivity(OscalBaseModel):
     ] = None
     subjects: Annotated[
         list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]],
-        Field(min_length=1),
+        Field(min_length=1, exclude_if=omit_none),
     ]
     remarks: Annotated[
         str | None,
@@ -5904,6 +6057,7 @@ class RelatedTask(OscalBaseModel):
             description='A machine-oriented identifier reference to a unique task.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Task Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5950,6 +6104,7 @@ class RiskLogEntryRelatedResponse(OscalBaseModel):
             description='A machine-oriented identifier reference to a unique risk response.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Response Universally Unique Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -5981,6 +6136,7 @@ class ResultAssessmentLogEntry(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference an assessment event in this or other OSCAL instances. The locally defined UUID of the assessment log entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Log Entry Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6003,7 +6159,7 @@ class ResultAssessmentLogEntry(OscalBaseModel):
     start: Annotated[
         OscalDateTimeWithTimezone,
         Field(
-            description='Identifies the start date and time of an event.', title='Start'
+            description='Identifies the start date and time of an event.', title='Start', exclude_if=omit_none
         ),
     ]
     end: Annotated[
@@ -6046,6 +6202,7 @@ class Control(OscalBaseModel):
             description='Identifies a control such that it can be referenced in the defining catalog and other OSCAL instances (e.g., profiles).',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Identifier',
+            exclude_if=omit_none,
         ),
     ]
     class_: Annotated[
@@ -6064,6 +6221,7 @@ class Control(OscalBaseModel):
             description='A name given to the control, which may be used by a tool for display and navigation.',
             pattern='^[^\\n]+$',
             title='Control Title',
+            exclude_if=omit_none,
         ),
     ]
     params: Annotated[
@@ -6094,6 +6252,7 @@ class ModifyAlter(OscalBaseModel):
             description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     removes: Annotated[list[ModifyAlterRemove] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -6114,9 +6273,10 @@ class ComponentDefinition(OscalBaseModel):
             description='Provides a globally unique means to identify a given component definition instance.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Component Definition Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
+    metadata: Metadata = Field(exclude_if=omit_none)
     import_component_definitions: Annotated[
         list[ImportComponentDefinition] | None,
         Field(alias='import-component-definitions', min_length=1, exclude_if=omit_none),
@@ -6140,6 +6300,7 @@ class SspImplementedRequirement(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this control requirement elsewhere in this or other OSCAL instances. The locally defined UUID of the control requirement can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Control Requirement Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     control_id: Annotated[
@@ -6149,6 +6310,7 @@ class SspImplementedRequirement(OscalBaseModel):
             description='A reference to a control with a corresponding id value. When referencing an externally defined control, the Control Identifier Reference must be used in the context of the external / imported OSCAL instance (e.g., uri-reference).',
             pattern='^(\\p{L}|_)(\\p{L}|\\p{N}|[.\\-_])*$',
             title='Control Identifier Reference',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -6187,6 +6349,7 @@ class Activity(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment activity elsewhere in this or other OSCAL instances. The locally defined UUID of the activity can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Activity Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6203,6 +6366,7 @@ class Activity(OscalBaseModel):
         Field(
             description='A human-readable description of this included activity.',
             title='Included Activity Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -6238,11 +6402,12 @@ class Task(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this task elsewhere in this or other OSCAL instances. The locally defined UUID of the task can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Task Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     type: Annotated[
         TokenDatatype | TaskType,
-        Field(description='The type of task.', title='Task Type'),
+        Field(description='The type of task.', title='Task Type', exclude_if=omit_none),
     ]
     title: Annotated[
         str,
@@ -6250,6 +6415,7 @@ class Task(OscalBaseModel):
             description='The title for this task.',
             pattern='^[^\\n]+$',
             title='Task Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -6302,7 +6468,7 @@ class Origin(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    actors: Annotated[list[OriginActor], Field(min_length=1)]
+    actors: Annotated[list[OriginActor], Field(min_length=1, exclude_if=omit_none)]
     related_tasks: Annotated[
         list[RelatedTask] | None, Field(alias='related-tasks', min_length=1, exclude_if=omit_none)
     ] = None
@@ -6322,6 +6488,7 @@ class RiskLogEntry(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this risk log entry elsewhere in this or other OSCAL instances. The locally defined UUID of the risk log entry can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Risk Log Entry Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6346,6 +6513,7 @@ class RiskLogEntry(OscalBaseModel):
         Field(
             description='Identifies the start date and time of the event.',
             title='Start',
+            exclude_if=omit_none,
         ),
     ]
     end: Annotated[
@@ -6394,8 +6562,8 @@ class Characterization(OscalBaseModel):
     )
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    origin: Origin
-    facets: Annotated[list[CharacterizationFacet], Field(min_length=1)]
+    origin: Origin = Field(exclude_if=omit_none)
+    facets: Annotated[list[CharacterizationFacet], Field(min_length=1, exclude_if=omit_none)]
 
 
 class Response(OscalBaseModel):
@@ -6412,6 +6580,7 @@ class Response(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this remediation elsewhere in this or other OSCAL instances. The locally defined UUID of the risk response can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Remediation Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     lifecycle: Annotated[
@@ -6419,6 +6588,7 @@ class Response(OscalBaseModel):
         Field(
             description='Identifies whether this is a recommendation, such as from an assessor or tool, or an actual plan accepted by the system owner.',
             title='Remediation Intent',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6427,6 +6597,7 @@ class Response(OscalBaseModel):
             description='The title for this response activity.',
             pattern='^[^\\n]+$',
             title='Response Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -6434,6 +6605,7 @@ class Response(OscalBaseModel):
         Field(
             description='A human-readable description of this response plan.',
             title='Response Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -6483,7 +6655,7 @@ class ResultAssessmentLog(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    entries: Annotated[list[ResultAssessmentLogEntry], Field(min_length=1)]
+    entries: Annotated[list[ResultAssessmentLogEntry], Field(min_length=1, exclude_if=omit_none)]
 
 
 class ResultLocalDefinitions(OscalBaseModel):
@@ -6519,7 +6691,7 @@ class ComponentDefinitionDocument(OscalBaseModel):
         ),
     ] = None
     component_definition: Annotated[
-        ComponentDefinition, Field(alias='component-definition')
+        ComponentDefinition, Field(alias='component-definition', exclude_if=omit_none)
     ]
 
 
@@ -6556,6 +6728,7 @@ class CatalogGroupWithControls(OscalBaseModel):
             description='A name given to the group, which may be used by a tool for display and navigation.',
             pattern='^[^\\n]+$',
             title='Group Title',
+            exclude_if=omit_none,
         ),
     ]
     params: Annotated[
@@ -6581,11 +6754,12 @@ class MappingCollection(OscalBaseModel):
             description='A globally unique identifier with cross-instance scope for this catalog instance. This UUID should be changed when this document is revised.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Mapping Collection Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
-    provenance: MappingProvenance
-    mappings: MappingCollectionMappings
+    metadata: Metadata = Field(exclude_if=omit_none)
+    provenance: MappingProvenance = Field(exclude_if=omit_none)
+    mappings: MappingCollectionMappings = Field(exclude_if=omit_none)
     back_matter: Annotated[BackMatter | None, Field(alias='back-matter', exclude_if=omit_none)] = None
 
 
@@ -6617,6 +6791,7 @@ class SspControlImplementation(OscalBaseModel):
         Field(
             description='A statement describing important things to know about how this set of control satisfaction documentation is approached.',
             title='Control Implementation Description',
+            exclude_if=omit_none,
         ),
     ]
     set_parameters: Annotated[
@@ -6624,7 +6799,7 @@ class SspControlImplementation(OscalBaseModel):
     ] = None
     implemented_requirements: Annotated[
         list[SspImplementedRequirement],
-        Field(alias='implemented-requirements', min_length=1),
+        Field(alias='implemented-requirements', min_length=1, exclude_if=omit_none),
     ]
 
 
@@ -6669,6 +6844,7 @@ class Finding(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this finding in this or other OSCAL instances. The locally defined UUID of the finding can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Finding Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6677,6 +6853,7 @@ class Finding(OscalBaseModel):
             description='The title for this finding.',
             pattern='^[^\\n]+$',
             title='Finding Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -6684,12 +6861,13 @@ class Finding(OscalBaseModel):
         Field(
             description='A human-readable description of this finding.',
             title='Finding Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
     origins: Annotated[list[Origin] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    target: FindingTarget
+    target: FindingTarget = Field(exclude_if=omit_none)
     implementation_statement_uuid: Annotated[
         str | None,
         Field(
@@ -6731,6 +6909,7 @@ class Observation(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this observation elsewhere in this or other OSCAL instances. The locally defined UUID of the observation can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Observation Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6747,11 +6926,12 @@ class Observation(OscalBaseModel):
         Field(
             description='A human-readable description of this assessment observation.',
             title='Observation Description',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
     links: Annotated[list[Link] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    methods: Annotated[list[StringDatatype | ObservationMethod], Field(min_length=1)]
+    methods: Annotated[list[StringDatatype | ObservationMethod], Field(min_length=1, exclude_if=omit_none)]
     types: Annotated[
         list[TokenDatatype | ObservationType] | None, Field(min_length=1, exclude_if=omit_none)
     ] = None
@@ -6766,6 +6946,7 @@ class Observation(OscalBaseModel):
         Field(
             description='Date/time stamp identifying when the finding information was collected.',
             title='Collected Field',
+            exclude_if=omit_none,
         ),
     ]
     expires: Annotated[
@@ -6794,7 +6975,7 @@ class RiskLog(OscalBaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    entries: Annotated[list[RiskLogEntry], Field(min_length=1)]
+    entries: Annotated[list[RiskLogEntry], Field(min_length=1, exclude_if=omit_none)]
 
 
 class MappingCollectionDocument(OscalBaseModel):
@@ -6810,7 +6991,7 @@ class MappingCollectionDocument(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    mapping_collection: Annotated[MappingCollection, Field(alias='mapping-collection')]
+    mapping_collection: Annotated[MappingCollection, Field(alias='mapping-collection', exclude_if=omit_none)]
 
 
 class SystemSecurityPlan(OscalBaseModel):
@@ -6827,18 +7008,19 @@ class SystemSecurityPlan(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this system security plan (SSP) elsewhere in this or other OSCAL instances. The locally defined UUID of the SSP can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance).This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='System Security Plan Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
-    import_profile: Annotated[ImportProfile, Field(alias='import-profile')]
+    metadata: Metadata = Field(exclude_if=omit_none)
+    import_profile: Annotated[ImportProfile, Field(alias='import-profile', exclude_if=omit_none)]
     system_characteristics: Annotated[
-        SystemCharacteristics, Field(alias='system-characteristics')
+        SystemCharacteristics, Field(alias='system-characteristics', exclude_if=omit_none)
     ]
     system_implementation: Annotated[
-        SystemImplementation, Field(alias='system-implementation')
+        SystemImplementation, Field(alias='system-implementation', exclude_if=omit_none)
     ]
     control_implementation: Annotated[
-        SspControlImplementation, Field(alias='control-implementation')
+        SspControlImplementation, Field(alias='control-implementation', exclude_if=omit_none)
     ]
     back_matter: Annotated[BackMatter | None, Field(alias='back-matter', exclude_if=omit_none)] = None
 
@@ -6857,10 +7039,11 @@ class AssessmentPlan(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment plan in this or other OSCAL instances. The locally defined UUID of the assessment plan can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Plan Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
-    import_ssp: Annotated[ImportSsp, Field(alias='import-ssp')]
+    metadata: Metadata = Field(exclude_if=omit_none)
+    import_ssp: Annotated[ImportSsp, Field(alias='import-ssp', exclude_if=omit_none)]
     local_definitions: Annotated[
         AssessmentPlanLocalDefinitions | None,
         Field(
@@ -6879,7 +7062,7 @@ class AssessmentPlan(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    reviewed_controls: Annotated[ReviewedControls, Field(alias='reviewed-controls')]
+    reviewed_controls: Annotated[ReviewedControls, Field(alias='reviewed-controls', exclude_if=omit_none)]
     assessment_subjects: Annotated[
         list[Annotated[AssessmentSubject, Field(union_mode='left_to_right')]]
         | None,
@@ -6906,6 +7089,7 @@ class Risk(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this risk elsewhere in this or other OSCAL instances. The locally defined UUID of the risk can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Risk Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6914,6 +7098,7 @@ class Risk(OscalBaseModel):
             description='The title for this risk.',
             pattern='^[^\\n]+$',
             title='Risk Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -6921,6 +7106,7 @@ class Risk(OscalBaseModel):
         Field(
             description='A human-readable summary of the identified risk, to include a statement of how the risk impacts the system.',
             title='Risk Description',
+            exclude_if=omit_none,
         ),
     ]
     statement: Annotated[
@@ -6928,6 +7114,7 @@ class Risk(OscalBaseModel):
         Field(
             description='An summary of impact for how the risk affects the system.',
             title='Risk Statement',
+            exclude_if=omit_none,
         ),
     ]
     props: Annotated[list[Property] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -6937,6 +7124,7 @@ class Risk(OscalBaseModel):
         Field(
             description='Describes the status of the associated risk.',
             title='Risk Status',
+            exclude_if=omit_none,
         ),
     ]
     origins: Annotated[list[Origin] | None, Field(min_length=1, exclude_if=omit_none)] = None
@@ -6988,6 +7176,7 @@ class Result(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this set of results in this or other OSCAL instances. The locally defined UUID of the assessment result can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Results Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
     title: Annotated[
@@ -6996,6 +7185,7 @@ class Result(OscalBaseModel):
             description='The title for this set of results.',
             pattern='^[^\\n]+$',
             title='Results Title',
+            exclude_if=omit_none,
         ),
     ]
     description: Annotated[
@@ -7003,6 +7193,7 @@ class Result(OscalBaseModel):
         Field(
             description='A human-readable description of this set of test results.',
             title='Results Description',
+            exclude_if=omit_none,
         ),
     ]
     start: Annotated[
@@ -7010,6 +7201,7 @@ class Result(OscalBaseModel):
         Field(
             description='Date/time stamp identifying the start of the evidence collection reflected in these results.',
             title='start field',
+            exclude_if=omit_none,
         ),
     ]
     end: Annotated[
@@ -7031,7 +7223,7 @@ class Result(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    reviewed_controls: Annotated[ReviewedControls, Field(alias='reviewed-controls')]
+    reviewed_controls: Annotated[ReviewedControls, Field(alias='reviewed-controls', exclude_if=omit_none)]
     attestations: Annotated[list[ResultAttestation] | None, Field(min_length=1, exclude_if=omit_none)] = None
     assessment_log: Annotated[
         ResultAssessmentLog | None,
@@ -7069,9 +7261,10 @@ class PlanOfActionAndMilestones(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with instancescope that can be used to reference this POA&M instance in this OSCAL instance. This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='POA&M Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
+    metadata: Metadata = Field(exclude_if=omit_none)
     import_ssp: Annotated[ImportSsp | None, Field(alias='import-ssp', exclude_if=omit_none)] = None
     system_id: Annotated[SystemId | None, Field(alias='system-id', exclude_if=omit_none)] = None
     local_definitions: Annotated[
@@ -7080,7 +7273,7 @@ class PlanOfActionAndMilestones(OscalBaseModel):
     observations: Annotated[list[Observation] | None, Field(min_length=1, exclude_if=omit_none)] = None
     risks: Annotated[list[Risk] | None, Field(min_length=1, exclude_if=omit_none)] = None
     findings: Annotated[list[Finding] | None, Field(min_length=1, exclude_if=omit_none)] = None
-    poam_items: Annotated[list[PoamItem], Field(alias='poam-items', min_length=1)]
+    poam_items: Annotated[list[PoamItem], Field(alias='poam-items', min_length=1, exclude_if=omit_none)]
     back_matter: Annotated[BackMatter | None, Field(alias='back-matter', exclude_if=omit_none)] = None
 
 
@@ -7097,7 +7290,7 @@ class AssessmentPlanDocument(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    assessment_plan: Annotated[AssessmentPlan, Field(alias='assessment-plan')]
+    assessment_plan: Annotated[AssessmentPlan, Field(alias='assessment-plan', exclude_if=omit_none)]
 
 
 class PlanOfActionAndMilestonesDocument(OscalBaseModel):
@@ -7114,7 +7307,7 @@ class PlanOfActionAndMilestonesDocument(OscalBaseModel):
         ),
     ] = None
     plan_of_action_and_milestones: Annotated[
-        PlanOfActionAndMilestones, Field(alias='plan-of-action-and-milestones')
+        PlanOfActionAndMilestones, Field(alias='plan-of-action-and-milestones', exclude_if=omit_none)
     ]
 
 
@@ -7132,7 +7325,7 @@ class SystemSecurityPlanDocument(OscalBaseModel):
         ),
     ] = None
     system_security_plan: Annotated[
-        SystemSecurityPlan, Field(alias='system-security-plan')
+        SystemSecurityPlan, Field(alias='system-security-plan', exclude_if=omit_none)
     ]
 
 
@@ -7150,10 +7343,11 @@ class AssessmentResults(OscalBaseModel):
             description='A machine-oriented, globally unique identifier with cross-instance scope that can be used to reference this assessment results instance in this or other OSCAL instances. The locally defined UUID of the assessment result can be used to reference the data item locally or globally (e.g., in an imported OSCAL instance). This UUID should be assigned per-subject, which means it should be consistently used to identify the same subject across revisions of the document.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Assessment Results Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
-    import_ap: Annotated[ImportAp, Field(alias='import-ap')]
+    metadata: Metadata = Field(exclude_if=omit_none)
+    import_ap: Annotated[ImportAp, Field(alias='import-ap', exclude_if=omit_none)]
     local_definitions: Annotated[
         AssessmentResultsLocalDefinitions | None,
         Field(
@@ -7163,7 +7357,7 @@ class AssessmentResults(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    results: Annotated[list[Result], Field(min_length=1)]
+    results: Annotated[list[Result], Field(min_length=1, exclude_if=omit_none)]
     back_matter: Annotated[BackMatter | None, Field(alias='back-matter', exclude_if=omit_none)] = None
 
 
@@ -7180,7 +7374,7 @@ class AssessmentResultsDocument(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    assessment_results: Annotated[AssessmentResults, Field(alias='assessment-results')]
+    assessment_results: Annotated[AssessmentResults, Field(alias='assessment-results', exclude_if=omit_none)]
 
 
 class Catalog(OscalBaseModel):
@@ -7197,9 +7391,10 @@ class Catalog(OscalBaseModel):
             description='Provides a globally unique means to identify a given catalog instance.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Catalog Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
+    metadata: Metadata = Field(exclude_if=omit_none)
     params: Annotated[
         list[Annotated[Parameter, Field(union_mode='left_to_right')]] | None, Field(min_length=1, exclude_if=omit_none)
     ] = None
@@ -7244,6 +7439,7 @@ class CatalogGroupWithGroups(OscalBaseModel):
             description='A name given to the group, which may be used by a tool for display and navigation.',
             pattern='^[^\\n]+$',
             title='Group Title',
+            exclude_if=omit_none,
         ),
     ]
     params: Annotated[
@@ -7275,11 +7471,12 @@ class Profile(OscalBaseModel):
             description='Provides a globally unique means to identify a given profile instance.',
             pattern='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[45][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$',
             title='Profile Universally Unique Identifier',
+            exclude_if=omit_none,
         ),
     ]
-    metadata: Metadata
+    metadata: Metadata = Field(exclude_if=omit_none)
     imports: Annotated[
-        list[Annotated[Import, Field(union_mode='left_to_right')]], Field(min_length=1)
+        list[Annotated[Import, Field(union_mode='left_to_right')]], Field(min_length=1, exclude_if=omit_none)
     ]
     merge: Annotated[
         Annotated[Merge, Field(union_mode='left_to_right')] | None,
@@ -7332,6 +7529,7 @@ class MergeWithCustom(OscalBaseModel):
         Field(
             description='Provides an alternate grouping structure that selected controls will be placed in.',
             title='Custom Grouping',
+            exclude_if=omit_none,
         ),
     ]
 
@@ -7372,6 +7570,7 @@ class ProfileGroupWithGroups(OscalBaseModel):
             description='A name to be given to the group for use in display.',
             pattern='^[^\\n]+$',
             title='Group Title',
+            exclude_if=omit_none,
         ),
     ]
     params: Annotated[
@@ -7402,7 +7601,7 @@ class CatalogDocument(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    catalog: Catalog
+    catalog: Catalog = Field(exclude_if=omit_none)
 
 
 class ProfileDocument(OscalBaseModel):
@@ -7418,7 +7617,7 @@ class ProfileDocument(OscalBaseModel):
             exclude_if=omit_none,
         ),
     ] = None
-    profile: Profile
+    profile: Profile = Field(exclude_if=omit_none)
 
 
 class OscalDocument(

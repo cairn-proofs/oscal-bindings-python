@@ -31,9 +31,9 @@ as a class with its manifest name. This script completes the module:
 3. It names each scalar alias from its definition key without the
    ``oscal-complete-oscal-<module>:`` prefix (``LocationUuid``). A scalar has
    no manifest entry. Its name is a binding name, not a contract name.
-4. It adds ``exclude_if=omit_none`` to each field that defaults to ``None``
-   (``add_exclude_if``), so pydantic-core drops the field on every
-   serialization path.
+4. It adds ``exclude_if=omit_none`` to each field of an ``OscalBaseModel``
+   subclass (``add_exclude_if``), so pydantic-core drops a ``None`` on every
+   serialization path, also in a required field.
 5. It applies three guards to the result. Each guard reports every offender:
 
    1. Each manifest name is defined at module level in the form that its kind
@@ -446,60 +446,68 @@ def place_patterns(content: str, failures: list[str]) -> str:
 
 
 def add_exclude_if(content: str, failures: list[str]) -> str:
-    """Add ``exclude_if=omit_none`` to each field that defaults to ``None``.
+    """Add ``exclude_if=omit_none`` to each field of an ``OscalBaseModel`` subclass.
 
-    OSCAL forbids ``null``, so pydantic-core must drop a ``None`` field on every
-    serialization path. Each field of the form ``x: Annotated[T | None, Field(...)]
-    = None`` gets the argument in its ``Field(...)``, and a plain ``x: T | None =
-    None`` becomes ``Field(default=None, exclude_if=omit_none)``. A ``None``
-    default of another form is a failure that names the class and the field.
+    OSCAL forbids ``null``, so pydantic-core must drop a ``None`` on every
+    serialization path, also one in a required field that a caller set with
+    ``model_construct`` or by assignment. A field that has a ``Field(...)`` call,
+    in its ``Annotated`` or as its default, gets the argument there. A plain
+    ``x: T | None = None`` becomes ``Field(default=None, exclude_if=omit_none)``
+    and a plain ``x: T`` becomes ``Field(exclude_if=omit_none)``. A field of
+    another form is a failure that names the class and the field. The
+    ``RootModel`` classes have no such field and are left alone.
     """
     tree = ast.parse(content)
     span = _Spans(content)
     edits: list[tuple[int, int, str]] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
+        if not (
+            isinstance(node, ast.ClassDef)
+            and any(_is_name(base, "OscalBaseModel") for base in node.bases)
+        ):
             continue
         for stmt in node.body:
-            if not (
-                isinstance(stmt, ast.AnnAssign)
-                and isinstance(stmt.value, ast.Constant)
-                and stmt.value.value is None
-            ):
+            if not isinstance(stmt, ast.AnnAssign):
                 continue
             where = f"{node.name}.{ast.unparse(stmt.target)}"
-            field = _field_call(stmt.annotation)
-            if field is not None:
-                if any(kw.arg == "exclude_if" for kw in field.keywords):
-                    continue
-                last = field.keywords[-1] if field.keywords else None
-                if last is None:
-                    # ``Field()`` has no keyword: put the argument before ``)``.
-                    close = span(field)[1] - 1
-                    edits.append((close, close, EXCLUDE_IF_ARGUMENT))
-                else:
-                    end = span(last)[1]
-                    after = content[end : span(field)[1]]
-                    if field.lineno != field.end_lineno and after.lstrip().startswith(
-                        ","
-                    ):
-                        # One keyword per line with a trailing comma: add a line
-                        # in the same format.
-                        end += after.index(",") + 1
-                        indent = " " * last.col_offset
-                        text = f"\n{indent}{EXCLUDE_IF_ARGUMENT},"
-                    else:
-                        text = f", {EXCLUDE_IF_ARGUMENT}"
-                    edits.append((end, end, text))
+            call = _field_call(stmt.annotation)
+            if isinstance(stmt.value, ast.Call) and _is_name(stmt.value.func, "Field"):
+                call = stmt.value
+            if call is not None:
+                if not any(kw.arg == "exclude_if" for kw in call.keywords):
+                    edits.append(_add_keyword(content, span, call))
             elif isinstance(stmt.annotation, ast.Subscript) and _is_name(
                 stmt.annotation.value, "Annotated"
             ):
-                failures.append(f"{where}: an Annotated None field without a Field")
-            else:
+                failures.append(f"{where}: an Annotated field without a Field")
+            elif stmt.value is None:
+                end = span(stmt.annotation)[1]
+                edits.append((end, end, f" = Field({EXCLUDE_IF_ARGUMENT})"))
+            elif isinstance(stmt.value, ast.Constant) and stmt.value.value is None:
                 edits.append(
                     (*span(stmt.value), f"Field(default=None, {EXCLUDE_IF_ARGUMENT})")
                 )
+            else:
+                failures.append(f"{where}: a default that is not None and not a Field")
     return _apply(content, edits)
+
+
+def _add_keyword(content: str, span: _Spans, field: ast.Call) -> tuple[int, int, str]:
+    """Return the edit that adds ``exclude_if=omit_none`` to a ``Field(...)`` call."""
+    if not field.keywords:
+        # ``Field()`` has no keyword: put the argument before ``)``.
+        close = span(field)[1] - 1
+        separator = ", " if field.args else ""
+        return close, close, separator + EXCLUDE_IF_ARGUMENT
+    last = field.keywords[-1]
+    end = span(last)[1]
+    after = content[end : span(field)[1]]
+    if field.lineno != field.end_lineno and after.lstrip().startswith(","):
+        # One keyword per line with a trailing comma: add a line in the same format.
+        end += after.index(",") + 1
+        indent = " " * last.col_offset
+        return end, end, f"\n{indent}{EXCLUDE_IF_ARGUMENT},"
+    return end, end, f", {EXCLUDE_IF_ARGUMENT}"
 
 
 def _field_call(annotation: ast.expr) -> ast.Call | None:
@@ -903,7 +911,17 @@ def _required_keys(node: ast.ClassDef) -> frozenset[str]:
         for item in node.body
         if isinstance(item, ast.AnnAssign)
         and isinstance(item.target, ast.Name)
-        and item.value is None
+        and (item.value is None or _is_required_field_call(item.value))
+    )
+
+
+def _is_required_field_call(value: ast.expr) -> bool:
+    """Return True for a ``Field(...)`` default that sets no default value."""
+    return (
+        isinstance(value, ast.Call)
+        and _is_name(value.func, "Field")
+        and not value.args
+        and all(kw.arg not in {"default", "default_factory"} for kw in value.keywords)
     )
 
 
@@ -1259,7 +1277,8 @@ def postprocess(
     content = discriminate_document_union(content, manifest, failures)
     content = add_union_aliases(content, manifest, failures)
     content = add_exclude_if(content, failures)
-    content = ensure_from_import(content, _BASE_MODULE, "omit_none")
+    if EXCLUDE_IF_ARGUMENT in content:
+        content = ensure_from_import(content, _BASE_MODULE, "omit_none")
 
     # Remove the RootModel import if no longer used.
     if not re.search(r"\(RootModel\[", content):

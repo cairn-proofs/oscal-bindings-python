@@ -9,7 +9,7 @@ delegates to children that do. The base gives every model valid OSCAL output by 
   `pydantic_core.to_json`, and `TypeAdapter.dump_*`. Pass `by_alias=False`
   to get Python field names instead.
 - None-valued fields are always omitted, because OSCAL forbids `null`. Each
-  optional field of a generated model has `Field(exclude_if=omit_none)`.
+  field of a generated model has `Field(exclude_if=omit_none)`.
   `exclude_none=False` has no effect.
 - Keyword construction accepts Python field names as well as aliases, e.g.
   `BackMatterResourceRlink(href=..., media_type=...)`. Validation
@@ -36,6 +36,10 @@ from pydantic import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+    from pydantic import GetJsonSchemaHandler
+    from pydantic.json_schema import JsonSchemaValue
+    from pydantic_core import CoreSchema
 
 
 @functools.cache
@@ -84,11 +88,37 @@ class OscalBaseModel(BaseModel):
     # the same marker (design.md, Root Cause 5).
     __init__.__pydantic_base_init__ = True  # type: ignore[attr-defined]
 
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        """Keep the required fields in the serialization schema.
+
+        Each field has ``exclude_if=omit_none``, and pydantic then lists no field
+        as ``required`` in ``model_json_schema(mode="serialization")``. A valid
+        instance always has its required fields, so the hook lists them again.
+        It runs when a schema is built, never when a value is serialized.
+        """
+        json_schema = handler(core_schema)
+        if handler.mode == "serialization":
+            resolved = handler.resolve_ref_schema(json_schema)
+            required = {
+                key
+                for name, field in cls.model_fields.items()
+                if field.is_required()
+                for key in (name, field.alias)
+                if key is not None
+            }
+            listed = [key for key in resolved.get("properties", {}) if key in required]
+            if listed:
+                resolved["required"] = listed
+        return json_schema
+
 
 def omit_none(value: object) -> bool:
-    """Return True for ``None``: the ``exclude_if`` test of every optional field.
+    """Return True for ``None``: the ``exclude_if`` test of every field.
 
-    OSCAL forbids ``null``, so each optional field of a generated model carries
+    OSCAL forbids ``null``, so each field of a generated model carries
     ``Field(exclude_if=omit_none)`` and pydantic-core drops it on every
     serialization path. `scripts/postprocess_models.py` adds the argument.
     """

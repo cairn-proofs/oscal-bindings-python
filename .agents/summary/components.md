@@ -42,7 +42,7 @@ graph LR
 | Symbol | Purpose |
 |--------|---------|
 | `OscalBaseModel.model_config` | `serialize_by_alias=True`; deliberately no `validate_by_name` / `populate_by_name` |
-| `omit_none` | The `exclude_if` test of every optional field (`value is None`), so pydantic-core drops None values and no path emits `null`; `scripts/postprocess_models.py` adds `exclude_if=omit_none` to each None-default field |
+| `omit_none` | The `exclude_if` test of every field (`value is None`), so pydantic-core drops None values and no path emits `null`; `scripts/postprocess_models.py` adds `exclude_if=omit_none` to each field; `OscalBaseModel.__get_pydantic_json_schema__` restores `required` in the serialization schema |
 | `OscalBaseModel.__init__` | Maps field-name kwargs to aliases; leaves the name if the alias is also passed so `extra='forbid'` rejects it. Marked `__pydantic_base_init__ = True` so `model_validate*` doesn't route through it |
 | `_kwarg_aliases(cls)` | `functools.cache`'d `{name: alias}` for alias-differing fields, excluding names that are also some field's alias |
 
