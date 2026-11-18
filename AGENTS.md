@@ -35,6 +35,8 @@ src/oscal_bindings/
     _base.py           # OscalBaseModel — hand-written base of every generated object
                        # model (alias keys, no nulls, by-name constructor kwargs);
                        # root_key_discriminator for OscalDocument.root
+    _branches.py       # Selects the nested-union branch in validation failures (PRS-014);
+                       # shared by parse_oscal and validate_element
     _datatypes.py      # Hand-written OscalUri / OscalUriReference / OscalEmailAddress /
                        # OscalDateTimeWithTimezone; the hoist names them with customTypePath
     models.py          # GENERATED Pydantic models — DO NOT hand-edit

@@ -98,6 +98,25 @@ def _brief(text: str) -> str:
     return f"{text[:_QUOTE_LIMIT]!r}... ({len(text):,} characters)"
 
 
+def _entry(
+    kind: str,
+    message: str,
+    loc: tuple[str | int, ...],
+    at: tuple[int | None, int | None],
+    text: str | None,
+) -> dict[str, Any]:
+    """Return one error entry in the Pydantic entry shape, with a position."""
+    line, column = at
+    return {
+        "type": f"yaml_{kind}",
+        "loc": loc,
+        "msg": message,
+        "input": text,
+        "line": line,
+        "column": column,
+    }
+
+
 def _fail(  # noqa: PLR0913 -- one keyword for each field of the entry
     kind: str,
     message: str,
@@ -113,16 +132,9 @@ def _fail(  # noqa: PLR0913 -- one keyword for each field of the entry
     and column in the YAML source. ``limit`` is the identifier of the documented
     limit, for a limit failure only.
     """
-    line, column = at
-    entry = {
-        "type": f"yaml_{kind}",
-        "loc": loc,
-        "msg": message,
-        "input": text,
-        "line": line,
-        "column": column,
-    }
-    raise OscalParseError(message, errors=[entry], limit=limit)
+    raise OscalParseError(
+        message, errors=[_entry(kind, message, loc, at, text)], limit=limit
+    )
 
 
 # --- Stage 1: YAML 1.1 line-break characters ----------------------------------
@@ -540,6 +552,9 @@ class _Walk:
         self.stack: list[_Frame] = []
         self.alias_nodes = 0
         self.alias_chars = 0
+        #: The grammar failures of scalars (YML-010), in document order. The walk
+        #: goes on past each one, so the result covers each failure (PRS-006).
+        self.bad: list[dict[str, Any]] = []
 
     def path(self, slot: str | int | None) -> tuple[str | int, ...]:
         """Return the JSON path of ``slot`` in the innermost open frame."""
@@ -699,24 +714,32 @@ class _Walk:
                         JSON_DIGIT_LIMIT_MSG, errors=[entry], limit="json_digits"
                     )
                 return text
-            _fail(
-                "number_grammar",
-                f"YAML scalar {_brief(text)} does not match the JSON number grammar "
-                "at this location",
-                loc=self.path(slot),
-                at=(node.line, node.column),
-                text=text,
+            self.bad.append(
+                _entry(
+                    "number_grammar",
+                    f"YAML scalar {_brief(text)} does not match the JSON number "
+                    "grammar at this location",
+                    self.path(slot),
+                    (node.line, node.column),
+                    text,
+                )
             )
+            # A stand-in that the schema accepts at any number location, so the
+            # JSON step reports no entry of its own for this scalar.
+            return "1"
         if text in ("true", "false"):
             return text
-        _fail(
-            "boolean_grammar",
-            f"YAML scalar {_brief(text)} is not a JSON boolean (true or false) "
-            "at this location",
-            loc=self.path(slot),
-            at=(node.line, node.column),
-            text=text,
+        self.bad.append(
+            _entry(
+                "boolean_grammar",
+                f"YAML scalar {_brief(text)} is not a JSON boolean (true or false) "
+                "at this location",
+                self.path(slot),
+                (node.line, node.column),
+                text,
+            )
         )
+        return "false"
 
 
 # --- Public operations ---------------------------------------------------------
@@ -752,15 +775,61 @@ def _position(prefix: str) -> tuple[int, int]:
     return len(lines), len(lines[-1]) + 1
 
 
+def _convert(data: str | bytes) -> tuple[str, list[dict[str, Any]]]:
+    """Return the JSON text of one YAML document and its scalar grammar failures.
+
+    A scalar that matches no grammar of YML-004 gets a stand-in in the text and
+    an entry in the list, so the walk reports each of them (PRS-006). Any other
+    failure of the YAML layer raises at once.
+    """
+    text, restore = _shield(_decode(data))
+    walk = _Walk()
+    return walk.run(_compose(text, restore)), walk.bad
+
+
+def _failure(
+    yaml_entries: list[dict[str, Any]], schema_entries: list[Any]
+) -> OscalParseError:
+    """Merge the YAML entries with the schema entries of the JSON step.
+
+    The stand-in at each failed scalar satisfies the schema, so the JSON step
+    reports no entry for it and the two lists never overlap. The YAML entries
+    come first, in document order. A YAML entry's ``loc`` is the plain JSON
+    path (``("catalog", "metadata", ...)``), and a schema entry's ``loc``
+    starts with the class name of the document type, as in a JSON parse. The
+    merge keeps each convention as it is.
+    """
+    errors = [*yaml_entries, *schema_entries]
+    if len(errors) == 1:
+        return OscalParseError(errors[0]["msg"], errors=errors)
+    return OscalParseError(
+        f"Failed to parse OSCAL document: {len(errors)} validation error(s)",
+        errors=errors,
+    )
+
+
 def to_json_text(data: str | bytes) -> str:
     """Convert one YAML document to the JSON text that YML-005 defines."""
-    text, restore = _shield(_decode(data))
-    return _Walk().run(_compose(text, restore))
+    text, bad = _convert(data)
+    if bad:
+        raise _failure(bad, [])
+    return text
 
 
 def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
     """Implement :func:`oscal_bindings.v1.extensions.yaml_io.parse_oscal_yaml`."""
-    return parse_oscal(to_json_text(data))
+    text, bad = _convert(data)
+    if not bad:
+        return parse_oscal(text)
+    schema_entries: list[Any] = []
+    try:
+        parse_oscal(text)
+    except OscalParseError as exc:
+        if exc.limit is not None:
+            raise
+        schema_entries = exc.errors
+    # Raised outside the handler: the error holds no copy of the input.
+    raise _failure(bad, schema_entries)
 
 
 def parse_oscal_yaml_file(path: Path) -> OscalDocument:
