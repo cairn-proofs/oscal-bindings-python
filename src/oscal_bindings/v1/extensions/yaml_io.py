@@ -123,7 +123,12 @@ def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
             ``line``, and ``column``. A scalar that matches no grammar of
             YML-004 does not stop the parse: the error holds one such entry
             for each of them, followed by the schema entries for the rest of
-            the document (PRS-006). Any other YAML failure is the one entry.
+            the document (PRS-006). The ``loc`` of a YAML entry is the plain JSON
+            path, such as ``("catalog", "metadata", "title")``, and the ``loc``
+            of a schema entry starts with the class name of the document
+            type, such as ``("CatalogDocument", "catalog", ...)``, as in
+            :func:`~oscal_bindings.v1.parser.parse_oscal`. Any other YAML
+            failure is the one entry.
         ImportError: The ``yaml`` extra is not installed.
     """
     _require_yaml()

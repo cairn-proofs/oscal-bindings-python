@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 import textwrap
+import time
 import tracemalloc
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -279,31 +280,110 @@ class TestEveryBadScalarIsReported:
         # A missing required field is a schema entry of the JSON step.
         text = _component_with_start("0x10").replace("      description: d\n", "")
         errors = _parse_errors(text)
-        types = [e["type"] for e in errors]
-        assert types[0] == "yaml_number_grammar"
-        assert any(not t.startswith("yaml_") for t in types[1:]), errors
-        assert not any(
-            e["loc"][: len(START_LOC)] == START_LOC
-            for e in errors
-            if not e["type"].startswith("yaml_")
+        assert [e["type"] for e in errors] == ["yaml_number_grammar", "missing"]
+        yaml_entry, schema_entry = errors
+        # A YAML entry has the plain JSON path, and a schema entry starts with
+        # the class name of the document type (the JSON parse convention).
+        assert yaml_entry["loc"] == START_LOC
+        assert schema_entry["loc"][0] == "ComponentDefinitionDocument"
+        assert schema_entry["loc"][1:] == (
+            "component-definition",
+            "components",
+            0,
+            "description",
         )
+        assert yaml_entry["line"]
+        assert "line" not in schema_entry
+        with pytest.raises(OscalParseError, match="2 validation error"):
+            parse_oscal_yaml(text)
 
     def test_the_stand_in_adds_no_entry_of_its_own(self) -> None:
         errors = _parse_errors(_component_with_start("0x10"))
         assert len(errors) == 1
 
-    def test_json_limit_still_wins(self) -> None:
+    @pytest.mark.parametrize("bad", ["yes", "True", "TRUE", "1", "on", "'false '"])
+    def test_a_bad_boolean_is_one_entry(self, bad: str) -> None:
+        (entry,) = _parse_errors(_profile_with_as_is(bad))
+        assert entry["type"] == "yaml_boolean_grammar"
+        assert entry["loc"] == ("profile", "merge", "as-is")
+
+    def test_a_bad_boolean_merges_with_a_schema_entry(self) -> None:
+        # The pinned schema has one boolean location (`merge.as-is`) and one
+        # number location pair (`port-ranges`), in different document types, so
+        # a bad boolean and a bad number cannot share one document.
+        text = _profile_with_as_is("yes").replace("title: T", "title: 5\n    x: 1")
+        types = [e["type"] for e in _parse_errors(text)]
+        assert types[0] == "yaml_boolean_grammar"
+        assert "extra_forbidden" in types[1:]
+
+    def test_a_bad_scalar_behind_an_alias_gets_an_entry_for_each_use(self) -> None:
+        text = _component_with_start("&n 0x10").replace("end: 443", "end: *n")
+        errors = _parse_errors(text)
+        assert [e["type"] for e in errors] == ["yaml_number_grammar"] * 2
+        assert [e["loc"][-1] for e in errors] == ["start", "end"]
+        assert [e["input"] for e in errors] == ["0x10", "0x10"]
+
+    def test_a_limit_later_in_the_walk_leaves_one_entry(self) -> None:
+        # A bad scalar comes first. The digit limit then stops the walk, and the
+        # error holds the limit entry alone.
         text = _component_with_start("0x10").replace(
             "end: 443", "end: " + "9" * (JSON_DIGIT_LIMIT + 1)
         )
         with pytest.raises(OscalParseError) as info:
             parse_oscal_yaml(text)
         assert info.value.limit == "json_digits"
+        (entry,) = info.value.errors
+        assert entry["type"] == "json_digit_limit"
+        assert entry["loc"][-1] == "end"
+
+    def test_the_depth_limit_later_in_the_walk_leaves_one_entry(self) -> None:
+        deep = "[" * (DEPTH_LIMIT + 1) + "]" * (DEPTH_LIMIT + 1)
+        text = _component_with_start("0x10") + f"  back-matter: {deep}\n"
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(text)
+        assert info.value.limit == "yaml_depth"
+        assert len(info.value.errors) == 1
+
+    def test_a_limit_from_the_json_step_leaves_one_entry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        limit = OscalParseError(
+            "limit", errors=[{"type": "json_depth_limit"}], limit="json_depth"
+        )
+
+        def fail(_text: str) -> None:
+            raise limit
+
+        monkeypatch.setattr(_yaml_loader, "parse_oscal", fail)
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(_component_with_start("0x10"))
+        assert info.value is limit
+        assert len(info.value.errors) == 1
 
     def test_message_counts_the_entries(self) -> None:
         text = _component_with_start("0x10").replace("end: 443", "end: 0x20")
         with pytest.raises(OscalParseError, match="2 validation error"):
             parse_oscal_yaml(text)
+
+    def test_many_bad_scalars_and_schema_errors_are_fast(self) -> None:
+        # 10,000 components, each with two bad numbers and no description:
+        # 20,000 YAML entries and 10,000 schema entries.
+        count = 10_000
+        item = (
+            "  - {uuid: 7d2b6c1e-3f4a-4b5c-8d6e-9f0a1b2c3d44, type: service, "
+            "title: S, protocols: [{name: p, "
+            "port-ranges: [{start: 0x1, end: 0x2}]}]}\n"
+        )
+        head = _component_with_start("1").split("  components:")[0]
+        text = head + "  components:\n" + item * count
+        started = time.perf_counter()
+        errors = _parse_errors(text)
+        elapsed = time.perf_counter() - started
+        kinds = [e["type"] for e in errors]
+        assert kinds.count("yaml_number_grammar") == 2 * count
+        assert kinds.count("missing") == count
+        assert len(errors) == 3 * count
+        assert elapsed < 10, elapsed
 
 
 class TestScalarTyping:

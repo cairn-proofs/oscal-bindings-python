@@ -787,22 +787,19 @@ def _convert(data: str | bytes) -> tuple[str, list[dict[str, Any]]]:
     return walk.run(_compose(text, restore)), walk.bad
 
 
-def _covers(parent: tuple[Any, ...], loc: tuple[Any, ...]) -> bool:
-    return loc[: len(parent)] == parent
-
-
 def _failure(
     yaml_entries: list[dict[str, Any]], schema_entries: list[Any]
 ) -> OscalParseError:
     """Merge the YAML entries with the schema entries of the JSON step.
 
-    The JSON step read a stand-in at each failed scalar, so an entry of it at or
-    under such a location is dropped. The YAML entries come first, in document
-    order.
+    The stand-in at each failed scalar satisfies the schema, so the JSON step
+    reports no entry for it and the two lists never overlap. The YAML entries
+    come first, in document order. A YAML entry's ``loc`` is the plain JSON
+    path (``("catalog", "metadata", ...)``), and a schema entry's ``loc``
+    starts with the class name of the document type, as in a JSON parse. The
+    merge keeps each convention as it is.
     """
-    locs = [e["loc"] for e in yaml_entries if e["loc"]]
-    rest = [e for e in schema_entries if not any(_covers(p, e["loc"]) for p in locs)]
-    errors = [*yaml_entries, *rest]
+    errors = [*yaml_entries, *schema_entries]
     if len(errors) == 1:
         return OscalParseError(errors[0]["msg"], errors=errors)
     return OscalParseError(
