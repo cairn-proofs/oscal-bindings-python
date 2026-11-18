@@ -142,6 +142,7 @@ BY_ALIAS = {"by_alias-omitted": {}, "by_alias=True": {"by_alias": True}}
 @pytest.mark.parametrize("by_alias", list(BY_ALIAS))
 @pytest.mark.parametrize("path", list(PATHS))
 @pytest.mark.parametrize("model", list(MODEL_FACTORIES))
+@pytest.mark.spec("SER-001.02", "SER-002.02")
 def test_default_path_emits_oscal_keys_and_no_nulls(
     model: str, path: str, by_alias: str, small_catalog_bytes: bytes
 ) -> None:

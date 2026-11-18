@@ -82,6 +82,7 @@ def _unresolved_identifiers(record: dict) -> list[str]:
     ]
 
 
+@pytest.mark.spec("SRF-003.04", "SRF-001.02")
 def test_every_public_operation_has_an_entry() -> None:
     """SRF-003.04: a public operation without an entry fails conformance."""
     missing = _missing_entries(_load_record())
@@ -100,6 +101,7 @@ def test_each_entry_names_one_public_operation_once() -> None:
     assert len(names) == len(set(names)), "an operation name occurs in two entries"
 
 
+@pytest.mark.spec("SRF-004.01")
 def test_cited_identifiers_resolve_in_the_pinned_index() -> None:
     """SRF-004: each contract identifier resolves in the requirement index."""
     unresolved = _unresolved_identifiers(_load_record())
@@ -130,6 +132,7 @@ def test_yaml_operations_cite_the_contract_requirements() -> None:
 # --- Guards that the test itself detects each failure (self-verification) ---
 
 
+@pytest.mark.spec("SRF-003.04")
 def test_detects_a_removed_entry() -> None:
     """Removing an entry for a public operation is caught (SRF-003.04)."""
     record = _load_record()
@@ -139,6 +142,7 @@ def test_detects_a_removed_entry() -> None:
     assert _missing_entries(record) == ["parse_oscal"]
 
 
+@pytest.mark.spec("SRF-004.02")
 def test_detects_an_unresolvable_identifier() -> None:
     """A cited identifier absent from the index is caught (SRF-004.02)."""
     record = _load_record()
@@ -150,8 +154,14 @@ def test_detects_an_unresolvable_identifier() -> None:
 @pytest.mark.parametrize(
     "entry",
     [
-        {"name": "x", "requirements": ["PRS-001"], "binding-local": "YRL-001"},
-        {"name": "x", "requirements": ["PRS-001.01"]},
+        pytest.param(
+            {"name": "x", "requirements": ["PRS-001"], "binding-local": "YRL-001"},
+            marks=pytest.mark.spec("SRF-007.01"),
+        ),
+        pytest.param(
+            {"name": "x", "requirements": ["PRS-001.01"]},
+            marks=pytest.mark.spec("SRF-007.02"),
+        ),
         {"name": "x"},
     ],
 )

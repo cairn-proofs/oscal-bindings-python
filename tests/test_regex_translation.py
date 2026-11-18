@@ -238,6 +238,7 @@ def test_space_class_and_its_complement() -> None:
         "(?<n>a)",
     ],
 )
+@pytest.mark.spec("PRS-007.02")
 def test_an_unknown_construct_is_an_error_that_names_the_pattern(
     pattern: str,
 ) -> None:

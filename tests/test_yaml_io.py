@@ -27,6 +27,7 @@ import pytest
 import yaml
 
 import oscal_bindings as ob
+import oscal_bindings.extensions as ob_extensions
 from oscal_bindings import OscalParseError, OscalReadError
 from oscal_bindings.v1.extensions import _yaml_loader
 from oscal_bindings.v1.extensions._yaml_loader import _SCHEMA, to_json_text
@@ -702,6 +703,7 @@ class TestParseOscalYaml:
         doc = parse_oscal_yaml(MINIMAL_CATALOG_YAML)
         assert _canon(_json_value(doc)) == _canon(json.loads(MINIMAL_CATALOG_JSON))
 
+    @pytest.mark.spec("YML-005.01")
     def test_parses_from_bytes(self) -> None:
         doc = parse_oscal_yaml(MINIMAL_CATALOG_YAML.encode("utf-8"))
         assert _canon(_json_value(doc)) == _canon(json.loads(MINIMAL_CATALOG_JSON))
@@ -719,7 +721,49 @@ class TestParseOscalYaml:
             parse_oscal_yaml(HEAD + "    colour: blue\n")
 
 
+class TestYamlStructure:
+    @pytest.mark.spec("YML-003.01")
+    def test_a_sequence_of_mappings_keeps_keys_and_item_order(self) -> None:
+        text = HEAD + (
+            "    props:\n"
+            "      - {name: c, value: 1}\n"
+            "      - {name: a, value: 2}\n"
+            "      - {name: b, value: 3}\n"
+        )
+        value = json.loads(to_json_text(text))
+        props = value["catalog"]["metadata"]["props"]
+        assert isinstance(props, list)
+        assert [list(p) for p in props] == [["name", "value"]] * 3
+        assert [p["name"] for p in props] == ["c", "a", "b"]
+        assert [p["value"] for p in props] == ["1", "2", "3"]
+        assert list(value["catalog"]["metadata"]) == [
+            "title",
+            "last-modified",
+            "version",
+            "oscal-version",
+            "props",
+        ]
+        parsed = parse_oscal_yaml(text)
+        assert [p.name for p in parsed.root.catalog.metadata.props] == ["c", "a", "b"]
+
+
+class TestYamlOperationSet:
+    @pytest.mark.spec("YML-001.02")
+    def test_the_parse_and_serialize_operations_come_together(self) -> None:
+        # A binding with the YAML parse operation also has the serialize one,
+        # on every import path.
+        for module in (ob, ob.v1, ob_extensions, ob.v1.extensions):
+            for name in ("parse_oscal_yaml", "serialize_oscal_yaml"):
+                assert callable(getattr(module, name)), (module, name)
+                assert name in module.__all__
+        doc = parse_oscal_yaml(MINIMAL_CATALOG_YAML)
+        assert _json_value(parse_oscal_yaml(serialize_oscal_yaml(doc))) == _json_value(
+            doc
+        )
+
+
 class TestParseOscalYamlFile:
+    @pytest.mark.spec("YML-006.01")
     def test_parses_existing_file(self, tmp_path) -> None:
         path = tmp_path / "catalog.yaml"
         path.write_text(MINIMAL_CATALOG_YAML, encoding="utf-8")
@@ -728,6 +772,7 @@ class TestParseOscalYamlFile:
         )
         assert _json_value(parse_oscal_yaml_file(str(path)))["catalog"]
 
+    @pytest.mark.spec("YML-006.02")
     def test_missing_file_reports_not_found(self, tmp_path) -> None:
         # YML-006 / PRS-002: not-found is distinct from the parse error.
         missing = tmp_path / "nope.yaml"
@@ -759,6 +804,18 @@ def _values(value: Any) -> list[Any]:
 
 
 class TestSerializeOscalYaml:
+    @pytest.mark.spec("YML-008.03")
+    def test_absent_optional_fields_are_not_written(self) -> None:
+        loaded = yaml.safe_load(serialize_oscal_yaml(parse_oscal_yaml(HEAD)))
+        assert set(loaded) == {"catalog"}
+        assert set(loaded["catalog"]) == {"uuid", "metadata"}
+        assert set(loaded["catalog"]["metadata"]) == {
+            "title",
+            "last-modified",
+            "version",
+            "oscal-version",
+        }
+
     def test_version_string_survives_round_trip(self) -> None:
         # YML-008.02.
         out = serialize_oscal_yaml(
@@ -769,6 +826,7 @@ class TestSerializeOscalYaml:
             == "1.0"
         )
 
+    @pytest.mark.spec("YML-008.03")
     def test_output_holds_no_null(self) -> None:
         # YML-008.03: the loaded output holds no None at any depth, including
         # for a document whose string values spell `null`.
@@ -868,6 +926,7 @@ class TestAliasBudget:
         assert len(md["props"]) == 99
         assert md["props"][0]["remarks"] == "x" * 10_000
 
+    @pytest.mark.spec("PRS-010.03")
     def test_nested_collection_alias_bomb_is_rejected_by_the_node_limit(self) -> None:
         # 30 levels of 10 copies each: about 10**30 nodes from 3 KB of input.
         text = _nested_alias(30)
@@ -1184,6 +1243,7 @@ class TestTypedYamlParsers:
         text = _typed_yaml_text(wrapper_name)
         assert getattr(ob, func_name)(text.encode()) == getattr(ob, func_name)(text)
 
+    @pytest.mark.spec("YML-007.01")
     @pytest.mark.parametrize("key", TYPED_YAML)
     def test_other_types_report_a_mismatch_naming_the_expected_type(
         self, key: str
@@ -1219,6 +1279,7 @@ class TestTypedYamlParsers:
         assert not isinstance(info.value, ob.OscalDocumentTypeMismatchError)
         assert info.value.errors[0]["type"] == "yaml_syntax"
 
+    @pytest.mark.spec("YML-007.02")
     def test_all_eight_are_exported_from_every_path(self) -> None:
         for func_name, _, _ in TYPED_YAML.values():
             func = getattr(ob.v1.extensions.yaml_io, func_name)

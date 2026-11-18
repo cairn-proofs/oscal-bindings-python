@@ -146,6 +146,7 @@ class TestProperty5VersionConstantConsistency:
     **Validates: Requirements 6.3**
     """
 
+    @pytest.mark.spec("VER-002.02")
     def test_constant_equals_the_release_of_the_pin(self) -> None:
         assert oscal_bindings.v1.__oscal_schema_version__ == OSCAL_RELEASE
 
@@ -184,10 +185,12 @@ class TestProperty6NamespaceStability:
     def _package_name() -> str:
         return oscal_bindings.v1.__name__.rsplit(".", 1)[-1]
 
+    @pytest.mark.spec("VER-001.02")
     def test_package_name_is_v_plus_the_major_component(self) -> None:
         major = oscal_bindings.v1.__oscal_schema_version__.split(".")[0]
         assert self._package_name() == f"v{major}"
 
+    @pytest.mark.spec("VER-001.01")
     def test_package_name_carries_no_minor_or_patch_component(self) -> None:
         """The substance of Req 4.6, stated independently of the major check.
 

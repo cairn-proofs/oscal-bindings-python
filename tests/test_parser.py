@@ -140,6 +140,7 @@ class TestParseOscalBytes:
         result = parse_oscal(MINIMAL_PROFILE.encode("utf-8"))
         assert isinstance(result, OscalDocument)
 
+    @pytest.mark.spec("PRS-001.02")
     def test_str_and_bytes_produce_equal_models(self):
         from_str = parse_oscal(MINIMAL_CATALOG)
         from_bytes = parse_oscal(MINIMAL_CATALOG.encode("utf-8"))
@@ -158,6 +159,7 @@ class TestParseOscalBytes:
 class TestParseOscalFile:
     """Tests for the parse_oscal_file function."""
 
+    @pytest.mark.spec("PRS-002.01")
     def test_parse_file(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write(MINIMAL_CATALOG)
@@ -194,6 +196,7 @@ class TestParseOscalFileReadFailures:
         os.geteuid() == 0, reason="root reads files that deny permission"
     )
 
+    @pytest.mark.spec("ERR-012.03")
     def test_directory_is_a_read_error(self, tmp_path):
         with pytest.raises(OscalReadError) as info:
             parse_oscal_file(tmp_path)
@@ -205,6 +208,7 @@ class TestParseOscalFileReadFailures:
         assert str(tmp_path) in str(error)
 
     @needs_non_root
+    @pytest.mark.spec("ERR-012.02")
     def test_file_without_read_permission_is_a_read_error(self, tmp_path):
         path = tmp_path / "locked.json"
         path.write_text(MINIMAL_CATALOG, encoding="utf-8")
@@ -284,6 +288,7 @@ class TestSerializeOscal:
         json_output = serialize_oscal(model, indent=2)
         assert "\n" in json_output
 
+    @pytest.mark.spec("SER-001.01")
     def test_serialize_uses_aliases(self):
         """Verify serialization uses JSON field names (hyphenated), not Python names."""
         model = parse_oscal(MINIMAL_CATALOG)
@@ -298,9 +303,11 @@ class TestSerializeOscal:
 class TestValidateOscal:
     """Tests for the validate_oscal function."""
 
+    @pytest.mark.spec("ERR-002.01")
     def test_valid_document(self):
         assert validate_oscal(MINIMAL_CATALOG) is True
 
+    @pytest.mark.spec("ERR-002.02")
     def test_invalid_json(self):
         assert validate_oscal("not json") is False
 
@@ -409,6 +416,7 @@ class TestTypedParsers:
         with pytest.raises(OscalParseError, match="not a Catalog"):
             parse_catalog(MINIMAL_PROFILE)
 
+    @pytest.mark.spec("ERR-009.01")
     def test_wrong_type_is_a_document_type_mismatch(self):
         with pytest.raises(
             OscalDocumentTypeMismatchError, match="not a Catalog"
@@ -416,6 +424,7 @@ class TestTypedParsers:
             parse_catalog(MINIMAL_PROFILE)
         assert isinstance(excinfo.value, OscalParseError)
 
+    @pytest.mark.spec("ERR-009.02")
     def test_invalid_json_is_not_a_document_type_mismatch(self):
         with pytest.raises(OscalParseError) as excinfo:
             parse_catalog("{not json")
@@ -593,6 +602,7 @@ class TestJsonDepthLimit:
         assert parse_catalog(text).catalog.groups
         assert validate_oscal(text) is True
 
+    @pytest.mark.spec("PRS-010.02", "ERR-004.03", "ERR-002.03")
     def test_conformant_document_past_the_limit_is_rejected_on_each_operation(
         self, tmp_path: Path
     ) -> None:
@@ -700,6 +710,7 @@ class TestLimitIdentifier:
     def test_json_digits(self) -> None:
         assert self._error(_component(PAST_DIGIT_LIMIT)).limit == "json_digits"
 
+    @pytest.mark.spec("ERR-010.02")
     def test_schema_failure_has_no_limit(self) -> None:
         text = json.dumps({"catalog": {"uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479"}})
         assert self._error(text).limit is None
