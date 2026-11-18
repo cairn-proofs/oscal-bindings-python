@@ -82,7 +82,7 @@ These recur across document types:
 | Base class | Every object model subclasses `OscalBaseModel` (`v1/_base.py`, via `--base-class`); `OscalDocument` and `MappingCollectionMappings` stay `RootModel` |
 | Config | `ConfigDict(extra='forbid')` — unknown JSON keys are rejected; merged with the base's `serialize_by_alias=True` |
 | Field aliases | JSON uses kebab/camelCase (`media-type`, `oscal-version`, `document-ids`); Python attrs use snake_case; aliases bridge them |
-| Serialization | Alias keys and no `null` on every path by default (wrap `model_serializer` drops None); `by_alias=False` emits names; `exclude_none=False` is a no-op |
+| Serialization | Alias keys and no `null` on every path by default (`exclude_if=omit_none` on each field drops None); `by_alias=False` emits names; `exclude_none=False` is a no-op |
 | By-name input | Constructor kwargs accept names or aliases (`BackMatterResourceRlink(media_type=...)`). `model_validate({...})` stays alias-only (`extra_forbidden` at any depth); JSON input rejects a name key the same way (needs pydantic ≥2.14.2; earlier 2.13/2.14 dropped it, [#6](https://github.com/cairn-proofs/oscal-bindings-python/issues/6)). No `validate_by_name` in config |
 | Constraints | `Annotated[T, Field(...)]` with `pattern`, `min_length`, etc. (produced by `--field-constraints`) |
 | Scalars | Collapsed to `TypeAlias` (not `RootModel`) — e.g. a `uuid` field is a constrained `str`, accessed directly |
