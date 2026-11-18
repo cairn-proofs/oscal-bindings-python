@@ -255,6 +255,57 @@ START_LOC = (
 )
 
 
+def _parse_errors(text: str) -> list[dict[str, Any]]:
+    with pytest.raises(OscalParseError) as info:
+        parse_oscal_yaml(text)
+    assert info.value.limit is None
+    return list(info.value.errors)
+
+
+class TestEveryBadScalarIsReported:
+    """Issue #36: PRS-006 needs an entry for each failure, not the first."""
+
+    def test_two_bad_numbers_give_two_entries(self) -> None:
+        text = _component_with_start("0x10").replace("end: 443", "end: 0x20")
+        errors = _parse_errors(text)
+        assert [e["type"] for e in errors] == ["yaml_number_grammar"] * 2
+        assert [e["loc"][-1] for e in errors] == ["start", "end"]
+        assert [e["input"] for e in errors] == ["0x10", "0x20"]
+        assert all(e["line"] and e["column"] for e in errors)
+        assert errors[0]["line"] == errors[1]["line"]
+        assert errors[0]["column"] < errors[1]["column"]
+
+    def test_schema_failures_are_merged_with_the_yaml_entries(self) -> None:
+        # A missing required field is a schema entry of the JSON step.
+        text = _component_with_start("0x10").replace("      description: d\n", "")
+        errors = _parse_errors(text)
+        types = [e["type"] for e in errors]
+        assert types[0] == "yaml_number_grammar"
+        assert any(not t.startswith("yaml_") for t in types[1:]), errors
+        assert not any(
+            e["loc"][: len(START_LOC)] == START_LOC
+            for e in errors
+            if not e["type"].startswith("yaml_")
+        )
+
+    def test_the_stand_in_adds_no_entry_of_its_own(self) -> None:
+        errors = _parse_errors(_component_with_start("0x10"))
+        assert len(errors) == 1
+
+    def test_json_limit_still_wins(self) -> None:
+        text = _component_with_start("0x10").replace(
+            "end: 443", "end: " + "9" * (JSON_DIGIT_LIMIT + 1)
+        )
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(text)
+        assert info.value.limit == "json_digits"
+
+    def test_message_counts_the_entries(self) -> None:
+        text = _component_with_start("0x10").replace("end: 443", "end: 0x20")
+        with pytest.raises(OscalParseError, match="2 validation error"):
+            parse_oscal_yaml(text)
+
+
 class TestScalarTyping:
     def test_number_form_at_string_location_stays_string(self) -> None:
         # YML-004.01.

@@ -118,9 +118,12 @@ def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
             UTF-8, holds a duplicate or non-scalar key, holds a scalar whose
             text does not match the type at its location, passes a resource
             limit of this module, or does not conform to the OSCAL schema. A
-            failure that the YAML layer finds carries one ``errors`` entry with
-            the keys ``type``, ``loc`` (the JSON path), ``msg``, ``input``,
-            ``line``, and ``column``.
+            failure that the YAML layer finds has an ``errors`` entry with the
+            keys ``type``, ``loc`` (the JSON path), ``msg``, ``input``,
+            ``line``, and ``column``. A scalar that matches no grammar of
+            YML-004 does not stop the parse: the error holds one such entry
+            for each of them, followed by the schema entries for the rest of
+            the document (PRS-006). Any other YAML failure is the one entry.
         ImportError: The ``yaml`` extra is not installed.
     """
     _require_yaml()
