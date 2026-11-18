@@ -234,6 +234,7 @@ class TestAssessmentPeriod:
         doc = OscalDoc.from_json(MINIMAL_ASSESSMENT_PLAN)
         assert doc.assessment_period() == (None, None)
 
+    @pytest.mark.spec("FAC-005.03")
     def test_ap_with_on_date_task(self):
         fixture = _ap_with_tasks(
             [
@@ -272,6 +273,7 @@ class TestAssessmentPeriod:
             datetime(2025, 1, 30, tzinfo=UTC),
         )
 
+    @pytest.mark.spec("FAC-005.01")
     def test_ap_aggregates_across_multiple_tasks(self):
         u2 = "00000000-0000-4000-8000-000000000002"
         fixture = _ap_with_tasks(
@@ -301,6 +303,7 @@ class TestAssessmentPeriod:
             datetime(2025, 4, 30, tzinfo=UTC),
         )
 
+    @pytest.mark.spec("FAC-005.02")
     def test_ap_at_frequency_contributes_nothing(self):
         fixture = _ap_with_tasks(
             [
@@ -315,6 +318,7 @@ class TestAssessmentPeriod:
         doc = OscalDoc.from_json(fixture)
         assert doc.assessment_period() == (None, None)
 
+    @pytest.mark.spec("FAC-005.01")
     def test_ap_walks_nested_tasks(self):
         u2 = "00000000-0000-4000-8000-000000000002"
         fixture = _ap_with_tasks(

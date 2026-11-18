@@ -134,3 +134,18 @@ class TestGetSupportedElementTypes:
     def test_contains_catalog(self):
         types = get_supported_element_types()
         assert "catalog" in types
+
+
+class TestNoUndocumentedLimit:
+    """The binding documents no limit for element validation (ELV-004)."""
+
+    @pytest.mark.spec("ELV-004.03")
+    def test_ten_thousand_failures_are_all_listed(self):
+        resources = [{} for _ in range(10_000)]
+        result = validate_element({"resources": resources}, "back-matter")
+        assert result.valid is False
+        assert result.errors is not None
+        paths = {e.path for e in result.errors}
+        for i in range(10_000):
+            assert f"resources.{i}.uuid" in paths
+        assert len(result.errors) >= 10_000
