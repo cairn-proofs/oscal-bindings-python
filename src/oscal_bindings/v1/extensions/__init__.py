@@ -20,8 +20,16 @@ from oscal_bindings.v1.extensions.validate_element import (
     ValidationError as ElementValidationError,
 )
 from oscal_bindings.v1.extensions.yaml_io import (
+    parse_assessment_plan_yaml,
+    parse_assessment_results_yaml,
+    parse_catalog_yaml,
+    parse_component_definition_yaml,
+    parse_mapping_collection_yaml,
     parse_oscal_yaml,
     parse_oscal_yaml_file,
+    parse_plan_of_action_and_milestones_yaml,
+    parse_profile_yaml,
+    parse_system_security_plan_yaml,
     serialize_oscal_yaml,
 )
 from oscal_bindings.v1.models import DocumentId
@@ -42,8 +50,16 @@ __all__ = [
     "make_hash",
     "make_resource",
     "make_rlink",
+    "parse_assessment_plan_yaml",
+    "parse_assessment_results_yaml",
+    "parse_catalog_yaml",
+    "parse_component_definition_yaml",
+    "parse_mapping_collection_yaml",
     "parse_oscal_yaml",
     "parse_oscal_yaml_file",
+    "parse_plan_of_action_and_milestones_yaml",
+    "parse_profile_yaml",
+    "parse_system_security_plan_yaml",
     "serialize_oscal_yaml",
     "validate_element",
 ]

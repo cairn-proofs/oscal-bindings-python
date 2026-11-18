@@ -26,6 +26,8 @@ Key Functions:
     serialize_oscal_yaml: Serialize an OSCAL model to YAML (``yaml`` extra).
     parse_catalog: Parse JSON as a Catalog document.
     parse_profile: Parse JSON as a Profile document.
+    parse_catalog_yaml: Parse YAML as a Catalog document (``yaml`` extra). Each of
+        the other seven document types has a ``parse_<type>_yaml`` too.
 
 Example:
     >>> from oscal_bindings.v1 import parse_oscal_file, serialize_oscal
@@ -47,8 +49,16 @@ from .extensions import (
     make_hash,
     make_resource,
     make_rlink,
+    parse_assessment_plan_yaml,
+    parse_assessment_results_yaml,
+    parse_catalog_yaml,
+    parse_component_definition_yaml,
+    parse_mapping_collection_yaml,
     parse_oscal_yaml,
     parse_oscal_yaml_file,
+    parse_plan_of_action_and_milestones_yaml,
+    parse_profile_yaml,
+    parse_system_security_plan_yaml,
     serialize_oscal_yaml,
     validate_element,
 )
@@ -117,17 +127,25 @@ __all__ = [
     "make_resource",
     "make_rlink",
     "parse_assessment_plan",
+    "parse_assessment_plan_yaml",
     "parse_assessment_results",
+    "parse_assessment_results_yaml",
     "parse_catalog",
+    "parse_catalog_yaml",
     "parse_component_definition",
+    "parse_component_definition_yaml",
     "parse_mapping_collection",
+    "parse_mapping_collection_yaml",
     "parse_oscal",
     "parse_oscal_file",
     "parse_oscal_yaml",
     "parse_oscal_yaml_file",
     "parse_plan_of_action_and_milestones",
+    "parse_plan_of_action_and_milestones_yaml",
     "parse_profile",
+    "parse_profile_yaml",
     "parse_system_security_plan",
+    "parse_system_security_plan_yaml",
     "serialize_oscal",
     "serialize_oscal_yaml",
     "validate_element",

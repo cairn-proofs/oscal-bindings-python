@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, ClassVar, Self, cast
+from typing import Any, ClassVar, Self, TypeVar
 
 from pydantic import ValidationError
 
@@ -26,6 +26,8 @@ from oscal_bindings.v1.models import (
     ProfileDocument,
     SystemSecurityPlanDocument,
 )
+
+_W = TypeVar("_W")
 
 
 class _OmittedInput:
@@ -317,56 +319,58 @@ def validate_oscal(data: str | bytes) -> bool:
 # --- Typed convenience parsers ---
 #
 # parse_oscal returns an OscalDocument whose `root` is a union of all eight
-# document wrappers. The hasattr guard confirms the concrete type at runtime;
-# cast tells the type checker which member of the union we've narrowed to.
+# document wrappers. `_narrow_document` confirms the concrete wrapper at runtime
+# and narrows the type for the checker. The typed YAML parsers in
+# `extensions/yaml_io.py` use it too, so both formats report a mismatch alike.
+
+
+def _narrow_document(doc: OscalDocument, wrapper: type[_W], expected: str) -> _W:
+    """Return the root of ``doc`` as ``wrapper``, or raise a type mismatch (PRS-003).
+
+    ``expected`` is the document type with its article, as in ``a Catalog``.
+    """
+    root = doc.root
+    if not isinstance(root, wrapper):
+        raise OscalDocumentTypeMismatchError(f"Document is not {expected}")
+    return root
 
 
 def parse_catalog(data: str | bytes) -> CatalogDocument:
     """Parse an OSCAL Catalog document (accepts `str` or `bytes`)."""
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "catalog"):
-        raise OscalDocumentTypeMismatchError("Document is not a Catalog")
-    return cast("CatalogDocument", doc.root)
+    return _narrow_document(parse_oscal(data), CatalogDocument, "a Catalog")
 
 
 def parse_profile(data: str | bytes) -> ProfileDocument:
     """Parse an OSCAL Profile document (accepts `str` or `bytes`)."""
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "profile"):
-        raise OscalDocumentTypeMismatchError("Document is not a Profile")
-    return cast("ProfileDocument", doc.root)
+    return _narrow_document(parse_oscal(data), ProfileDocument, "a Profile")
 
 
 def parse_component_definition(data: str | bytes) -> ComponentDefinitionDocument:
     """Parse an OSCAL Component Definition document (accepts `str` or `bytes`)."""
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "component_definition"):
-        raise OscalDocumentTypeMismatchError("Document is not a Component Definition")
-    return cast("ComponentDefinitionDocument", doc.root)
+    return _narrow_document(
+        parse_oscal(data), ComponentDefinitionDocument, "a Component Definition"
+    )
 
 
 def parse_system_security_plan(data: str | bytes) -> SystemSecurityPlanDocument:
     """Parse an OSCAL System Security Plan document (accepts `str` or `bytes`)."""
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "system_security_plan"):
-        raise OscalDocumentTypeMismatchError("Document is not a System Security Plan")
-    return cast("SystemSecurityPlanDocument", doc.root)
+    return _narrow_document(
+        parse_oscal(data), SystemSecurityPlanDocument, "a System Security Plan"
+    )
 
 
 def parse_assessment_plan(data: str | bytes) -> AssessmentPlanDocument:
     """Parse an OSCAL Assessment Plan document (accepts `str` or `bytes`)."""
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "assessment_plan"):
-        raise OscalDocumentTypeMismatchError("Document is not an Assessment Plan")
-    return cast("AssessmentPlanDocument", doc.root)
+    return _narrow_document(
+        parse_oscal(data), AssessmentPlanDocument, "an Assessment Plan"
+    )
 
 
 def parse_assessment_results(data: str | bytes) -> AssessmentResultsDocument:
     """Parse an OSCAL Assessment Results document (accepts `str` or `bytes`)."""
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "assessment_results"):
-        raise OscalDocumentTypeMismatchError("Document is not Assessment Results")
-    return cast("AssessmentResultsDocument", doc.root)
+    return _narrow_document(
+        parse_oscal(data), AssessmentResultsDocument, "Assessment Results"
+    )
 
 
 def parse_plan_of_action_and_milestones(
@@ -376,17 +380,15 @@ def parse_plan_of_action_and_milestones(
 
     Accepts `str` or `bytes`.
     """
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "plan_of_action_and_milestones"):
-        raise OscalDocumentTypeMismatchError(
-            "Document is not a Plan of Action and Milestones"
-        )
-    return cast("PlanOfActionAndMilestonesDocument", doc.root)
+    return _narrow_document(
+        parse_oscal(data),
+        PlanOfActionAndMilestonesDocument,
+        "a Plan of Action and Milestones",
+    )
 
 
 def parse_mapping_collection(data: str | bytes) -> MappingCollectionDocument:
     """Parse an OSCAL Mapping Collection document (accepts `str` or `bytes`)."""
-    doc = parse_oscal(data)
-    if not hasattr(doc.root, "mapping_collection"):
-        raise OscalDocumentTypeMismatchError("Document is not a Mapping Collection")
-    return cast("MappingCollectionDocument", doc.root)
+    return _narrow_document(
+        parse_oscal(data), MappingCollectionDocument, "a Mapping Collection"
+    )

@@ -1118,3 +1118,110 @@ def test_large_real_catalog_without_aliases_parses(
     assert _json_value(doc) == expected
     # Task 9.6: the serializer round-trips a publication-sized catalog.
     assert _json_value(parse_oscal_yaml(serialize_oscal_yaml(doc))) == expected
+
+
+# --- Typed YAML parsers (YML-007, issue #31) -----------------------------------
+
+TYPED_YAML = {
+    "catalog": ("parse_catalog_yaml", "CatalogDocument", "a Catalog"),
+    "profile": ("parse_profile_yaml", "ProfileDocument", "a Profile"),
+    "component-definition": (
+        "parse_component_definition_yaml",
+        "ComponentDefinitionDocument",
+        "a Component Definition",
+    ),
+    "system-security-plan": (
+        "parse_system_security_plan_yaml",
+        "SystemSecurityPlanDocument",
+        "a System Security Plan",
+    ),
+    "assessment-plan": (
+        "parse_assessment_plan_yaml",
+        "AssessmentPlanDocument",
+        "an Assessment Plan",
+    ),
+    "assessment-results": (
+        "parse_assessment_results_yaml",
+        "AssessmentResultsDocument",
+        "Assessment Results",
+    ),
+    "plan-of-action-and-milestones": (
+        "parse_plan_of_action_and_milestones_yaml",
+        "PlanOfActionAndMilestonesDocument",
+        "a Plan of Action and Milestones",
+    ),
+    "mapping-collection": (
+        "parse_mapping_collection_yaml",
+        "MappingCollectionDocument",
+        "a Mapping Collection",
+    ),
+}
+
+
+def _typed_yaml_text(wrapper_name: str) -> str:
+    """Return the YAML text of one small valid document of a wrapper type."""
+    from support.model_instances import synthesize_instance
+
+    instance = synthesize_instance(getattr(ob.v1.models, wrapper_name))
+    value = json.loads(instance.model_dump_json(by_alias=True, exclude_none=True))
+    return yaml.safe_dump(value)
+
+
+class TestTypedYamlParsers:
+    """YML-007: one typed YAML parser for each of the eight document types."""
+
+    @pytest.mark.parametrize("key", TYPED_YAML)
+    def test_returns_the_wrapper_of_its_type(self, key: str) -> None:
+        func_name, wrapper_name, _ = TYPED_YAML[key]
+        text = _typed_yaml_text(wrapper_name)
+        result = getattr(ob, func_name)(text)
+        assert type(result) is getattr(ob.v1.models, wrapper_name)
+        assert result == parse_oscal_yaml(text).root
+
+    @pytest.mark.parametrize("key", TYPED_YAML)
+    def test_accepts_bytes(self, key: str) -> None:
+        func_name, wrapper_name, _ = TYPED_YAML[key]
+        text = _typed_yaml_text(wrapper_name)
+        assert getattr(ob, func_name)(text.encode()) == getattr(ob, func_name)(text)
+
+    @pytest.mark.parametrize("key", TYPED_YAML)
+    def test_other_types_report_a_mismatch_naming_the_expected_type(
+        self, key: str
+    ) -> None:
+        func_name, _, expected = TYPED_YAML[key]
+        for other, (_, other_wrapper, _) in TYPED_YAML.items():
+            if other == key:
+                continue
+            with pytest.raises(ob.OscalDocumentTypeMismatchError) as info:
+                getattr(ob, func_name)(_typed_yaml_text(other_wrapper))
+            assert str(info.value) == f"Document is not {expected}"
+            assert isinstance(info.value, OscalParseError)
+
+    @pytest.mark.parametrize("key", TYPED_YAML)
+    def test_matches_the_typed_json_parser_message(self, key: str) -> None:
+        # One narrowing helper serves both formats, so the messages agree.
+        func_name = TYPED_YAML[key][0]
+        json_name = func_name.removesuffix("_yaml")
+        other = next(v[1] for k, v in TYPED_YAML.items() if k != key)
+        other_text = _typed_yaml_text(other)
+        other_json = json.dumps(yaml.safe_load(other_text))
+        with pytest.raises(OscalParseError) as from_yaml:
+            getattr(ob, func_name)(other_text)
+        with pytest.raises(OscalParseError) as from_json:
+            getattr(ob, json_name)(other_json)
+        assert str(from_yaml.value) == str(from_json.value)
+
+    @pytest.mark.parametrize("key", TYPED_YAML)
+    def test_a_parse_failure_is_not_a_mismatch(self, key: str) -> None:
+        func_name = TYPED_YAML[key][0]
+        with pytest.raises(OscalParseError) as info:
+            getattr(ob, func_name)("catalog: [")
+        assert not isinstance(info.value, ob.OscalDocumentTypeMismatchError)
+        assert info.value.errors[0]["type"] == "yaml_syntax"
+
+    def test_all_eight_are_exported_from_every_path(self) -> None:
+        for func_name, _, _ in TYPED_YAML.values():
+            func = getattr(ob.v1.extensions.yaml_io, func_name)
+            for module in (ob, ob.v1, ob.extensions, ob.v1.extensions):
+                assert getattr(module, func_name) is func
+                assert func_name in module.__all__
