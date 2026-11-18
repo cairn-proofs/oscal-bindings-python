@@ -6,12 +6,16 @@ into Pydantic models and serializing them back to JSON.
 
 from __future__ import annotations
 
+import functools
+import json
 import re
+import types
 from pathlib import Path
-from typing import Any, ClassVar, Self, cast
+from typing import Any, ClassVar, Self, cast, get_args
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
+from oscal_bindings.v1 import models as _models
 from oscal_bindings.v1._base import DOCUMENT_TYPE_ERROR
 from oscal_bindings.v1.models import (
     AssessmentPlanDocument,
@@ -178,6 +182,80 @@ def _name_root_keys(errors: list[Any]) -> list[Any]:
     return [{**entry, "msg": f"{entry['msg']} (found: {keys})"}]
 
 
+@functools.cache
+def _branch_properties() -> dict[str, tuple[str, dict[str, str]]]:
+    """Map each nested-union branch class name to its union and properties.
+
+    The value is the union alias name and a map of every branch name of that
+    union to its distinguishing property (PRS-014). The distinguishing property
+    of a branch is the one OSCAL property that only that branch defines. The
+    manifest records the same property, and a test compares the two.
+    """
+    unions: dict[str, tuple[str, dict[str, str]]] = {}
+    for alias, value in vars(_models).items():
+        if not isinstance(value, types.UnionType):
+            continue
+        branches = get_args(value)
+        if not branches[1:] or not all(
+            isinstance(b, type) and issubclass(b, BaseModel) for b in branches
+        ):
+            continue
+        names = [
+            {f.alias or key for key, f in b.model_fields.items()} for b in branches
+        ]
+        properties: dict[str, str] = {}
+        for branch, own in zip(branches, names, strict=True):
+            others = set().union(*(o for o in names if o is not own))
+            (distinct,) = own - others
+            properties[branch.__name__] = distinct
+        for branch in branches:
+            unions[branch.__name__] = (alias, properties)
+    return unions
+
+
+def _selected_branch_errors(data: str | bytes, errors: list[Any]) -> list[Any]:
+    """Keep only the entries of the selected nested-union branch (PRS-014).
+
+    An object that holds the distinguishing property of exactly one branch of a
+    nested union selects that branch. Each entry for a failure of the object
+    is then a failure of that branch, so an entry whose location passes through
+    another branch of the union is dropped. An object that holds none, or more
+    than one, keeps the entries of every branch. This runs on the error path
+    only. A document that the JSON module cannot read (it is deeper than its
+    recursion limit) keeps every entry.
+    """
+    branches = _branch_properties()
+    if not any(
+        isinstance(part, str) and part in branches
+        for entry in errors
+        for part in entry["loc"]
+    ):
+        return errors
+    try:
+        node = json.loads(data)
+    except (ValueError, RecursionError):
+        return errors
+    kept = []
+    for entry in errors:
+        current: Any = node
+        selected = True
+        for part in entry["loc"]:
+            if isinstance(current, dict) and part in branches and part not in current:
+                _, properties = branches[part]
+                held = [b for b, prop in properties.items() if prop in current]
+                if len(held) == 1 and held[0] != part:
+                    selected = False
+                    break
+            elif isinstance(current, dict) and part in current:
+                current = current[part]
+            elif isinstance(current, list) and isinstance(part, int):
+                current = current[part] if 0 <= part < len(current) else None
+            # Any other part is a tag of the document union.
+        if selected:
+            kept.append(entry)
+    return kept
+
+
 def _omit_container_inputs(errors: list[Any]) -> list[Any]:
     """Replace each object or array ``input`` with the sentinel (#42)."""
     omitted = OscalParseError.OMITTED_INPUT
@@ -214,7 +292,9 @@ def parse_oscal(data: str | bytes) -> OscalDocument:
         limit = _limit_entry(e)
         if limit is None:
             # Name the root keys before the inputs are replaced (design D3).
-            errors = _omit_container_inputs(_name_root_keys(e.errors()))
+            errors = _omit_container_inputs(
+                _selected_branch_errors(data, _name_root_keys(e.errors()))
+            )
     except ValueError as e:
         raise OscalParseError(f"Invalid JSON: {e}") from e
     # Raised outside the handler, so that neither __cause__ nor __context__

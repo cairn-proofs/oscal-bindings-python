@@ -18,8 +18,6 @@ EXPECTED_FAILURES: dict[str, str] = {
     # A round trip keeps six datetime fraction digits and drops the seventh.
     "round-trip/seven-fraction-digits": f"{ISSUES}/19",
     "yaml-round-trip/string-scalars": f"{ISSUES}/19",
-    # PRS-014: only failures of the selected nested-union branch.
-    "parse/closed-enum-out-of-set": f"{ISSUES}/69",
     # FAC-007: datetime bounds from assessment_period().
     "assessment-period/mixed-offsets": f"{ISSUES}/58",
     "assessment-period/equal-instant": f"{ISSUES}/58",

@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from support.spec_artifact import corpus_root
+from support.scripts import load_script
+from support.spec_artifact import corpus_root, ensure_spec_artifact
 
 from oscal_bindings import OscalDoc
 from oscal_bindings.parser import (
@@ -35,6 +36,8 @@ from oscal_bindings.v1.parser import (
     JSON_DEPTH_LIMIT_MSG,
     JSON_DIGIT_LIMIT,
     JSON_DIGIT_LIMIT_MSG,
+    _branch_properties,
+    _selected_branch_errors,
 )
 
 # Minimal valid OSCAL catalog document
@@ -905,3 +908,82 @@ class TestParseErrorEntries:
         held = with_error - without_error
         assert count == 1
         assert held < len(text) / 10, f"{held:,} B held for {len(text):,} B of input"
+
+
+def _catalog_with_params(params: list[dict[str, Any]]) -> str:
+    data = json.loads(MINIMAL_CATALOG)
+    data["catalog"]["params"] = params
+    return json.dumps(data)
+
+
+_PARAM_BRANCHES = ("ParameterWithSelect", "ParameterWithValues")
+
+
+def _param_branches(text: str) -> set[str]:
+    return {
+        part
+        for e in _schema_error(text).errors
+        for part in e["loc"]
+        if part in _PARAM_BRANCHES
+    }
+
+
+class TestSelectedBranchErrors:
+    """PRS-014: only the failures of the selected nested-union branch."""
+
+    def test_a_select_object_reports_only_the_select_branch(self) -> None:
+        text = _catalog_with_params([{"id": "p", "select": {"how-many": "seven"}}])
+        (entry,) = _schema_error(text).errors
+        assert entry["loc"][-3:] == ("ParameterWithSelect", "select", "how-many")
+
+    def test_a_values_object_reports_only_the_values_branch(self) -> None:
+        text = _catalog_with_params([{"id": "p", "values": [1]}])
+        assert _param_branches(text) == {"ParameterWithValues"}
+
+    def test_the_count_in_the_message_follows_the_kept_entries(self) -> None:
+        text = _catalog_with_params([{"id": "p", "select": {"how-many": "seven"}}])
+        assert "1 validation error(s)" in str(_schema_error(text))
+
+    def test_the_bytes_input_selects_the_branch_too(self) -> None:
+        text = _catalog_with_params([{"id": "p", "select": {"how-many": "seven"}}])
+        assert len(_schema_error(text.encode()).errors) == 1
+
+    def test_an_object_with_both_properties_keeps_every_branch(self) -> None:
+        text = _catalog_with_params(
+            [{"id": "p", "select": {"how-many": "seven"}, "values": ["x"]}]
+        )
+        assert _param_branches(text) == set(_PARAM_BRANCHES)
+
+    def test_an_object_with_neither_property_keeps_every_branch(self) -> None:
+        assert _param_branches(_catalog_with_params([{"id": 5}])) == set(
+            _PARAM_BRANCHES
+        )
+
+    def test_each_parameter_selects_its_own_branch(self) -> None:
+        text = _catalog_with_params(
+            [
+                {"id": "a", "select": {"how-many": "seven"}},
+                {"id": "b", "values": [1]},
+            ]
+        )
+        by_index = {e["loc"][3]: e["loc"][4] for e in _schema_error(text).errors}
+        assert by_index == {0: "ParameterWithSelect", 1: "ParameterWithValues"}
+
+    def test_a_document_over_the_json_module_depth_keeps_every_entry(self) -> None:
+        entries = [{"loc": ("ParameterWithSelect",)}, {"loc": ("ParameterWithValues",)}]
+        assert _selected_branch_errors("[" * 100000, entries) == entries
+
+    def test_the_distinguishing_properties_equal_the_manifest(self) -> None:
+        pin = load_script("spec_artifact")
+        names = json.loads(pin.artifact_paths(ensure_spec_artifact()).names.read_text())
+        expected = {
+            v["type"]: v["property"]
+            for entry in names["types"]
+            if entry["kind"] == "union"
+            for v in entry["variants"]
+        }
+        derived = {
+            branch: properties[branch]
+            for branch, (_, properties) in _branch_properties().items()
+        }
+        assert derived == expected
