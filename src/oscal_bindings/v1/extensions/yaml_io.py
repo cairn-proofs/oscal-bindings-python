@@ -59,12 +59,32 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from oscal_bindings.v1.models import (
+    AssessmentPlanDocument,
+    AssessmentResultsDocument,
+    CatalogDocument,
+    ComponentDefinitionDocument,
+    MappingCollectionDocument,
+    PlanOfActionAndMilestonesDocument,
+    ProfileDocument,
+    SystemSecurityPlanDocument,
+)
+from oscal_bindings.v1.parser import _narrow_document
+
 if TYPE_CHECKING:
     from oscal_bindings.v1.models import OscalDocument
 
 __all__ = [
+    "parse_assessment_plan_yaml",
+    "parse_assessment_results_yaml",
+    "parse_catalog_yaml",
+    "parse_component_definition_yaml",
+    "parse_mapping_collection_yaml",
     "parse_oscal_yaml",
     "parse_oscal_yaml_file",
+    "parse_plan_of_action_and_milestones_yaml",
+    "parse_profile_yaml",
+    "parse_system_security_plan_yaml",
     "serialize_oscal_yaml",
 ]
 
@@ -155,6 +175,159 @@ def parse_oscal_yaml_file(path: Path | str) -> OscalDocument:
     from oscal_bindings.v1.extensions import _yaml_loader  # noqa: PLC0415
 
     return _yaml_loader.parse_oscal_yaml_file(Path(path))
+
+
+# --- Typed YAML parsers (YML-007) ---
+#
+# All eight or none: each parses its input as `parse_oscal_yaml` does (YML-005),
+# then behaves as the typed JSON parser of PRS-003 for its document type. It
+# returns the wrapper, or raises OscalDocumentTypeMismatchError (a subclass of
+# OscalParseError) naming the expected type. Each needs the ``yaml`` extra.
+
+
+def parse_catalog_yaml(data: str | bytes) -> CatalogDocument:
+    """Parse an OSCAL Catalog document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.CatalogDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not a Catalog.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(parse_oscal_yaml(data), CatalogDocument, "a Catalog")
+
+
+def parse_profile_yaml(data: str | bytes) -> ProfileDocument:
+    """Parse an OSCAL Profile document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.ProfileDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not a Profile.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(parse_oscal_yaml(data), ProfileDocument, "a Profile")
+
+
+def parse_component_definition_yaml(data: str | bytes) -> ComponentDefinitionDocument:
+    """Parse an OSCAL Component Definition document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.ComponentDefinitionDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not a Component Definition.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(
+        parse_oscal_yaml(data), ComponentDefinitionDocument, "a Component Definition"
+    )
+
+
+def parse_system_security_plan_yaml(data: str | bytes) -> SystemSecurityPlanDocument:
+    """Parse an OSCAL System Security Plan document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.SystemSecurityPlanDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not a System Security Plan.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(
+        parse_oscal_yaml(data), SystemSecurityPlanDocument, "a System Security Plan"
+    )
+
+
+def parse_assessment_plan_yaml(data: str | bytes) -> AssessmentPlanDocument:
+    """Parse an OSCAL Assessment Plan document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.AssessmentPlanDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not an Assessment Plan.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(
+        parse_oscal_yaml(data), AssessmentPlanDocument, "an Assessment Plan"
+    )
+
+
+def parse_assessment_results_yaml(data: str | bytes) -> AssessmentResultsDocument:
+    """Parse an OSCAL Assessment Results document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.AssessmentResultsDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not Assessment Results.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(
+        parse_oscal_yaml(data), AssessmentResultsDocument, "Assessment Results"
+    )
+
+
+def parse_plan_of_action_and_milestones_yaml(
+    data: str | bytes,
+) -> PlanOfActionAndMilestonesDocument:
+    """Parse an OSCAL Plan of Action and Milestones document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.PlanOfActionAndMilestonesDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not a Plan of Action and
+            Milestones.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(
+        parse_oscal_yaml(data),
+        PlanOfActionAndMilestonesDocument,
+        "a Plan of Action and Milestones",
+    )
+
+
+def parse_mapping_collection_yaml(data: str | bytes) -> MappingCollectionDocument:
+    """Parse an OSCAL Mapping Collection document in YAML (YML-007).
+
+    Parses as :func:`parse_oscal_yaml` does, then returns the wrapper,
+    a :class:`~oscal_bindings.v1.models.MappingCollectionDocument`.
+    Requires the ``yaml``
+    extra.
+
+    Raises:
+        OscalDocumentTypeMismatchError: The document is not a Mapping Collection.
+        OscalParseError: As :func:`parse_oscal_yaml` defines.
+        ImportError: The ``yaml`` extra is not installed.
+    """
+    return _narrow_document(
+        parse_oscal_yaml(data), MappingCollectionDocument, "a Mapping Collection"
+    )
 
 
 def serialize_oscal_yaml(model: OscalDocument) -> str:

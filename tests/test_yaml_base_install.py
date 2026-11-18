@@ -19,7 +19,19 @@ import oscal_bindings.v1
 import oscal_bindings.v1.extensions
 from oscal_bindings.v1.extensions import yaml_io
 
-YAML_NAMES = ("parse_oscal_yaml", "parse_oscal_yaml_file", "serialize_oscal_yaml")
+YAML_NAMES = (
+    "parse_oscal_yaml",
+    "parse_oscal_yaml_file",
+    "serialize_oscal_yaml",
+    "parse_catalog_yaml",
+    "parse_profile_yaml",
+    "parse_component_definition_yaml",
+    "parse_system_security_plan_yaml",
+    "parse_assessment_plan_yaml",
+    "parse_assessment_results_yaml",
+    "parse_plan_of_action_and_milestones_yaml",
+    "parse_mapping_collection_yaml",
+)
 
 
 def _run_without_yaml(body: str) -> subprocess.CompletedProcess[str]:

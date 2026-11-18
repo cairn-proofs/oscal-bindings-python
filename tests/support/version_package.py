@@ -26,7 +26,8 @@ if TYPE_CHECKING:
 #: runtime: derived expectations drift with the code they are meant to pin. An
 #: intentional surface change updates this set in the same commit, so an
 #: unintentional addition still fails. The ``add-yaml-io`` change (#7) added
-#: ``parse_oscal_yaml``, ``parse_oscal_yaml_file``, and ``serialize_oscal_yaml``.
+#: ``parse_oscal_yaml``, ``parse_oscal_yaml_file``, and ``serialize_oscal_yaml``. The
+#: typed YAML parsers (YML-007, #31) added the eight ``parse_<type>_yaml``.
 PUBLISHED_ALL = frozenset(
     {
         "AssessmentPlanDocument",
@@ -63,6 +64,14 @@ PUBLISHED_ALL = frozenset(
         "parse_oscal_file",
         "parse_oscal_yaml",
         "parse_oscal_yaml_file",
+        "parse_catalog_yaml",
+        "parse_profile_yaml",
+        "parse_component_definition_yaml",
+        "parse_system_security_plan_yaml",
+        "parse_assessment_plan_yaml",
+        "parse_assessment_results_yaml",
+        "parse_plan_of_action_and_milestones_yaml",
+        "parse_mapping_collection_yaml",
         "parse_plan_of_action_and_milestones",
         "parse_profile",
         "parse_system_security_plan",
