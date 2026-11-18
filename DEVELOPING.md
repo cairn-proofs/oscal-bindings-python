@@ -24,7 +24,7 @@ gh repo clone cairn-proofs/oscal-bindings-python-threat-models ../oscal-bindings
 
 ```bash
 hatch run generate         # regenerate models from schema + post-process
-hatch test --all --cover   # run tests with coverage across Python 3.11–3.14
+hatch test --all --cover   # run tests with coverage across Python 3.11–3.15
 hatch run lint             # ruff check . && ruff format --check . (read-only)
 hatch run ruff format .    # apply formatting
 hatch run security         # bandit over src/ + scripts/, pip-audit over every lockfile
