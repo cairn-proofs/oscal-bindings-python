@@ -102,6 +102,7 @@ def test_load_validated_manifest_returns_released_manifest() -> None:
 # NAM-003: names, references, format, and release
 
 
+@pytest.mark.spec("NAM-003.01")
 def test_nam_003_01_name_with_non_identifier_character_is_invalid(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -114,6 +115,7 @@ def test_nam_003_01_name_with_non_identifier_character_is_invalid(
 
 
 @pytest.mark.parametrize("name", ["Bad Name", 'Bad"Name'])
+@pytest.mark.spec("NAM-003.01")
 def test_nam_003_01_name_with_space_or_quote_is_invalid(
     released: dict[str, Any], manifest: dict[str, Any], name: str
 ) -> None:
@@ -121,6 +123,7 @@ def test_nam_003_01_name_with_space_or_quote_is_invalid(
     _assert_fails(_validate(released, manifest), "names.json/types/0")
 
 
+@pytest.mark.spec("NAM-003.03")
 def test_nam_003_03_name_with_final_newline_is_invalid(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -145,6 +148,7 @@ def test_name_check_uses_full_string_without_json_schema(
     )
 
 
+@pytest.mark.spec("NAM-003.02")
 def test_nam_003_02_duplicate_name_is_invalid(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -156,6 +160,7 @@ def test_nam_003_02_duplicate_name_is_invalid(
     )
 
 
+@pytest.mark.spec("NAM-003.04")
 def test_nam_003_04_reference_to_missing_entry_is_invalid(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -184,6 +189,7 @@ def test_nam_003_04_item_and_member_references_must_name_an_entry(
     )
 
 
+@pytest.mark.spec("NAM-022.01", "NAM-012.01")
 def test_nam_022_01_unsupported_format_version_is_stated(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -193,6 +199,7 @@ def test_nam_022_01_unsupported_format_version_is_stated(
     ]
 
 
+@pytest.mark.spec("NAM-022.02")
 def test_nam_022_02_format_version_is_the_first_check(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -214,6 +221,7 @@ def test_format_value_of_other_type_is_not_supported(
     ]
 
 
+@pytest.mark.spec("NAM-021.01")
 def test_nam_021_01_manifest_without_format_is_invalid(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -225,6 +233,7 @@ def test_nam_021_01_manifest_without_format_is_invalid(
 
 
 @pytest.mark.parametrize("value", [[], "names", 1, None])
+@pytest.mark.spec("NAM-021.01")
 def test_nam_021_01_manifest_that_is_not_an_object_is_invalid(
     released: dict[str, Any], value: object
 ) -> None:
@@ -241,6 +250,7 @@ def test_other_oscal_release_is_rejected(
     )
 
 
+@pytest.mark.spec("NAM-012.02")
 def test_consumer_of_other_release_rejects_manifest(
     released: dict[str, Any],
 ) -> None:
@@ -254,6 +264,7 @@ def test_consumer_of_other_release_rejects_manifest(
 # NAM-002: the schema hash
 
 
+@pytest.mark.spec("NAM-002.03")
 def test_nam_002_03_schema_hash_mismatch_is_detected(
     released: dict[str, Any],
 ) -> None:
@@ -279,6 +290,7 @@ def test_wrong_recorded_schema_hash_is_detected(
 # NAM-001: pointers
 
 
+@pytest.mark.spec("NAM-009.02")
 def test_nam_001_03_unresolvable_pointer_is_invalid(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -317,6 +329,7 @@ def test_pointer_in_two_entries_is_invalid(
 # NAM-004: the JSON Schema and the store checks
 
 
+@pytest.mark.spec("NAM-004.01")
 def test_nam_004_01_entry_without_kind_fails_and_names_entry(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -328,6 +341,7 @@ def test_nam_004_01_entry_without_kind_fails_and_names_entry(
     )
 
 
+@pytest.mark.spec("NAM-013.01")
 def test_nam_004_02_schema_file_name_with_path_fails(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
@@ -337,6 +351,7 @@ def test_nam_004_02_schema_file_name_with_path_fails(
     )
 
 
+@pytest.mark.spec("NAM-004.03")
 def test_nam_004_03_variant_property_not_a_key_fails_and_names_entry(
     released: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
