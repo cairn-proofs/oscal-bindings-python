@@ -15,6 +15,8 @@ Key Classes:
     CatalogDocument: A catalog document wrapper.
     ProfileDocument: A profile document wrapper.
     OscalParseError: Exception raised when parsing or validation fails.
+    OscalDateTime: The ``datetime`` subclass of every OSCAL date-time field. It keeps
+        every fraction digit of the text; read its docstring for the arithmetic limits.
 
 Key Functions:
     parse_oscal: Parse an OSCAL JSON string into a typed model.
@@ -35,6 +37,7 @@ Example:
     >>> json_str = serialize_oscal(doc)
 """
 
+from ._datetime import OscalDateTime
 from .extensions import (
     DocumentId,
     ElementValidationError,
@@ -112,6 +115,7 @@ __all__ = [
     "OscalAccessError",
     "OscalBody",
     "OscalBuilderError",
+    "OscalDateTime",
     "OscalDoc",
     "OscalDocument",
     "OscalDocumentTypeMismatchError",

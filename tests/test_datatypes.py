@@ -179,7 +179,7 @@ class TestDateTimeWithTimezone:
             2024, 1, 2, 3, 4, 5, 500000, tzinfo=timezone(timedelta(hours=-5))
         )
         assert DATE_TIME_ADAPTER.dump_python(value, mode="json") == (
-            "2024-01-02T03:04:05.500000-05:00"
+            "2024-01-02T03:04:05.5-05:00"
         )
 
     def test_an_aware_datetime_in_python_input_is_accepted(self) -> None:

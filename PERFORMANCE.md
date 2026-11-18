@@ -68,6 +68,22 @@ For the catalog (7.3 MB of YAML), `parse_oscal_yaml` takes 0.8 s with libyaml (`
 | `doc.model_dump_json()` | 66.1 (invalid) | 165.8 | 2.5x | 4.88 MB (was 7.57 MB) |
 | `pydantic_core.to_json(doc)` | 63.7 (invalid) | 170.6 | 2.7x | 4.88 MB (was 7.53 MB) |
 
+### Datetime fraction digits (issue #19)
+
+The date-time fields are `OscalDateTime`, a `datetime` subclass that keeps every fraction digit of the text. A parse of a datetime now calls a Python wrap validator, and a JSON serialization of one calls a Python function. The NIST SP 800-53 rev5 catalog has 8 datetime fields, so the test is whether a parse and a serialization of a real document move.
+
+`hatch run python scripts/bench_serialization.py` on that catalog (10.4 MB of JSON), median of 7 per run, then the median of 3 runs. The runs of `main` and the branch alternate on one machine. Python 3.13.18, pydantic 2.14.3, pydantic-core 2.50.4.
+
+| Path | Before, GC on ms | After, GC on ms | Before, GC off ms | After, GC off ms |
+|---|---:|---:|---:|---:|
+| `parse_oscal(bytes)` | 189.7 | 184.2 | 135.5 | 136.2 |
+| `serialize_oscal(doc, indent=None)` | 318.3 | 309.8 | 295.8 | 290.2 |
+| `serialize_oscal(doc)` | 347.1 | 347.8 | 319.8 | 340.6 |
+| `doc.model_dump_json()` | 326.5 | 314.8 | 309.6 | 299.6 |
+| `pydantic_core.to_json(doc)` | 330.8 | 326.3 | 310.4 | 310.4 |
+
+No row moves beyond the run-to-run noise of this machine. The compact output is 54 bytes longer, because the type writes a datetime as the text wrote it: the catalog writes eight of them with a zero fraction (`.000000`) that the old type dropped. A document with many datetimes pays one Python call for each; the cost for such a document is not measured here.
+
 ## Datatype checks
 
 The change that enforces the OSCAL datatype constraints (#77) replaced `AnyUrl`, `EmailStr`, and the unchecked `AwareDatetime` and `str` fields with four hand-written types (`v1/_datatypes.py`). Each value of those types now passes one to three `pattern` steps in pydantic-core (the Rust `regex` engine), and a `datetime` that a caller gives in Python input passes one Python call. The target was no measurable slowdown of a parse of the catalog.

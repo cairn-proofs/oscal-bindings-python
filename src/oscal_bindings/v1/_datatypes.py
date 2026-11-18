@@ -22,9 +22,11 @@ parse calls no Python function for the check. The one exception is a
   the input text. A U-label of a domain is a run of non-ASCII characters,
   letters, digits, and hyphens, with no hyphen at its start or end. The tables
   of IDNA2008 would need a dependency, so the type does not check them.
-- ``OscalDateTimeWithTimezone``: an ``AwareDatetime``. The input must be a
+- ``OscalDateTimeWithTimezone``: an ``OscalDateTime``, a ``datetime`` subclass
+  that keeps every fraction digit of the text (issue #19). The input must be a
   string that matches the pattern of the schema, or in Python input a
-  ``datetime`` with a timezone whose serialization matches it.
+  ``datetime`` with a timezone whose serialization matches it. A JSON
+  serialization writes the digits of the text.
 
 The pattern literals are the output of ``translate`` of
 ``scripts/regex_translation.py`` for the patterns of the schema. A test reads
@@ -34,16 +36,19 @@ package holds no schema and no translator.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
 import pydantic_core
-from pydantic import AwareDatetime, GetPydanticSchema
+from pydantic import GetPydanticSchema, WithJsonSchema
 from pydantic_core import PydanticCustomError, SchemaValidator, core_schema
+
+from oscal_bindings.v1._datetime import OscalDateTime
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from pydantic import GetCoreSchemaHandler
+    from pydantic import GetCoreSchemaHandler, ValidatorFunctionWrapHandler
 
 __all__ = [
     "OscalDateTimeWithTimezone",
@@ -185,7 +190,7 @@ _DATE_TIME_TEXT: Final = SchemaValidator(
 )
 
 
-def _check_serialization(value: datetime) -> datetime:
+def _check_serialization(value: datetime) -> OscalDateTime:
     """Match the text that a serialization writes with the pattern of the schema."""
     text = pydantic_core.to_json(value).decode()[1:-1]
     try:
@@ -194,16 +199,37 @@ def _check_serialization(value: datetime) -> datetime:
         raise PydanticCustomError(
             _DATE_TIME_ERROR_TYPE, _DATE_TIME_ERROR_MESSAGE
         ) from error
-    return value
+    return OscalDateTime.from_datetime(value)
+
+
+_FRACTION: Final = re.compile(r"T\d\d:\d\d:\d\d\.(\d+)")
+
+
+def _keep_fraction(text: str, parse: ValidatorFunctionWrapHandler) -> OscalDateTime:
+    """Parse the text as a ``datetime`` and keep every fraction digit it wrote."""
+    parsed = parse(text)
+    match = _FRACTION.search(text)
+    return OscalDateTime.from_datetime(parsed, match.group(1) if match else "")
+
+
+def _write_date_time(value: datetime) -> str:
+    """Write the OSCAL text of a value, with every fraction digit it holds."""
+    if isinstance(value, OscalDateTime):
+        return value.to_string()
+    return pydantic_core.to_json(value).decode()[1:-1]
 
 
 def _date_time_schema(_source: Any, _handler: GetCoreSchemaHandler) -> Any:
-    # JSON input: the string must match the pattern, then it is a datetime.
-    from_text = core_schema.chain_schema(
-        [
-            core_schema.str_schema(pattern=_DATE_TIME_PATTERN),
-            core_schema.datetime_schema(tz_constraint="aware"),
-        ]
+    # JSON input: the string must match the pattern, then it is a datetime that
+    # keeps the digits of the text.
+    from_text = core_schema.no_info_wrap_validator_function(
+        _keep_fraction,
+        core_schema.chain_schema(
+            [
+                core_schema.str_schema(pattern=_DATE_TIME_PATTERN),
+                core_schema.datetime_schema(tz_constraint="aware"),
+            ]
+        ),
     )
     # Python input: the same chain, or a datetime instance (never a number)
     # whose serialization matches the pattern. The union gives one error at the
@@ -219,10 +245,22 @@ def _date_time_schema(_source: Any, _handler: GetCoreSchemaHandler) -> Any:
             custom_error_type=_DATE_TIME_ERROR_TYPE,
             custom_error_message=_DATE_TIME_ERROR_MESSAGE,
         ),
+        # A plain ``datetime`` writes microseconds only; the text keeps the rest.
+        serialization=core_schema.plain_serializer_function_ser_schema(
+            _write_date_time, when_used="json", return_schema=core_schema.str_schema()
+        ),
     )
 
 
 OscalDateTimeWithTimezone = Annotated[
-    AwareDatetime, GetPydanticSchema(_date_time_schema)
+    OscalDateTime,
+    GetPydanticSchema(_date_time_schema),
+    # The schemas that the type had before: the pattern for an input, and the
+    # ``date-time`` format for an output (the serializer returns a string).
+    WithJsonSchema(
+        {"type": "string", "pattern": _DATE_TIME_PATTERN}, mode="validation"
+    ),
+    WithJsonSchema({"type": "string", "format": "date-time"}, mode="serialization"),
 ]
-"""The datatype ``date-time-with-timezone``: a ``datetime`` that has a timezone."""
+"""The datatype ``date-time-with-timezone``: an `OscalDateTime`, a ``datetime`` with
+a timezone that keeps every fraction digit of its text."""

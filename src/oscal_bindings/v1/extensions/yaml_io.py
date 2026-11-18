@@ -1,16 +1,11 @@
 """Optional YAML parse and serialize for OSCAL documents.
 
 This module implements the store's ``yaml-documents`` capability (YML-001 to
-YML-010), with two documented exceptions:
-
-1. The serializer inherits the JSON path's datetime defect, so a
-   seven-fraction-digit datetime loses its seventh digit on a round trip. That
-   narrows YML-008 and SER-005 until issue #19 closes. The conformance run
-   xfails ``yaml-round-trip/string-scalars`` (``tests/support/expected_failures.py``).
-2. A double-quoted escape that names a surrogate, such as a surrogate pair
-   ``"\\ud83d\\ude00"``, is a parse error. YAML 1.2 defines an escape as a
-   Unicode scalar value, which a surrogate is not. The JSON path accepts the
-   same pair, so this narrows YML-005. Write ``"\\U0001F600"`` instead.
+YML-010), with one documented exception: a double-quoted escape that names a
+surrogate, such as a surrogate pair ``"\\ud83d\\ude00"``, is a parse error. YAML 1.2
+defines an escape as a Unicode scalar value, which a surrogate is not. The JSON
+path accepts the same pair, so this narrows YML-005. Write ``"\\U0001F600"``
+instead.
 
 YAML is an optional feature. It needs the ``yaml`` extra
 (``pip install oscal-bindings[yaml]``). This module does not import PyYAML when

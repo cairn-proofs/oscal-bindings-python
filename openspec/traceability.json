@@ -35,6 +35,7 @@
     { "name": "make_hash", "requirements": ["BMB-001"] },
     { "name": "make_rlink", "requirements": ["BMB-002"] },
     { "name": "make_resource", "requirements": ["BMB-003", "BMB-004"] },
+    { "name": "OscalDateTime", "requirements": ["PRS-008", "SER-005"] },
     { "name": "OscalBuilderError", "requirements": ["ERR-001", "ERR-013"] },
     { "name": "OscalParseError", "requirements": ["ERR-001", "ERR-003", "ERR-009", "ERR-010"] },
     { "name": "OscalDocumentTypeMismatchError", "requirements": ["ERR-005", "ERR-009"] },
