@@ -55,7 +55,7 @@ graph LR
 | `OscalUri` | `str` (the input text) | The OSCAL pattern, then the RFC 3986 `URI` grammar. Each scheme is valid |
 | `OscalUriReference` | `str` (the input text) | The RFC 3986 `URI-reference` grammar |
 | `OscalEmailAddress` | `str` (the input text) | The two OSCAL patterns, then the RFC 5321 `Mailbox` grammar with RFC 6531 |
-| `OscalDateTimeWithTimezone` | `AwareDatetime` | The OSCAL pattern on the input string; in Python input also a `datetime` whose serialization matches it. One `oscal_date_time_with_timezone` error at the field |
+| `OscalDateTimeWithTimezone` | `OscalDateTime` (`v1/_datetime.py`, a `datetime` subclass that keeps every fraction digit) | The OSCAL pattern on the input string; in Python input also a `datetime` whose serialization matches it. One `oscal_date_time_with_timezone` error at the field |
 
 Each check runs in pydantic-core with the Rust `regex` engine. The pattern literals are the output of `translate` for the schema patterns; a test fails when one drifts.
 

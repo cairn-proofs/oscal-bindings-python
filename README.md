@@ -201,6 +201,28 @@ Opt-outs:
 - `by_alias=False` emits Python field names, still without `null`.
 - `exclude_none=False` has no effect. OSCAL forbids `null`, so None-valued fields are always omitted. To tell whether a field was set, use attribute access (`rlink.hashes is None`) or `model_fields_set`.
 
+### Datetimes
+
+Each OSCAL date-time field (`metadata.last_modified`, `result.start`, ...) is an `OscalDateTime`: a `datetime` subclass, so `isinstance(value, datetime)` holds and code that reads it as a `datetime` keeps working. OSCAL allows any number of fraction digits, and Python's `datetime` keeps six, so `OscalDateTime` also keeps the digits of the text and writes them again:
+
+```python
+from oscal_bindings import OscalDateTime, parse_oscal
+
+doc = parse_oscal(text)                    # last-modified: "2024-01-02T03:04:05.1234567Z"
+last = doc.root.catalog.metadata.last_modified
+last.microsecond                           # 123456, as a datetime has it
+last.fraction                              # "1234567", every digit of the text
+last.to_string()                           # "2024-01-02T03:04:05.1234567Z"
+```
+
+Equality, order, and hash count every digit: `.1234567` and `.1234568` are different instants, and `.120` equals `.12`. Arithmetic is where the extra digits can fall away:
+
+- `value + timedelta` and `value - timedelta` keep them, and so do `replace` and `astimezone`.
+- `value - other` is a `timedelta`, which holds microseconds, so two values that differ only after the sixth digit have a difference of zero. Compare them with `==`, `<`, and `>`.
+- `timestamp()`, `strftime()`, and `isoformat(timespec=...)` use the microsecond value only.
+
+The class docstring lists each method, and the API documentation shows it.
+
 ### YAML
 
 With the `yaml` extra installed, `parse_oscal_yaml`, `parse_oscal_yaml_file`, and `serialize_oscal_yaml` read and write OSCAL in YAML. They accept and produce the same typed `OscalDocument` as the JSON functions.
@@ -226,7 +248,7 @@ The input is one YAML 1.2 document in UTF-8. A stream with no document or more t
 
 The OSCAL schema, not the YAML reader, decides the type of each scalar at its location. A value keeps its text unless the location is a number or a boolean, so `version: 1.0` at a string location stays the string `"1.0"`, and `yes` stays `"yes"`. A number location takes only the JSON number grammar (no leading `+`, no leading zero, no hexadecimal), and a boolean location takes only `true` or `false`; any other text is a parse error that names the scalar's location. The error holds one entry for each such scalar, and the entries of the schema check for the rest of the document, so one parse shows every failure. A YAML tag does not change a value, and the key `<<` is an ordinary field, so a merge key is rejected as an unknown field. The characters U+0085, U+2028, and U+2029 are content, as YAML 1.2 defines, not line breaks. A `%YAML 1.1` or `%YAML 1.2` directive is accepted, and both read as YAML 1.2. Any other version is a parse error.
 
-Two cases differ from the JSON path. A double-quoted escape that names a surrogate, such as the pair `"\ud83d\ude00"`, is a parse error, because a YAML escape must name a Unicode character; write `"\U0001F600"` instead. And the serializer drops the seventh fraction digit of a datetime, as `serialize_oscal` does ([#19](https://github.com/cairn-proofs/oscal-bindings-python/issues/19)).
+One case differs from the JSON path. A double-quoted escape that names a surrogate, such as the pair `"\ud83d\ude00"`, is a parse error, because a YAML escape must name a Unicode character; write `"\U0001F600"` instead.
 
 The YAML parser applies three documented limits on alias expansion and nesting depth, so a small file cannot expand into a large value or exhaust the call stack. A fourth limit applies to line-break characters, below. [Resource limits](#resource-limits) lists every limit with the operations it applies to. An input past any of them is an `OscalParseError`:
 

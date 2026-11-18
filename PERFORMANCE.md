@@ -84,6 +84,22 @@ For the catalog (7.3 MB of YAML), `parse_oscal_yaml` takes 0.8 s with libyaml (`
 
 Compact serialization is about 4.3x faster with the GC on and 4.6x with it off. Parse is not touched by the change; its row differs by run-to-run noise. Covering the 284 required fields costs about 5% against a version that covered the 698 optional fields only. The absolute times are higher than in the tables above because this machine and Python are different, so compare the ratios.
 
+### Datetime fraction digits (issue #19)
+
+The date-time fields are `OscalDateTime`, a `datetime` subclass that keeps every fraction digit of the text. A parse of a datetime now calls a Python wrap validator, and a JSON serialization of one calls a Python function. The NIST SP 800-53 rev5 catalog has 8 datetime fields, so the test is whether a parse and a serialization of a real document move.
+
+`hatch run python scripts/bench_serialization.py` on that catalog (10.4 MB of JSON), median of 7 per run, then the median of 3 runs. The runs of `main` (with the `exclude_if` change above) and the branch alternate on one machine. Python 3.13.18, pydantic 2.14.3, pydantic-core 2.50.4.
+
+| Path | Before, GC on ms | After, GC on ms | Before, GC off ms | After, GC off ms |
+|---|---:|---:|---:|---:|
+| `parse_oscal(bytes)` | 184.1 | 183.3 | 131.2 | 131.7 |
+| `serialize_oscal(doc, indent=None)` | 69.5 | 70.0 | 59.2 | 59.9 |
+| `serialize_oscal(doc)` | 104.3 | 101.8 | 91.6 | 96.8 |
+| `doc.model_dump_json()` | 72.5 | 74.3 | 64.3 | 64.7 |
+| `pydantic_core.to_json(doc)` | 76.9 | 74.8 | 62.5 | 63.7 |
+
+No row moves beyond the run-to-run noise of this machine: the largest difference is 6%, in `serialize_oscal(doc)` with the GC off, and the runs of one tree differ by as much. The compact output is 54 bytes longer, because the type writes a datetime as the text wrote it: the catalog writes eight of them with a zero fraction (`.000000`) that the old type dropped. A document with many datetimes pays one Python call for each; the cost for such a document is not measured here.
+
 ## Datatype checks
 
 The change that enforces the OSCAL datatype constraints (#77) replaced `AnyUrl`, `EmailStr`, and the unchecked `AwareDatetime` and `str` fields with four hand-written types (`v1/_datatypes.py`). Each value of those types now passes one to three `pattern` steps in pydantic-core (the Rust `regex` engine), and a `datetime` that a caller gives in Python input passes one Python call. The target was no measurable slowdown of a parse of the catalog.
