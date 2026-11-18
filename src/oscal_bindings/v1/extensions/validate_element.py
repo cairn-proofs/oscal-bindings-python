@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
 import oscal_bindings.v1.models as _models
+from oscal_bindings.v1._branches import select_branch_errors
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -136,7 +137,7 @@ def validate_element(element: Any, element_type: str) -> ElementValidationResult
                 path=".".join(str(loc) for loc in err["loc"]) or "/",
                 message=err["msg"],
             )
-            for err in e.errors()
+            for err in select_branch_errors(e.errors(), lambda: element)
         ]
         return ElementValidationResult(valid=False, errors=errors)
     except Exception as e:

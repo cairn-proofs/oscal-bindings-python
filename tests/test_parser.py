@@ -7,15 +7,17 @@ import os
 import pickle  # nosec B403 - the test pickles its own error entries
 import tempfile
 import tracemalloc
+import types
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 from support.scripts import load_script
 from support.spec_artifact import corpus_root, ensure_spec_artifact
 
-from oscal_bindings import OscalDoc
+from oscal_bindings import OscalDoc, parse_oscal_yaml, validate_element
 from oscal_bindings.parser import (
     OscalDocument,
     OscalDocumentTypeMismatchError,
@@ -29,15 +31,14 @@ from oscal_bindings.parser import (
     serialize_oscal,
     validate_oscal,
 )
-from oscal_bindings.v1 import models
+from oscal_bindings.v1 import _branches, models
+from oscal_bindings.v1._branches import branch_properties, select_branch_errors
 from oscal_bindings.v1.extensions.yaml_io import DEPTH_LIMIT
 from oscal_bindings.v1.parser import (
     JSON_DEPTH_LIMIT,
     JSON_DEPTH_LIMIT_MSG,
     JSON_DIGIT_LIMIT,
     JSON_DIGIT_LIMIT_MSG,
-    _branch_properties,
-    _selected_branch_errors,
 )
 
 # Minimal valid OSCAL catalog document
@@ -969,9 +970,82 @@ class TestSelectedBranchErrors:
         by_index = {e["loc"][3]: e["loc"][4] for e in _schema_error(text).errors}
         assert by_index == {0: "ParameterWithSelect", 1: "ParameterWithValues"}
 
-    def test_a_document_over_the_json_module_depth_keeps_every_entry(self) -> None:
+    def test_a_failing_parse_never_has_zero_entries(self) -> None:
+        for text in (
+            _catalog_with_params([{"id": "p", "select": {"how-many": "seven"}}]),
+            _catalog_with_params([{"id": 5}]),
+            _catalog_with_params([{"id": "p", "select": {}, "values": [1]}]),
+        ):
+            assert _schema_error(text).errors
+
+    def test_a_recursive_group_selects_a_branch_at_each_level(self) -> None:
+        data = json.loads(MINIMAL_CATALOG)
+        data["catalog"]["groups"] = [
+            {
+                "id": "g",
+                "title": "G",
+                "groups": [
+                    {"id": "h", "title": "H", "controls": [{"id": "c", "title": 5}]}
+                ],
+            }
+        ]
+        (entry,) = _schema_error(json.dumps(data)).errors
+        names = [p for p in entry["loc"] if isinstance(p, str) and "Group" in p]
+        assert names == ["CatalogGroupWithGroups", "CatalogGroupWithControls"]
+
+    def test_the_three_branch_merge_selects_one_branch(self) -> None:
+        data = json.loads(MINIMAL_PROFILE)
+        data["profile"]["merge"] = {"flat": 5}
+        (entry,) = _schema_error(json.dumps(data)).errors
+        assert entry["loc"][-2:] == ("MergeWithFlat", "flat")
+
+    def test_a_profile_group_selects_its_branch_inside_a_merge(self) -> None:
+        data = json.loads(MINIMAL_PROFILE)
+        data["profile"]["merge"] = {
+            "custom": {
+                "groups": [
+                    {
+                        "title": "t",
+                        "insert-controls": [{"order": "bogus", "include-all": {}}],
+                    }
+                ]
+            }
+        }
+        (entry,) = _schema_error(json.dumps(data)).errors
+        assert "ProfileGroupWithInsertControls" in entry["loc"]
+        assert "ProfileGroupWithGroups" not in entry["loc"]
+        assert "MergeWithCustom" in entry["loc"]
+
+    def test_the_yaml_path_selects_the_branch_too(self) -> None:
+        text = (
+            "catalog:\n"
+            "  uuid: f47ac10b-58cc-4372-a567-0e02b2c3d479\n"
+            "  metadata: {title: T, last-modified: '2026-01-01T00:00:00Z',"
+            " version: '1', oscal-version: 1.2.3}\n"
+            "  params:\n"
+            "    - id: p\n"
+            "      select: {how-many: seven}\n"
+        )
+        with pytest.raises(OscalParseError) as info:
+            parse_oscal_yaml(text)
+        (entry,) = info.value.errors
+        assert "ParameterWithSelect" in entry["loc"]
+
+    def test_the_json_module_depth_is_not_reachable_through_parse_oscal(self) -> None:
+        # pydantic-core stops at depth 200, far below the recursion limit of
+        # the json module, so the fallback is tested on the function.
+        def too_deep() -> Any:
+            raise RecursionError
+
         entries = [{"loc": ("ParameterWithSelect",)}, {"loc": ("ParameterWithValues",)}]
-        assert _selected_branch_errors("[" * 100000, entries) == entries
+        assert select_branch_errors(entries, too_deep) == entries
+
+    def test_the_input_is_not_loaded_without_a_branch_in_the_entries(self) -> None:
+        def fail() -> Any:
+            raise AssertionError
+
+        entries = [{"loc": ("CatalogDocument", "catalog", "uuid")}]
+        assert select_branch_errors(entries, fail) == entries
 
     def test_the_distinguishing_properties_equal_the_manifest(self) -> None:
         pin = load_script("spec_artifact")
@@ -984,6 +1058,71 @@ class TestSelectedBranchErrors:
         }
         derived = {
             branch: properties[branch]
-            for branch, (_, properties) in _branch_properties().items()
+            for branch, properties in branch_properties().items()
         }
         assert derived == expected
+
+    def test_a_union_without_one_unique_property_is_left_out(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class Same1(BaseModel):
+            a: int | None = None
+
+        class Same2(BaseModel):
+            a: int | None = None
+
+        class One(BaseModel):
+            a: int | None = None
+
+        class Two(BaseModel):
+            a: int | None = None
+            b: int | None = None
+            c: int | None = None
+
+        class Good1(BaseModel):
+            x: int | None = None
+
+        class Good2(BaseModel):
+            y: int | None = None
+
+        fake = types.SimpleNamespace(
+            No=Same1 | Same2, Several=One | Two, Good=Good1 | Good2
+        )
+        monkeypatch.setattr(_branches, "_models", fake)
+        branch_properties.cache_clear()
+        try:
+            # Same1/Same2: no unique property. One has none, Two has two.
+            # Only the union whose branches each have one is kept.
+            assert set(branch_properties()) == {"Good1", "Good2"}
+        finally:
+            monkeypatch.undo()
+            branch_properties.cache_clear()
+
+
+class TestValidateElementSelectedBranch:
+    """PRS-014 applies to validate_element, an operation of the parse family."""
+
+    def test_a_select_parameter_reports_only_the_select_branch(self) -> None:
+        result = validate_element(
+            {"id": "p", "select": {"how-many": "seven"}}, "parameter"
+        )
+        assert result.valid is False
+        assert result.errors is not None
+        assert [e.path for e in result.errors] == [
+            "ParameterWithSelect.select.how-many"
+        ]
+
+    def test_a_values_parameter_reports_only_the_values_branch(self) -> None:
+        result = validate_element({"id": "p", "values": [1]}, "parameter")
+        assert result.errors
+        assert all(e.path.startswith("ParameterWithValues") for e in result.errors)
+
+    def test_an_object_with_neither_property_keeps_every_branch(self) -> None:
+        result = validate_element({"id": 5}, "parameter")
+        assert result.errors
+        starts = {e.path.split(".")[0] for e in result.errors}
+        assert starts == {"ParameterWithSelect", "ParameterWithValues"}
+
+    def test_an_object_type_without_a_union_is_unchanged(self) -> None:
+        result = validate_element({"href": 5}, "back-matter-resource-rlink")
+        assert result.errors
