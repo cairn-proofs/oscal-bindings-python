@@ -155,6 +155,9 @@ python = ["3.11", "3.12", "3.13", "3.14", "3.15"]
 [tool.pytest.ini_options]
 addopts = ["--durations=5", "--color=yes"]
 testpaths = ["tests"]
+markers = [
+    "spec(*ids): the scenarios of the pinned spec artifact that the test covers, for example spec(\"MDL-021.03\") (issue #49)",
+]
 
 [tool.coverage.run]
 source_pkgs = ["oscal_bindings"]
