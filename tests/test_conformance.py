@@ -173,6 +173,32 @@ def _assessment_period(case: dict[str, Any], src: Path) -> None:
     _expect_error(case, doc.assessment_period)
 
 
+def _facade(case: dict[str, Any], src: Path) -> None:
+    """Build the document facade from the input, as `input-form` states (FAC-001..3)."""
+    form = case.get("input-form")
+    if "expected-category" in case:
+        error = _expect_error(case, lambda: OscalDoc.from_file(src))
+        assert str(src) in str(error)
+        return
+    if form == "bytes":
+        doc = OscalDoc.from_json(src.read_bytes())
+    elif form == "path":
+        doc = OscalDoc.from_file(src)
+    else:
+        doc = OscalDoc(ob.parse_oscal(src.read_text("utf-8")))
+    expected_bytes = (corpus_root() / case["expected"]).read_bytes()
+    body_json = json.loads(expected_bytes)[case["document-type"]]
+    assert canonicalize(ob.serialize_oscal(doc.wrapper)) == expected_bytes
+    assert canonicalize(doc.body.model_dump_json()) == canonicalize(
+        json.dumps(body_json)
+    )
+    assert canonicalize(doc.metadata.model_dump_json()) == canonicalize(
+        json.dumps(body_json["metadata"])
+    )
+    assert doc.oscal_version == str(body_json["metadata"]["oscal-version"])
+    assert doc.uuid == str(body_json["uuid"])
+
+
 def _validate_element(case: dict[str, Any], src: Path) -> None:
     element = json.loads(src.read_text("utf-8"))
     if "expected-category" in case:
@@ -248,6 +274,7 @@ OPERATIONS: dict[str, Callable[..., None]] = {
     "parse-typed": _parse_typed,
     "parse-file": _parse_file,
     "assessment-period": _assessment_period,
+    "facade": _facade,
     "validate-element": _validate_element,
     "element-types": _element_types,
     "yaml-round-trip": _yaml_round_trip,
