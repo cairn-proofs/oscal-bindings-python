@@ -11,6 +11,7 @@ Absolute times depend on the machine, so compare ratios. Each section names its 
 - [YAML cost](#yaml-cost)
 - [Serialization](#serialization)
 - [Datatype checks](#datatype-checks)
+- [Error path: selected union branch](#error-path-selected-union-branch)
 - [Design changes with a measured effect](#design-changes-with-a-measured-effect)
 - [How to measure](#how-to-measure)
 
@@ -86,6 +87,19 @@ The after column is 2 to 5% lower in each row, also in the serialization rows th
 `import oscal_bindings` takes 159.5 ms before and 150.0 ms after (median of 9 fresh processes, `python -X importtime`). The runtime no longer imports `email-validator`.
 
 `scripts/bench_memory.py`: the peak of `parse_oscal` for the catalog is 36.5 MB before and 35.3 MB after. The other three rows of [Memory](#memory) are the same.
+
+## Error path: selected union branch
+
+Python 3.13. A failing parse of a union object keeps only the entries of the selected branch (PRS-014). To find the branch, the error path runs `json.loads` on the input again. A parse that succeeds does not run it. Measured on the NIST SP 800-53 rev4 catalog (about 5 MB as indented JSON) with one added parameter whose `select` has `how-many` set to `seven`. Median of 9 parses, two runs each, with a small script around `parse_oscal`:
+
+| | Before | After |
+|---|---|---|
+| Parse time, GC enabled | 0.099 s (both runs) | 0.108 s and 0.126 s |
+| Parse time, GC disabled | 0.066 s and 0.070 s | 0.082 s and 0.085 s |
+| Error entries | 2 | 1 |
+| `tracemalloc` peak | 17.3 MB | 17.3 MB |
+
+The failing parse takes about 10% to 25% longer, and the peak does not change.
 
 ## Design changes with a measured effect
 
