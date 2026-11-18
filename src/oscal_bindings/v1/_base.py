@@ -8,7 +8,8 @@ delegates to children that do. The base gives every model valid OSCAL output by 
 - Serialization uses OSCAL (alias) keys on every path: `model_dump*()`,
   `pydantic_core.to_json`, and `TypeAdapter.dump_*`. Pass `by_alias=False`
   to get Python field names instead.
-- None-valued fields are always omitted, because OSCAL forbids `null`.
+- None-valued fields are always omitted, because OSCAL forbids `null`. Each
+  optional field of a generated model has `Field(exclude_if=omit_none)`.
   `exclude_none=False` has no effect.
 - Keyword construction accepts Python field names as well as aliases, e.g.
   `BackMatterResourceRlink(href=..., media_type=...)`. Validation
@@ -31,8 +32,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Discriminator,
-    SerializerFunctionWrapHandler,
-    model_serializer,
 )
 
 if TYPE_CHECKING:
@@ -85,15 +84,15 @@ class OscalBaseModel(BaseModel):
     # the same marker (design.md, Root Cause 5).
     __init__.__pydantic_base_init__ = True  # type: ignore[attr-defined]
 
-    # No return annotation on purpose: pydantic derives the serialization JSON
-    # schema from it, and `-> Any` collapses model_json_schema(mode="serialization")
-    # to an empty schema.
-    @model_serializer(mode="wrap")
-    def _omit_none(self, handler: SerializerFunctionWrapHandler):
-        data = handler(self)
-        if type(data) is dict:
-            return {k: v for k, v in data.items() if v is not None}
-        return data
+
+def omit_none(value: object) -> bool:
+    """Return True for ``None``: the ``exclude_if`` test of every optional field.
+
+    OSCAL forbids ``null``, so each optional field of a generated model carries
+    ``Field(exclude_if=omit_none)`` and pydantic-core drops it on every
+    serialization path. `scripts/postprocess_models.py` adds the argument.
+    """
+    return value is None
 
 
 #: The error type of an input that names no document type.

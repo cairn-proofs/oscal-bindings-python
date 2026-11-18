@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 pp: ModuleType = load_script("postprocess_models")
+#: What a plain ``x: T | None = None`` field becomes (issue #8).
+NONE_FIELD = " = Field(default=None, exclude_if=omit_none)"
 PostprocessError = pp.PostprocessError
 
 HEADER = (
@@ -193,7 +195,10 @@ class TestUnionAliases:
     def test_inline_unions_of_the_variant_set_use_the_alias(self, done: str) -> None:
         """The match ignores the order of the names and keeps ``None``."""
         field = "Annotated[Group, Field(union_mode='left_to_right')]"
-        assert f"groups: list[{field}] | None = None" in done
+        assert (
+            f"groups: list[{field}] | None = Field(default=None, exclude_if=omit_none)"
+            in done
+        )
         assert f"list[{field}] | None,\n" in done
         assert "Group: TypeAlias = GroupWithControls | GroupWithGroups" in done
         assert "GroupWithGroups | GroupWithControls" not in done
@@ -224,7 +229,7 @@ class TestUnionAliases:
             {"name": "Other", "kind": "object"}, {"name": "Wider", "kind": "object"}
         )
         result = pp.postprocess(source, manifest, SCHEMA)
-        assert "x: GroupWithControls | None = None" in result
+        assert "x: GroupWithControls | None" + NONE_FIELD in result
         assert "y: GroupWithControls | GroupWithGroups | Mapping" in result
 
     def test_a_long_alias_is_wrapped(self) -> None:
@@ -284,7 +289,7 @@ class TestOscalDocument:
         ) in done
         assert (
             "from oscal_bindings.v1._base import OscalBaseModel, "
-            "root_key_discriminator\n"
+            "omit_none, root_key_discriminator\n"
         ) in done
 
     def test_a_long_tagged_member_is_split_as_black_splits_it(self) -> None:
@@ -426,14 +431,14 @@ class TestMappingCollectionMappings:
 class TestScalarAliases:
     def test_namespaced_scalar_keeps_its_local_name(self, done: str) -> None:
         assert "LocationUuid = Annotated[str, Field(pattern=" in done
-        assert "location: LocationUuid | None = None" in done
+        assert "location: LocationUuid | None" + NONE_FIELD in done
         assert "OscalCompleteOscal" not in done
 
     def test_scalar_without_a_prefix_keeps_its_name(self, done: str) -> None:
         assert "TokenDatatype = Annotated[str, Field(pattern=" in done
 
     def test_open_enum_field_keeps_the_base_alias(self, done: str) -> None:
-        assert "algorithm: TokenDatatype | HashAlgorithm | None = None" in done
+        assert "algorithm: TokenDatatype | HashAlgorithm | None" + NONE_FIELD in done
 
     @pytest.mark.parametrize(
         ("local", "published"),
@@ -1204,3 +1209,64 @@ class TestRerun:
         err = capsys.readouterr().err
         assert self.EXPECTED[0] in err
         assert f"{models_path} was not written" in err
+
+
+class TestExcludeIf:
+    """`add_exclude_if` drops each ``None`` field in pydantic-core (issue #8)."""
+
+    @staticmethod
+    def _run(body: str) -> tuple[str, list[str]]:
+        failures: list[str] = []
+        return pp.add_exclude_if(HEADER + _object("A", body), failures), failures
+
+    def test_annotated_field_gets_the_argument(self) -> None:
+        result, failures = self._run(
+            "x: Annotated[str | None, Field(title='X', min_length=1)] = None"
+        )
+        assert "Field(title='X', min_length=1, exclude_if=omit_none)" in result
+        assert failures == []
+
+    def test_multi_line_field_gets_its_own_line(self) -> None:
+        result, _ = self._run(
+            "x: Annotated[\n        str | None,\n        Field(\n"
+            "            title='X',\n            min_length=1,\n        ),\n"
+            "    ] = None"
+        )
+        assert "min_length=1,\n            exclude_if=omit_none,\n" in result
+
+    def test_plain_field_becomes_a_field_call(self) -> None:
+        result, _ = self._run("x: str | None = None")
+        assert "x: str | None = Field(default=None, exclude_if=omit_none)" in result
+
+    def test_a_field_that_has_it_is_left_alone(self) -> None:
+        body = "x: Annotated[str | None, Field(exclude_if=omit_none)] = None"
+        result, _ = self._run(body)
+        assert result.count("exclude_if=omit_none") == 1
+
+    def test_required_fields_are_left_alone(self) -> None:
+        result, _ = self._run("x: Annotated[str, Field(title='X')]")
+        assert "exclude_if" not in result
+
+    def test_annotated_none_field_without_a_field_is_a_failure(self) -> None:
+        _, failures = self._run("x: Annotated[str | None, 'note'] = None")
+        assert failures == ["A.x: an Annotated None field without a Field"]
+
+    def test_result_is_valid_python_and_idempotent(self) -> None:
+        once, _ = self._run("x: str | None = None")
+        assert pp.add_exclude_if(once, []) == once
+
+    def test_every_none_field_of_the_committed_module_has_it(self) -> None:
+        import ast
+
+        source = __import__("pathlib").Path(models.__file__).read_text(encoding="utf-8")
+        missing = [
+            f"{cls.name}.{ast.unparse(stmt.target)}"
+            for cls in ast.walk(ast.parse(source))
+            if isinstance(cls, ast.ClassDef)
+            for stmt in cls.body
+            if isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.value, ast.Constant)
+            and stmt.value.value is None
+            and "exclude_if=omit_none" not in ast.unparse(stmt)
+        ]
+        assert missing == []

@@ -31,7 +31,10 @@ as a class with its manifest name. This script completes the module:
 3. It names each scalar alias from its definition key without the
    ``oscal-complete-oscal-<module>:`` prefix (``LocationUuid``). A scalar has
    no manifest entry. Its name is a binding name, not a contract name.
-4. It applies three guards to the result. Each guard reports every offender:
+4. It adds ``exclude_if=omit_none`` to each field that defaults to ``None``
+   (``add_exclude_if``), so pydantic-core drops the field on every
+   serialization path.
+5. It applies three guards to the result. Each guard reports every offender:
 
    1. Each manifest name is defined at module level in the form that its kind
       requires.
@@ -103,6 +106,8 @@ UNION_FIELD: Final = "Annotated[{alias}, Field(union_mode='left_to_right')]"
 SCALAR_FORM: Final = "scalar alias"
 #: The longest alias line that is written on one line, as black formats it.
 LINE_LENGTH: Final = 88
+#: The keyword that drops a ``None`` field on every serialization path.
+EXCLUDE_IF_ARGUMENT: Final = "exclude_if=omit_none"
 
 
 class PostprocessError(ValueError):
@@ -438,6 +443,77 @@ def place_patterns(content: str, failures: list[str]) -> str:
                 "which is not str, int, or float"
             )
     return _apply(content, edits)
+
+
+def add_exclude_if(content: str, failures: list[str]) -> str:
+    """Add ``exclude_if=omit_none`` to each field that defaults to ``None``.
+
+    OSCAL forbids ``null``, so pydantic-core must drop a ``None`` field on every
+    serialization path. Each field of the form ``x: Annotated[T | None, Field(...)]
+    = None`` gets the argument in its ``Field(...)``, and a plain ``x: T | None =
+    None`` becomes ``Field(default=None, exclude_if=omit_none)``. A ``None``
+    default of another form is a failure that names the class and the field.
+    """
+    tree = ast.parse(content)
+    span = _Spans(content)
+    edits: list[tuple[int, int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for stmt in node.body:
+            if not (
+                isinstance(stmt, ast.AnnAssign)
+                and isinstance(stmt.value, ast.Constant)
+                and stmt.value.value is None
+            ):
+                continue
+            where = f"{node.name}.{ast.unparse(stmt.target)}"
+            field = _field_call(stmt.annotation)
+            if field is not None:
+                if any(kw.arg == "exclude_if" for kw in field.keywords):
+                    continue
+                last = field.keywords[-1] if field.keywords else None
+                if last is None:
+                    # ``Field()`` has no keyword: put the argument before ``)``.
+                    close = span(field)[1] - 1
+                    edits.append((close, close, EXCLUDE_IF_ARGUMENT))
+                else:
+                    end = span(last)[1]
+                    after = content[end : span(field)[1]]
+                    if field.lineno != field.end_lineno and after.lstrip().startswith(
+                        ","
+                    ):
+                        # One keyword per line with a trailing comma: add a line
+                        # in the same format.
+                        end += after.index(",") + 1
+                        indent = " " * last.col_offset
+                        text = f"\n{indent}{EXCLUDE_IF_ARGUMENT},"
+                    else:
+                        text = f", {EXCLUDE_IF_ARGUMENT}"
+                    edits.append((end, end, text))
+            elif isinstance(stmt.annotation, ast.Subscript) and _is_name(
+                stmt.annotation.value, "Annotated"
+            ):
+                failures.append(f"{where}: an Annotated None field without a Field")
+            else:
+                edits.append(
+                    (*span(stmt.value), f"Field(default=None, {EXCLUDE_IF_ARGUMENT})")
+                )
+    return _apply(content, edits)
+
+
+def _field_call(annotation: ast.expr) -> ast.Call | None:
+    """Return the ``Field(...)`` call in the metadata of an ``Annotated``."""
+    if not (
+        isinstance(annotation, ast.Subscript)
+        and _is_name(annotation.value, "Annotated")
+        and isinstance(annotation.slice, ast.Tuple)
+    ):
+        return None
+    for meta in annotation.slice.elts[1:]:
+        if isinstance(meta, ast.Call) and _is_name(meta.func, "Field"):
+            return meta
+    return None
 
 
 class _Spans:
@@ -1182,6 +1258,8 @@ def postprocess(
     content = rename_document_union(content, manifest, failures)
     content = discriminate_document_union(content, manifest, failures)
     content = add_union_aliases(content, manifest, failures)
+    content = add_exclude_if(content, failures)
+    content = ensure_from_import(content, _BASE_MODULE, "omit_none")
 
     # Remove the RootModel import if no longer used.
     if not re.search(r"\(RootModel\[", content):

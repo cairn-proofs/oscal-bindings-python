@@ -58,7 +58,7 @@ For the catalog (7.3 MB of YAML), `parse_oscal_yaml` takes 0.8 s with libyaml (`
 
 ## Serialization
 
-`hatch run python scripts/bench_serialization.py`, median of 7 per run; "after" is the median of 3 runs, which varied by up to about 30% on the compact row. Python 3.12.14, pydantic 2.13.5, pydantic-core 2.46.5. These numbers come from the change that made every serialization path emit valid OSCAL (issue #5). The serialize-time regression is accepted as the price of valid OSCAL on every path; parse is unchanged. Before, `model_dump_json()` and `to_json` emitted invalid OSCAL (Python names, `null`s), so those rows are not like-for-like. If serialize time becomes a problem, the fallback is per-field `exclude_if` (about 1.35x in the prototype, needs pydantic 2.12 or later).
+`hatch run python scripts/bench_serialization.py`, median of 7 per run; "after" is the median of 3 runs, which varied by up to about 30% on the compact row. Python 3.12.14, pydantic 2.13.5, pydantic-core 2.46.5. These numbers come from the change that made every serialization path emit valid OSCAL (issue #5). The serialize-time regression is accepted as the price of valid OSCAL on every path; parse is unchanged. Before, `model_dump_json()` and `to_json` emitted invalid OSCAL (Python names, `null`s), so those rows are not like-for-like. The per-field `exclude_if` change below (issue #8) removed most of this regression.
 
 | Path | Before ms | After ms | Ratio | Output after |
 |------|----------:|---------:|------:|-------------:|
@@ -67,6 +67,22 @@ For the catalog (7.3 MB of YAML), `parse_oscal_yaml` takes 0.8 s with libyaml (`
 | `serialize_oscal(doc)` | 63.1 | 168.4 | 2.7x | 10.44 MB (same) |
 | `doc.model_dump_json()` | 66.1 (invalid) | 165.8 | 2.5x | 4.88 MB (was 7.57 MB) |
 | `pydantic_core.to_json(doc)` | 63.7 (invalid) | 170.6 | 2.7x | 4.88 MB (was 7.53 MB) |
+
+### Per-field `exclude_if` (issue #8)
+
+`omit_none` as `Field(exclude_if=...)` on each of the 698 optional fields replaced the wrap `model_serializer` of `OscalBaseModel`, so pydantic-core drops a `None` field and no Python callback runs per model node. Output is byte-identical: the same sizes on every path, and `model_json_schema(mode="serialization")` is unchanged.
+
+`hatch run python scripts/bench_serialization.py` on the NIST SP 800-53 rev5 catalog (10.4 MB of JSON), median of 7 per run, then the median of 3 runs. The runs of `main` and the branch alternate on one machine. Python 3.13.18, pydantic 2.14.3, pydantic-core 2.50.4.
+
+| Path | Before, GC on ms | After, GC on ms | Before, GC off ms | After, GC off ms | Ratio, GC on |
+|---|---:|---:|---:|---:|---:|
+| `parse_oscal(bytes)` | 184.2 | 195.2 | 131.5 | 133.1 | 1.06x (noise) |
+| `serialize_oscal(doc, indent=None)` | 304.3 | 69.1 | 285.5 | 57.1 | 0.23x |
+| `serialize_oscal(doc)` | 346.5 | 95.6 | 321.8 | 89.9 | 0.28x |
+| `doc.model_dump_json()` | 318.6 | 72.1 | 305.5 | 66.6 | 0.23x |
+| `pydantic_core.to_json(doc)` | 314.1 | 68.0 | 292.4 | 62.2 | 0.22x |
+
+Compact serialization is about 4.4x faster with the GC on and 5.0x with it off. Parse is not touched by the change; its row differs by run-to-run noise. The absolute times are higher than in the tables above because this machine and Python are different, so compare the ratios.
 
 ## Datatype checks
 
