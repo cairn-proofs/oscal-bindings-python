@@ -523,6 +523,7 @@ def test_merge_ignores_title_and_description(
 # 2.2 Guards
 
 
+@pytest.mark.spec("MDL-021.03")
 def test_merge_of_different_bodies_fails_and_names_both_sites(
     schema: dict[str, Any], manifest: dict[str, Any]
 ) -> None:
