@@ -138,6 +138,17 @@ class OscalDateTime(datetime):
 
     # -- the digits -------------------------------------------------------------
 
+    def _digits(self) -> str:
+        """Return the digits, or the default for a value that ``__new__`` never made.
+
+        Python 3.11 builds the result of ``replace`` and of other methods in C,
+        without a call of ``__new__``, so the slot can be empty.
+        """
+        try:
+            return self._fraction
+        except AttributeError:
+            return _default_fraction(self.microsecond)
+
     @property
     def fraction(self) -> str:
         """The digits after the decimal point of the seconds, as the text wrote them.
@@ -146,12 +157,12 @@ class OscalDateTime(datetime):
         `microsecond` when a ``datetime`` was converted, and every digit of the
         text when the value was parsed: ``"1234567"`` for ``...05.1234567Z``.
         """
-        return self._fraction
+        return self._digits()
 
     @property
     def _extra(self) -> Fraction:
         """The part of the second beyond the microsecond, in microseconds."""
-        rest = self._fraction[_MICRO_DIGITS:]
+        rest = self._digits()[_MICRO_DIGITS:]
         return Fraction(int(rest), 10 ** len(rest)) if rest.strip("0") else Fraction(0)
 
     @classmethod
@@ -202,12 +213,12 @@ class OscalDateTime(datetime):
         Another ``timespec`` rounds down to that precision as ``datetime`` does,
         from the microsecond value.
         """
-        if timespec != "auto" or self._fraction == _default_fraction(self.microsecond):
+        if timespec != "auto" or self._digits() == _default_fraction(self.microsecond):
             return super().isoformat(sep, timespec)
         whole = super().isoformat(sep, "seconds")
         zone = _ZONE.search(whole)
         split = zone.start() if zone else len(whole)
-        point = "." + self._fraction if self._fraction else ""
+        point = "." + self._digits() if self._digits() else ""
         return whole[:split] + point + whole[split:]
 
     def to_string(self) -> str:
@@ -221,9 +232,9 @@ class OscalDateTime(datetime):
 
     def __repr__(self) -> str:
         base = super().__repr__()
-        if self._fraction == _default_fraction(self.microsecond):
+        if self._digits() == _default_fraction(self.microsecond):
             return base
-        return f"{base[:-1]}, fraction={self._fraction!r})"
+        return f"{base[:-1]}, fraction={self._digits()!r})"
 
     # -- equality and order -----------------------------------------------------
 
@@ -276,9 +287,9 @@ class OscalDateTime(datetime):
 
     def _carry(self, result: Any) -> Any:
         """Give ``result`` the digits beyond the sixth of this value."""
-        if isinstance(result, OscalDateTime) and len(self._fraction) > _MICRO_DIGITS:
+        if isinstance(result, OscalDateTime) and len(self._digits()) > _MICRO_DIGITS:
             result._fraction = (  # noqa: SLF001
-                f"{result.microsecond:06d}" + self._fraction[_MICRO_DIGITS:]
+                f"{result.microsecond:06d}" + self._digits()[_MICRO_DIGITS:]
             )
         return result
 
@@ -297,7 +308,7 @@ class OscalDateTime(datetime):
         """
         result = super().replace(*args, **kwargs)
         if "microsecond" not in kwargs and len(args) < _MICROSECOND_ARGUMENT:
-            result._fraction = self._fraction  # noqa: SLF001
+            result._fraction = self._digits()  # noqa: SLF001
         return result
 
     __replace__ = replace
@@ -305,7 +316,7 @@ class OscalDateTime(datetime):
     def astimezone(self, tz: tzinfo | None = None) -> Self:  # type: ignore[override]
         """Return the value in another timezone; the digits stay."""
         result = super().astimezone(tz)
-        result._fraction = self._fraction  # noqa: SLF001
+        result._fraction = self._digits()  # noqa: SLF001
         return result
 
     def __reduce_ex__(self, protocol: Any) -> Any:
