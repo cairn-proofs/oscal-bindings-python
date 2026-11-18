@@ -71,6 +71,7 @@ def test_cache_hit_makes_no_network_call(tmp_path, monkeypatch):
     assert len(fake_get.urls) == 1
 
 
+@pytest.mark.spec("VER-005.01", "VER-005.02")
 def test_hash_mismatch_raises_and_publishes_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(corpus, "_http_get", _CountingGet(PAYLOAD + b"tampered"))
     with pytest.raises(CorpusError, match="sha256 mismatch") as info:
