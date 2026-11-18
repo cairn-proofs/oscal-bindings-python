@@ -35,6 +35,7 @@ from oscal_bindings.v1.parser import (
     JSON_DEPTH_LIMIT_MSG,
     JSON_DIGIT_LIMIT,
     JSON_DIGIT_LIMIT_MSG,
+    _narrow_document,
 )
 
 # Minimal valid OSCAL catalog document
@@ -543,6 +544,35 @@ JSON_LIMIT_KINDS = {"json_depth_limit", "json_digit_limit", "json_invalid"}
 
 def _kinds(error: OscalParseError) -> set[str]:
     return {e["type"] for e in error.errors}
+
+
+class TestNarrowDocument:
+    """`_narrow_document` is the helper of the typed JSON and YAML parsers."""
+
+    def test_returns_the_root_when_it_is_the_wrapper(self):
+        doc = parse_oscal(MINIMAL_CATALOG)
+        assert _narrow_document(doc, models.CatalogDocument, "a Catalog") is doc.root
+
+    def test_raises_a_mismatch_naming_the_expected_type(self):
+        doc = parse_oscal(MINIMAL_PROFILE)
+        with pytest.raises(OscalDocumentTypeMismatchError) as info:
+            _narrow_document(doc, models.CatalogDocument, "a Catalog")
+        assert str(info.value) == "Document is not a Catalog"
+        assert info.value.errors == []
+
+    def test_each_wrapper_matches_only_its_own_type(self):
+        wrappers = [
+            c
+            for c in vars(models).values()
+            if isinstance(c, type) and c.__name__.endswith("Document")
+        ]
+        doc = parse_oscal(MINIMAL_PROFILE)
+        for wrapper in wrappers:
+            if wrapper is models.ProfileDocument:
+                assert _narrow_document(doc, wrapper, "x") is doc.root
+            elif wrapper is not models.OscalDocument:
+                with pytest.raises(OscalDocumentTypeMismatchError):
+                    _narrow_document(doc, wrapper, "x")
 
 
 class TestJsonDepthLimit:

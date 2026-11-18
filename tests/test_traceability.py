@@ -107,12 +107,24 @@ def test_cited_identifiers_resolve_in_the_pinned_index() -> None:
 
 
 def test_yaml_operations_cite_the_contract_requirements() -> None:
-    """The three YAML operations cite YML-005, YML-006, YML-008 (proposal item 7)."""
+    """The YAML operations cite YML-005 to YML-008 (proposal item 7, issue #31)."""
     by_name = {op["name"]: op for op in _load_record()["operations"]}
     assert by_name["parse_oscal_yaml"].get("requirements") == ["YML-005", "PRS-013"]
     file_op = by_name["parse_oscal_yaml_file"]
     assert file_op.get("requirements") == ["YML-006", "PRS-013"]
     assert by_name["serialize_oscal_yaml"].get("requirements") == ["YML-008"]
+    typed = (
+        "parse_catalog_yaml",
+        "parse_profile_yaml",
+        "parse_component_definition_yaml",
+        "parse_system_security_plan_yaml",
+        "parse_assessment_plan_yaml",
+        "parse_assessment_results_yaml",
+        "parse_plan_of_action_and_milestones_yaml",
+        "parse_mapping_collection_yaml",
+    )
+    for name in typed:
+        assert by_name[name].get("requirements") == ["YML-007"], name
 
 
 # --- Guards that the test itself detects each failure (self-verification) ---
