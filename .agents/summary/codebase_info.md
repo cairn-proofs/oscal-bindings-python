@@ -10,7 +10,7 @@ The implementation lives in a **major-version package**, `oscal_bindings.v1`. Th
 - **Repository:** `cairn-proofs/oscal-bindings-python`. The `-python` suffix is for the repo only: sibling bindings in other languages live in `oscal-bindings-<lang>` repos, while each registry package uses that ecosystem's native name.
 - **License:** Apache-2.0 (`LICENSE`); NIST attribution for the OSCAL JSON Schema, which the models are generated from, is in `NOTICE`.
 - **Version:** 0.4.0
-- **Language:** Python 3.11+ (test matrix: 3.11, 3.12, 3.13, 3.14)
+- **Language:** Python 3.11+ (test matrix: 3.11, 3.12, 3.13, 3.14, 3.15)
 - **Core runtime dependency:** Pydantic v2 (with `email` extra)
 - **Build backend:** Hatchling
 - **License / audience:** Developers building compliance tooling, GRC platforms, and security automation that consume/produce OSCAL documents.
@@ -157,5 +157,5 @@ graph TD
 ## Testing
 
 - `pytest`, `testpaths = ["tests"]`, one test module per source module plus an import smoke test with top-level/v1 parity checks (`test_oscal_bindings.py`), manifest, hoist, and post-processor tests (`test_manifest.py`, `test_hoist_names.py`, `test_postprocess.py`, `test_prop_postprocess.py`), closed-enum tests (`test_closed_enums.py`), and shared helpers in `tests/support/` (`version_package.py`, `corpus.py`, `spec_artifact.py`, `scripts.py`).
-- Matrix runs across Python 3.11, 3.12, 3.13, and 3.14 (`hatch test --all`), parallelized.
+- Matrix runs across Python 3.11, 3.12, 3.13, 3.14, and 3.15 (`hatch test --all`), parallelized.
 - Reports: terminal coverage plus `htmlcov/` (HTML, git-ignored), both from `hatch test --cover` via the overridden `cov-report` script.
