@@ -926,6 +926,7 @@ class TestAliasBudget:
         assert len(md["props"]) == 99
         assert md["props"][0]["remarks"] == "x" * 10_000
 
+    @pytest.mark.spec("PRS-010.03")
     def test_nested_collection_alias_bomb_is_rejected_by_the_node_limit(self) -> None:
         # 30 levels of 10 copies each: about 10**30 nodes from 3 KB of input.
         text = _nested_alias(30)
