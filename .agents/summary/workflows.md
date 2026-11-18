@@ -129,10 +129,10 @@ flowchart TD
 flowchart TD
     A["doc.assessment_period()"] --> B{"body type?"}
     B -->|AssessmentPlan| C["walk tasks[] (recursively into tasks[].tasks[])"]
-    C --> D["on-date → add date to starts+ends<br/>within-date-range → add start & end<br/>at-frequency → contributes nothing"]
+    C --> D["on-date → add datetime to starts+ends<br/>within-date-range → add start & end<br/>at-frequency → contributes nothing"]
     B -->|AssessmentResults| E["results[].start → starts<br/>results[].end (if set) → ends"]
     B -->|other| F["raise OscalAccessError"]
-    D --> G["return (min starts | None, max ends | None)"]
+    D --> G["return (earliest start | None, latest end | None)<br/>by instant, first in document order on a tie"]
     E --> G
 ```
 

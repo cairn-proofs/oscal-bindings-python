@@ -80,7 +80,7 @@ Each check runs in pydantic-core with the Rust `regex` engine. The pattern liter
 - `OscalDoc` uses `__slots__ = ("_wrapper",)`; constructor accepts an `OscalWrapper` or an `OscalDocument` (unwraps `.root`), else raises `TypeError`.
 - Classmethods `from_json(str|bytes)` and `from_file(path)`.
 - Properties: `wrapper`, `body`, `metadata`, `oscal_version`, `uuid`.
-- `assessment_period() -> (date|None, date|None)` — defined only for Assessment Plan (walks `tasks[].timing`, including nested subtasks: `on-date`, `within-date-range`; `at-frequency` contributes nothing) and Assessment Results (aggregates `results[].start`/`.end`). Earliest start / latest end win. Raises `OscalAccessError` on other types.
+- `assessment_period() -> (OscalDateTime|None, OscalDateTime|None)` — defined only for Assessment Plan (walks `tasks[].timing`, including nested subtasks: `on-date`, `within-date-range`; `at-frequency` contributes nothing) and Assessment Results (aggregates `results[].start`/`.end`). Bounds are datetimes ordered by instant with every fraction digit (FAC-007): the earliest start and the latest end win, and an equal instant keeps the first value in document order (a task before its nested tasks). Each bound keeps its own offset. Raises `OscalAccessError` on other types.
 - Type unions `OscalBody` and `OscalWrapper` (each an 8-way union), and the module-private `_WRAPPER_TO_BODY_ATTR` dispatch map.
 - `OscalAccessError` — raised when a typed accessor is used on the wrong document type.
 - `OscalUnknownElementTypeError` — raised by `validate_element` for an unrecognized element type; a category of its own, outside the parse errors.

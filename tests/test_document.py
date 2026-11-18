@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from oscal_bindings import (
     OscalAccessError,
+    OscalDateTime,
     OscalDoc,
     parse_oscal,
 )
 from oscal_bindings.models import (
+    AssessmentResults,
+    AssessmentResultsDocument,
     Catalog,
     CatalogDocument,
     MappingCollection,
     MappingCollectionDocument,
     Metadata,
+    Result,
     SystemSecurityPlan,
     SystemSecurityPlanDocument,
 )
@@ -243,8 +247,8 @@ class TestAssessmentPeriod:
         )
         doc = OscalDoc.from_json(fixture)
         start, end = doc.assessment_period()
-        assert start == date(2025, 3, 15)
-        assert end == date(2025, 3, 15)
+        assert start == datetime(2025, 3, 15, tzinfo=UTC)
+        assert end == datetime(2025, 3, 15, tzinfo=UTC)
 
     def test_ap_with_date_range_task(self):
         fixture = _ap_with_tasks(
@@ -264,8 +268,8 @@ class TestAssessmentPeriod:
         )
         doc = OscalDoc.from_json(fixture)
         assert doc.assessment_period() == (
-            date(2025, 1, 5),
-            date(2025, 1, 30),
+            datetime(2025, 1, 5, tzinfo=UTC),
+            datetime(2025, 1, 30, tzinfo=UTC),
         )
 
     def test_ap_aggregates_across_multiple_tasks(self):
@@ -293,8 +297,8 @@ class TestAssessmentPeriod:
         )
         doc = OscalDoc.from_json(fixture)
         assert doc.assessment_period() == (
-            date(2025, 1, 5),
-            date(2025, 4, 30),
+            datetime(2025, 1, 5, tzinfo=UTC),
+            datetime(2025, 4, 30, tzinfo=UTC),
         )
 
     def test_ap_at_frequency_contributes_nothing(self):
@@ -332,8 +336,8 @@ class TestAssessmentPeriod:
         )
         doc = OscalDoc.from_json(fixture)
         assert doc.assessment_period() == (
-            date(2025, 6, 1),
-            date(2025, 6, 1),
+            datetime(2025, 6, 1, tzinfo=UTC),
+            datetime(2025, 6, 1, tzinfo=UTC),
         )
 
     def test_ar_single_result_with_end(self):
@@ -349,8 +353,8 @@ class TestAssessmentPeriod:
         )
         doc = OscalDoc.from_json(fixture)
         assert doc.assessment_period() == (
-            date(2025, 2, 1),
-            date(2025, 2, 15),
+            datetime(2025, 2, 1, tzinfo=UTC),
+            datetime(2025, 2, 15, tzinfo=UTC),
         )
 
     def test_ar_aggregates_across_results(self):
@@ -373,16 +377,168 @@ class TestAssessmentPeriod:
         )
         doc = OscalDoc.from_json(fixture)
         assert doc.assessment_period() == (
-            date(2025, 1, 20),
-            date(2025, 3, 1),
+            datetime(2025, 1, 20, tzinfo=UTC),
+            datetime(2025, 3, 1, tzinfo=UTC),
         )
 
     def test_ar_result_without_end(self):
         fixture = _ar_with_results([_result(TEST_UUID, "R1", "2025-02-01T00:00:00Z")])
         doc = OscalDoc.from_json(fixture)
         start, end = doc.assessment_period()
-        assert start == date(2025, 2, 1)
+        assert start == datetime(2025, 2, 1, tzinfo=UTC)
         assert end is None
+
+
+def _on_date(uuid: str, date_text: str, **rest) -> dict:
+    return _task(
+        uuid, "milestone", "T", timing={"on-date": {"date": date_text}}, **rest
+    )
+
+
+U2 = "00000000-0000-4000-8000-000000000002"
+U3 = "00000000-0000-4000-8000-000000000003"
+
+
+class TestAssessmentPeriodDatetimes:
+    """FAC-007: the bounds are datetimes ordered by instant, first in document order."""
+
+    def test_the_bounds_are_oscal_datetimes(self):
+        fixture = _ap_with_tasks([_on_date(TEST_UUID, "2025-03-15T00:00:00Z")])
+        start, end = OscalDoc.from_json(fixture).assessment_period()
+        assert isinstance(start, OscalDateTime)
+        assert isinstance(end, OscalDateTime)
+        assert start.to_string() == "2025-03-15T00:00:00Z"
+
+    def test_bounds_are_ordered_by_instant_across_offsets(self):
+        fixture = _ap_with_tasks(
+            [
+                _on_date(TEST_UUID, "2026-03-01T23:00:00-05:00"),
+                _on_date(U2, "2026-03-02T01:00:00Z"),
+            ]
+        )
+        start, end = OscalDoc.from_json(fixture).assessment_period()
+        assert start.to_string() == "2026-03-02T01:00:00Z"
+        assert end.to_string() == "2026-03-01T23:00:00-05:00"
+
+    def test_a_bound_keeps_its_own_offset(self):
+        fixture = _ap_with_tasks([_on_date(TEST_UUID, "2026-03-01T07:00:00-05:00")])
+        start, _ = OscalDoc.from_json(fixture).assessment_period()
+        assert start.utcoffset() == timedelta(hours=-5)
+
+    def test_an_equal_instant_gives_the_first_value_in_document_order(self):
+        fixture = _ap_with_tasks(
+            [
+                _on_date(
+                    TEST_UUID,
+                    "2026-03-01T12:00:00Z",
+                    tasks=[_on_date(U2, "2026-03-01T07:00:00-05:00")],
+                )
+            ]
+        )
+        start, end = OscalDoc.from_json(fixture).assessment_period()
+        assert start.to_string() == "2026-03-01T12:00:00Z"
+        assert end.to_string() == "2026-03-01T12:00:00Z"
+
+    def test_the_first_value_wins_whatever_the_offset_of_the_second(self):
+        fixture = _ap_with_tasks(
+            [
+                _on_date(U2, "2026-03-01T07:00:00-05:00"),
+                _on_date(TEST_UUID, "2026-03-01T12:00:00Z"),
+            ]
+        )
+        start, end = OscalDoc.from_json(fixture).assessment_period()
+        assert start.to_string() == "2026-03-01T07:00:00-05:00"
+        assert end.to_string() == "2026-03-01T07:00:00-05:00"
+
+    def test_a_task_comes_before_its_nested_tasks(self):
+        fixture = _ap_with_tasks(
+            [
+                _on_date(
+                    TEST_UUID,
+                    "2026-03-01T12:00:00Z",
+                    tasks=[_on_date(U2, "2026-03-01T12:00:00+00:00")],
+                ),
+                _on_date(U3, "2026-03-01T07:00:00-05:00"),
+            ]
+        )
+        start, _ = OscalDoc.from_json(fixture).assessment_period()
+        assert start.to_string() == "2026-03-01T12:00:00Z"
+
+    def test_the_seventh_fraction_digit_orders_the_bounds(self):
+        fixture = _ar_with_results(
+            [
+                _result(
+                    TEST_UUID,
+                    "R1",
+                    "2026-03-01T10:00:00.1234568Z",
+                    "2026-03-01T11:00:00Z",
+                ),
+                _result(
+                    U2,
+                    "R2",
+                    "2026-03-01T05:00:00.1234567-05:00",
+                    "2026-03-01T06:00:00.0000001-05:00",
+                ),
+            ]
+        )
+        start, end = OscalDoc.from_json(fixture).assessment_period()
+        assert start.to_string() == "2026-03-01T05:00:00.1234567-05:00"
+        assert end.to_string() == "2026-03-01T06:00:00.0000001-05:00"
+
+    def test_digits_beyond_the_sixth_decide_an_otherwise_equal_instant(self):
+        fixture = _ap_with_tasks(
+            [
+                _on_date(TEST_UUID, "2026-03-01T12:00:00.1234568Z"),
+                _on_date(U2, "2026-03-01T12:00:00.1234567Z"),
+            ]
+        )
+        start, end = OscalDoc.from_json(fixture).assessment_period()
+        assert start.fraction == "1234567"
+        assert end.fraction == "1234568"
+
+    def test_a_within_date_range_gives_a_start_and_an_end(self):
+        fixture = _ap_with_tasks(
+            [
+                _task(
+                    TEST_UUID,
+                    "action",
+                    "T",
+                    timing={
+                        "within-date-range": {
+                            "start": "2026-03-01T00:00:00Z",
+                            "end": "2026-03-09T00:00:00Z",
+                        }
+                    },
+                ),
+                _on_date(U2, "2026-03-05T00:00:00Z"),
+            ]
+        )
+        start, end = OscalDoc.from_json(fixture).assessment_period()
+        assert start == datetime(2026, 3, 1, tzinfo=UTC)
+        assert end == datetime(2026, 3, 9, tzinfo=UTC)
+
+    def test_a_model_built_without_validation_still_gives_oscal_datetimes(self):
+        body = AssessmentResults.model_construct(
+            results=[
+                Result.model_construct(
+                    start=datetime(2026, 3, 1, tzinfo=UTC),
+                    end=datetime(2026, 3, 2, tzinfo=UTC),
+                )
+            ]
+        )
+        doc = OscalDoc(
+            AssessmentResultsDocument.model_construct(assessment_results=body)
+        )
+        start, end = doc.assessment_period()
+        assert isinstance(start, OscalDateTime)
+        assert isinstance(end, OscalDateTime)
+
+    def test_the_docstring_says_to_compare_and_not_to_subtract(self):
+        doc = OscalDoc.assessment_period.__doc__ or ""
+        assert "do not subtract" in doc
+        assert "microseconds" in doc
+        assert "datetime.date" in doc
+        assert "first of" in doc
 
 
 class TestBodyAccess:

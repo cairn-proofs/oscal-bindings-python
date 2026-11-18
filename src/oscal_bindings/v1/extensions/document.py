@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from oscal_bindings.v1._datetime import OscalDateTime
 from oscal_bindings.v1.models import (
     AssessmentPlan,
     AssessmentPlanDocument,
@@ -32,7 +33,8 @@ from oscal_bindings.v1.models import (
 from oscal_bindings.v1.parser import parse_oscal, parse_oscal_file
 
 if TYPE_CHECKING:
-    from datetime import date
+    from collections.abc import Iterable
+    from datetime import datetime
     from pathlib import Path
 
 OscalBody = (
@@ -149,22 +151,40 @@ class OscalDoc:
         """
         return self.body.uuid
 
-    def assessment_period(self) -> tuple[date | None, date | None]:
-        """Return `(start, end)` dates for an Assessment Plan or Assessment Results.
+    def assessment_period(self) -> tuple[OscalDateTime | None, OscalDateTime | None]:
+        """Return `(start, end)` datetimes for an Assessment Plan or Assessment Results.
+
+        Each bound is `None` or an `OscalDateTime` of the document, with its
+        instant, its offset, and every fraction digit of its text (FAC-007).
 
         For an Assessment Plan, walks `tasks[].timing` (including nested
         `tasks[].tasks[]`) and aggregates:
 
-        - `on-date` contributes a single point in time.
-        - `within-date-range` contributes its `start` and `end`.
-        - `at-frequency` contributes nothing (no calendar dates).
+        - `on-date` contributes one datetime, which is both a start and an end.
+        - `within-date-range` contributes its `start` and its `end`.
+        - `at-frequency` contributes nothing.
 
         For Assessment Results, aggregates `results[].start` and
         `results[].end`.
 
-        Precedence rule: when multiple date sources are present, the
-        earliest start and the latest end across all sources win.
-        Returns `(None, None)` if no calendar dates are present.
+        The start is the earliest of the start values and the end is the latest
+        of the end values. Values are ordered by instant, so
+        `2026-03-01T23:00:00-05:00` is later than `2026-03-02T01:00:00Z`, and
+        the comparison counts every fraction digit. When two or more values
+        have the earliest (or the latest) instant, the bound is the first of
+        them in document order, where a task comes before its nested tasks. The
+        bound keeps its own offset: it is not converted to UTC.
+
+        Returns `(None, None)` if no datetime is present.
+
+        Note:
+            **Compare the bounds, do not subtract them.** `end - start` is a
+            `timedelta` of microseconds, so it drops the digits beyond the
+            sixth; see `OscalDateTime`.
+
+        Warning:
+            Before this version `assessment_period()` returned `datetime.date`
+            values. A caller that needs a date calls `.date()` on a bound.
 
         Raises:
             OscalAccessError: If called on a non-AP/AR document.
@@ -183,34 +203,67 @@ class OscalDoc:
         return f"OscalDoc({type(self.body).__name__} uuid={self.uuid})"
 
 
+def _as_oscal_datetime(value: datetime) -> OscalDateTime:
+    """Return ``value`` as an `OscalDateTime` (a model built without validation)."""
+    return (
+        value
+        if isinstance(value, OscalDateTime)
+        else OscalDateTime.from_datetime(value)
+    )
+
+
+def _bounds(
+    starts: Iterable[datetime], ends: Iterable[datetime]
+) -> tuple[OscalDateTime | None, OscalDateTime | None]:
+    """Return the earliest start and the latest end, the first value on a tie.
+
+    Both iterables are in document order. A value replaces the bound only when
+    it is strictly earlier (start) or strictly later (end), so an equal instant
+    keeps the first value (FAC-007).
+    """
+    start: OscalDateTime | None = None
+    for value in starts:
+        candidate = _as_oscal_datetime(value)
+        if start is None or candidate < start:
+            start = candidate
+    end: OscalDateTime | None = None
+    for value in ends:
+        candidate = _as_oscal_datetime(value)
+        if end is None or candidate > end:
+            end = candidate
+    return start, end
+
+
 def _ap_assessment_period(
     ap: AssessmentPlan,
-) -> tuple[date | None, date | None]:
-    starts: list[date] = []
-    ends: list[date] = []
+) -> tuple[OscalDateTime | None, OscalDateTime | None]:
+    starts: list[datetime] = []
+    ends: list[datetime] = []
     for task in ap.tasks or []:
         _collect_task_dates(task, starts, ends)
-    return (min(starts) if starts else None, max(ends) if ends else None)
+    return _bounds(starts, ends)
 
 
-def _collect_task_dates(task, starts: list[date], ends: list[date]) -> None:
+def _collect_task_dates(task, starts: list[datetime], ends: list[datetime]) -> None:
+    # A task comes before the tasks that it holds (FAC-007, document order).
     timing = task.timing
     if timing is not None:
         on_date = getattr(timing, "on_date", None)
         if on_date is not None:
-            starts.append(on_date.date.date())
-            ends.append(on_date.date.date())
+            starts.append(on_date.date)
+            ends.append(on_date.date)
         range_ = getattr(timing, "within_date_range", None)
         if range_ is not None:
-            starts.append(range_.start.date())
-            ends.append(range_.end.date())
+            starts.append(range_.start)
+            ends.append(range_.end)
     for child in task.tasks or []:
         _collect_task_dates(child, starts, ends)
 
 
 def _ar_assessment_period(
     ar: AssessmentResults,
-) -> tuple[date | None, date | None]:
-    starts = [r.start.date() for r in ar.results]
-    ends = [r.end.date() for r in ar.results if r.end is not None]
-    return (min(starts) if starts else None, max(ends) if ends else None)
+) -> tuple[OscalDateTime | None, OscalDateTime | None]:
+    return _bounds(
+        [r.start for r in ar.results],
+        [r.end for r in ar.results if r.end is not None],
+    )
