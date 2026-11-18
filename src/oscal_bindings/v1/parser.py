@@ -6,6 +6,7 @@ into Pydantic models and serializing them back to JSON.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any, ClassVar, Self, cast
@@ -13,6 +14,7 @@ from typing import Any, ClassVar, Self, cast
 from pydantic import ValidationError
 
 from oscal_bindings.v1._base import DOCUMENT_TYPE_ERROR
+from oscal_bindings.v1._branches import select_branch_errors
 from oscal_bindings.v1.models import (
     AssessmentPlanDocument,
     AssessmentResultsDocument,
@@ -214,7 +216,11 @@ def parse_oscal(data: str | bytes) -> OscalDocument:
         limit = _limit_entry(e)
         if limit is None:
             # Name the root keys before the inputs are replaced (design D3).
-            errors = _omit_container_inputs(_name_root_keys(e.errors()))
+            errors = _omit_container_inputs(
+                select_branch_errors(
+                    _name_root_keys(e.errors()), lambda: json.loads(data)
+                )
+            )
     except ValueError as e:
         raise OscalParseError(f"Invalid JSON: {e}") from e
     # Raised outside the handler, so that neither __cause__ nor __context__
