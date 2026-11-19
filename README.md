@@ -12,7 +12,7 @@ Typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Secu
 - **Every OSCAL document type.** Catalog, Profile, Component Definition, System Security Plan, Assessment Plan, Assessment Results, Plan of Action and Milestones, and Mapping Collection, each with a typed parser.
 - **Strict input.** A parse rejects unknown fields, Python field names in place of OSCAL names, and values that break an OSCAL pattern, and reports each failure with its location.
 - **Valid OSCAL output.** Every serialization path writes OSCAL key names and never writes `null`.
-- **Compiled validation.** JSON parsing and most validation run in pydantic-core, the compiled Rust core of Pydantic. [PERFORMANCE.md](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/PERFORMANCE.md) has the measured parse, memory, and serialization costs.
+- **Validation in Rust.** JSON parsing and most validation run in pydantic-core, the compiled Rust core of Pydantic. [PERFORMANCE.md](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/PERFORMANCE.md) has the measured parse, memory, and serialization costs.
 - **One runtime dependency.** Only `pydantic`. JSON and YAML input as `str`, `bytes`, or a file path, with YAML as an optional extra.
 
 ## Installation
