@@ -255,6 +255,7 @@ only-include = [
   "docs",
   "DEVELOPING.md",
   "PERFORMANCE.md",
+  "spec-pin.json",
 ]
 
 [tool.hatch.envs.hatch-build]

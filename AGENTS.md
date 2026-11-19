@@ -66,6 +66,8 @@ tests/                 # One test module per source module + import smoke test
   support/scripts.py   # load_script(): how tests import modules from scripts/
 docs/                  # User guide pages; README.md keeps only the pitch, install, quick start, and links.
                        # docs/limits.md is the documented-limit table that tests tie to the constants
+spec-pin.json          # Pinned spec artifact version, read by the README sticker badge (store SRF-008/009);
+                       # must equal SPEC_ARTIFACT_VERSION (tests/test_spec_pin_sticker.py)
 PERFORMANCE.md        # Every performance number (time, GC, memory, YAML, serialization). Other docs point here; they state none
 requirements.txt       # Lockfile for the default env (hatch-pip-compile output)
 requirements/          # Lockfiles for hatch-test (per Python) and hatch-build
