@@ -78,7 +78,8 @@ oscal-bindings-python/
 ├── pyproject.toml               # Build config, deps, hatch envs/scripts
 ├── mise.toml / mise.lock        # Toolchain pins: Python 3.14, uv, Hatch (+ .mise/locks sidecar)
 ├── DEVELOPING.md                # Dev workflow + design-decision rationale
-└── README.md                    # User-facing usage guide
+├── docs/                        # User guide pages (parsing, models, YAML, errors, limits, ...)
+└── README.md                    # Pitch, install, quick start; links to docs/
 ```
 
 ## Codebase Structure Map

@@ -40,8 +40,8 @@ NOT_APPLICABLE: dict[str, str] = {
     # -- document-facade ----------------------------------------------------------
     # -- document-parsing ---------------------------------------------------------
     "PRS-010.01": (
-        "The binding documents no limit on the bytes of a JSON input (README, "
-        "Resource limits: no limit bounds the input size), so the scenario's "
+        "The binding documents no limit on the bytes of a JSON input (docs/limits.md: "
+        "no limit bounds the input size), so the scenario's "
         "precondition never holds."
     ),
     "PRS-011.01": (
@@ -70,12 +70,13 @@ NOT_APPLICABLE: dict[str, str] = {
     # -- element-validation -------------------------------------------------------
     "ELV-004.01": (
         "The scenario starts from a binding that documents a failure limit for element "
-        "validation; this binding documents none (the README limit table names no "
-        "validate_element row), and ELV-004.03 pins that it lists every failure."
+        "validation; this binding documents none (the limit table of docs/limits.md "
+        "names no validate_element row), and ELV-004.03 pins that it lists every "
+        "failure."
     ),
     "ELV-004.02": (
         "KNOWN GAP, not a rule that is out of scope: validate_element has a "
-        "depth limit that the README does not document. pydantic-core's depth "
+        "depth limit that docs/limits.md does not document. pydantic-core's depth "
         "limit stops an element nested about 500 levels or more, and the result "
         "is an invalid result with a recursion error, where ELV-004 allows only "
         "a documented limit and ERR-011 requires the limit-exceeded error. This "
@@ -95,7 +96,7 @@ NOT_APPLICABLE: dict[str, str] = {
     ),
     "ERR-011.01": (
         "KNOWN GAP, not a rule that is out of scope: validate_element has a "
-        "depth limit that the README does not document. pydantic-core's depth "
+        "depth limit that docs/limits.md does not document. pydantic-core's depth "
         "limit stops an element nested about 500 levels or more, and the result "
         "is an invalid result with a recursion error, where ELV-004 allows only "
         "a documented limit and ERR-011 requires the limit-exceeded error. This "
@@ -104,7 +105,7 @@ NOT_APPLICABLE: dict[str, str] = {
     ),
     "ERR-011.02": (
         "KNOWN GAP, not a rule that is out of scope: validate_element has a "
-        "depth limit that the README does not document. pydantic-core's depth "
+        "depth limit that docs/limits.md does not document. pydantic-core's depth "
         "limit stops an element nested about 500 levels or more, and the result "
         "is an invalid result with a recursion error, where ELV-004 allows only "
         "a documented limit and ERR-011 requires the limit-exceeded error. This "
@@ -268,7 +269,7 @@ NOT_APPLICABLE: dict[str, str] = {
     ),
     "YML-005.05": (
         "The scenario needs a documented limit on YAML input bytes; this binding "
-        "documents none (the README states that no limit bounds the input size), "
+        "documents none (docs/limits.md states that no limit bounds the input size), "
         "so no such limit exists."
     ),
 }

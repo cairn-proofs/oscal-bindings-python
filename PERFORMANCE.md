@@ -1,6 +1,6 @@
 # Performance of oscal-bindings (Python)
 
-This file holds every performance number of the project: parse time, garbage collection, memory, YAML cost, and serialization time. The README, `DEVELOPING.md`, and `AGENTS.md` point here and state no number of their own. A pull request that changes a number here updates this file in the same change.
+This file holds every performance number of the project: parse time, garbage collection, memory, YAML cost, and serialization time. The README, the `docs/` pages, `DEVELOPING.md`, and `AGENTS.md` point here and state no number of their own. A pull request that changes a number here updates this file in the same change.
 
 Absolute times depend on the machine, so compare ratios. Each section names its Python version. The document is the NIST SP 800-53 rev5 catalog (10.4 MB of JSON, 7.3 MB of YAML) unless a section says otherwise.
 

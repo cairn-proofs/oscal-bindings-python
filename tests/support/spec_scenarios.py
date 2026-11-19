@@ -35,7 +35,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 #: Directories and files whose text may name a scenario. A name outside the
 #: pinned artifact is a stale citation. ``openspec/changes/archive`` holds
 #: history and is not read, and the checker's own test uses made-up identifiers.
-_TEXT_ROOTS = ("src", "scripts", "tests", ".agents", "openspec")
+_TEXT_ROOTS = ("src", "scripts", "tests", ".agents", "openspec", "docs")
 _TEXT_FILES = ("README.md", "DEVELOPING.md", "AGENTS.md", "PERFORMANCE.md")
 _TEXT_SUFFIXES = {".py", ".md", ".json", ".toml", ".yml", ".yaml"}
 _SKIP_PARTS = {".corpus_cache", "__pycache__", "archive"}
