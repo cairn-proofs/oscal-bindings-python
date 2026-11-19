@@ -253,8 +253,10 @@ only-include = [
   "requirements.txt",
   "requirements",
   "README.md",
+  "docs",
   "DEVELOPING.md",
   "PERFORMANCE.md",
+  "spec-pin.json",
 ]
 
 [tool.hatch.envs.hatch-build]

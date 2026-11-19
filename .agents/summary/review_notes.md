@@ -11,7 +11,7 @@ Cross-document facts were verified against the source files (`v1/parser.py`, `v1
 | Fact | Consistent across docs? | Notes |
 |------|-------------------------|-------|
 | 8 document types + wrappers | ✅ | Same set in codebase_info, architecture, components, interfaces, data_models, workflows, index |
-| Parsers accept `str \| bytes` | ✅ | Stated identically in README, interfaces, workflows, index |
+| Parsers accept `str \| bytes` | ✅ | Stated identically in docs/parsing.md, interfaces, workflows, index |
 | `v1/models.py` is generated / do-not-edit | ✅ | Consistent everywhere; docs also flag that the top-level `models.py` is a hand-written alias module, not generated |
 | Public API is re-export-only in `v1/__init__.py` | ✅ | Matches actual `__all__` (35 curated names) |
 | Top level is a pure re-export; `__all__` derived from `v1.__all__` | ✅ | codebase_info, architecture, components, interfaces, index agree; asserted by `tests/test_oscal_bindings.py` |

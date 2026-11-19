@@ -237,6 +237,8 @@ names it, except `__oscal_schema_version__`.
 4. Run `hatch test --all`.
 5. Commit the regenerated `src/oscal_bindings/v1/models.py` with the pin. The CI drift check fails when the committed
    file is not what the pin generates.
+6. Set `version` in `spec-pin.json` to the new `SPEC_ARTIFACT_VERSION`, in the same commit. The README sticker reads
+   this file, and a test (`tests/test_spec_pin_sticker.py`) fails when the two differ.
 
 A reviewer of the pull request checks these items:
 

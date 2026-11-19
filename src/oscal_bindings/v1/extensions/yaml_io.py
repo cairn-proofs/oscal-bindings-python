@@ -51,13 +51,13 @@ These parse operations also apply the JSON digit limit of
 `oscal_bindings.v1.parser` at each number location: a number whose
 integer part has more than 4,300 digits is a parse error at its YAML location.
 The YAML depth limit is lower than the JSON depth limit, so the JSON depth
-limit never rejects a YAML input. The README lists every limit.
+limit never rejects a YAML input. docs/limits.md lists every limit.
 
 Content that the input writes out, and that no alias repeats, does not count
 against the two alias limits. No step of the parse recurses per nesting level,
 so the depth limit, not the interpreter's stack, rejects deep input. The limits
 do not bound the size of input without aliases. Its memory cost grows linearly
-with the input size, at a higher factor than the JSON path (see the README).
+with the input size, at a higher factor than the JSON path (see PERFORMANCE.md).
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ __all__ = [
     "serialize_oscal_yaml",
 ]
 
-# The three limits are not exported: the README and DEVELOPING state each value,
+# The three limits are not exported: docs/limits.md and DEVELOPING state each value,
 # and tests/test_lint_config.py ties the prose to these constants.
 
 #: The maximum number of nodes that aliases can add to one YAML input. Each use
