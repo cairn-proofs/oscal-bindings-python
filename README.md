@@ -1,9 +1,11 @@
 # oscal-bindings
 
-[![CI](https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml)
-[![PyPI](https://img.shields.io/pypi/v/oscal-bindings.svg)](https://pypi.org/project/oscal-bindings/)
-[![Python versions](https://img.shields.io/pypi/pyversions/oscal-bindings.svg)](https://pypi.org/project/oscal-bindings/)
-[![License](https://img.shields.io/pypi/l/oscal-bindings.svg)](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/LICENSE)
+<p align="center">
+  <a href="https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml"><img alt="CI" src="https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml/badge.svg?branch=main"></a>
+  <a href="https://pypi.org/project/oscal-bindings/"><img alt="PyPI" src="https://img.shields.io/pypi/v/oscal-bindings.svg"></a>
+  <a href="https://pypi.org/project/oscal-bindings/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/oscal-bindings.svg"></a>
+  <a href="https://github.com/cairn-proofs/oscal-bindings-python/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/pypi/l/oscal-bindings.svg"></a>
+</p>
 
 Typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Security Controls Assessment Language) v1.2.3, generated from the NIST JSON Schema with Pydantic v2.
 
