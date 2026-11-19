@@ -1,3 +1,6 @@
+[![oscal-bindings-specs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcairn-proofs%2Foscal-bindings-python%2Fmain%2Fspec-pin.json&query=%24.version&label=oscal-bindings-specs)](https://github.com/cairn-proofs/oscal-bindings-specs)
+[![conformance](https://img.shields.io/github/actions/workflow/status/cairn-proofs/oscal-bindings-python/build.yml?branch=main&label=conformance)](https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml)
+
 # oscal-bindings (Python)
 
 <p align="center">
