@@ -6,25 +6,29 @@
   states. Verify with `hatch test tests/test_docstring_markup.py` that it fails and names each of the eight files
   that hold a role.
 - [ ] 1.2 Replace each Sphinx role in the hand-written modules under `src/oscal_bindings/` with a code span, as design
-  D3 states. Change no other docstring text. Verify that `hatch test tests/test_docstring_markup.py` passes and that
+  D3 states. Name each member that a class takes from `datetime` or `OSError` with its base class, as D3 states.
+  Change no other docstring text. Verify that `hatch test tests/test_docstring_markup.py` passes and that
   `hatch test` passes, including `TestDocumentation` in `tests/test_oscal_datetime.py`.
 
 ## 2. Docs build
 
 - [ ] 2.1 Add `scripts/build_docs.py` as [design D1](design.md#d1-a-script-runs-pdoc-and-checks-its-output) states,
   and `docs/pdoc-templates/module.html.jinja2` as
-  [design D4](design.md#d4-the-template-renders-model-fields-without-pydantic-internals) states. Change the `docs`
-  script in `pyproject.toml` to `python scripts/build_docs.py`. Add `tests/test_build_docs.py`, which imports the
-  script with `load_script`. Verify with `hatch test tests/test_build_docs.py`:
-  1. The annotation filter gives `list[ParameterWithSelect | ParameterWithValues] | None` for the `params` field of
-     `Catalog`, and `str` for `StringDatatype`.
+  [design D4](design.md#d4-the-script-corrects-the-pydantic-output-of-pdoc) states. Change the `docs`
+  script in `pyproject.toml` to `python scripts/build_docs.py`. Add `pdoc` to the `extra-dependencies` of `hatch-test`
+  and run `hatch run lock`. Add `tests/test_build_docs.py`, which imports the script with `load_script`. Verify with
+  `hatch test tests/test_build_docs.py`:
+  1. The corrected `annotation_str` of the `params` field of `Catalog` is
+     `: list[oscal_bindings.v1.models.ParameterWithSelect | oscal_bindings.v1.models.ParameterWithValues] | None`.
+     The corrected `default_value_str` of `StringDatatype` is `str`.
   2. For a small output directory with one defect of D1 item 3, the output check reports that defect. For a
      directory with no defect, it reports nothing.
 - [ ] 2.2 Run `hatch run docs`. Verify that it exits 0, and in `build/api-docs`:
   1. `oscal_bindings/v1.html` has `Arguments`, `Returns`, and `Raises` section headings.
-  2. In `oscal_bindings/v1/models.html`, the `metadata` field of `Catalog` shows `metadata: Metadata` with no default,
-     and the `params` field shows `= None`.
-  3. The edit link of `oscal_bindings/v1.html` is
+  2. In `oscal_bindings/v1/models.html`, the `metadata` field of `Catalog` shows `metadata: Metadata` with no default.
+     The `params` field shows `= None`, and its annotation links to `#ParameterWithSelect`.
+  3. The `OscalDocument` entry of `oscal_bindings/v1.html` has no docstring from `RootModel`, and no `Generic` base.
+  4. The edit link of `oscal_bindings/v1.html` is
      `https://github.com/cairn-proofs/oscal-bindings-python/blob/main/src/oscal_bindings/v1/__init__.py`. With
      `DOCS_SOURCE_REF=v0.0.0` set, it has `v0.0.0` in place of `main`.
 - [ ] 2.3 Rewrite the module docstring of `src/oscal_bindings/__init__.py` as the overview of
@@ -49,15 +53,17 @@
   [design D7](design.md#d7-the-attest-job-signs-api-docszip) states. Update the comment above `attest`. Verify by
   reading the diff that `attest` signs `dist/api-docs.zip` and the packages in one step, and that `draft-release`
   attaches all three files.
-- [ ] 3.2 In `.github/workflows/release.yml`, add the `pages-deploy` job of
-  [design D8](design.md#d8-pages-deploy-runs-after-pypi-publish). Update the comment at the top of the file. Verify by
-  reading the diff that `pypi-publish` does not change, and that only `pages-deploy` has `pages: write`.
+- [ ] 3.2 In `.github/workflows/release.yml`, add the `docs-latest` and `pages-deploy` jobs of
+  [design D8](design.md#d8-pages-deploy-runs-after-pypi-publish-for-the-latest-release-only).
+  Update the comment at the top of the file. Verify by reading the diff that `pypi-publish` does not change, and
+  that only `pages-deploy` has `pages: write`.
 - [ ] 3.3 Run the zip command of the `attest` job on the `build/api-docs` of task 2.2, then the unzip command and the
   `index.html` test of `pages-deploy`, in a directory under `tmp/`. Verify that the unzipped directory has
   `index.html` at its root and the same file list as `build/api-docs`.
 - [ ] 3.4 Update the docs of the release flow:
-  1. `DEVELOPING.md` "Releasing": the docs asset and the deploy after the PyPI upload. Also the skip for a release that
-     is not the latest, and "Re-run failed jobs" for a failed deploy. Also the one-time settings of
+  1. `DEVELOPING.md` "Releasing": the docs asset and the deploy after the PyPI upload. The skip for a release
+     that is not the latest. The step to clear "Set as the latest release" for a release of an older line. "Re-run
+     failed jobs" for a failed deploy. Also the one-time settings of
      [design D9](design.md#d9-a-maintainer-sets-the-repo-settings-by-hand) with their `gh api` commands.
   2. `README.md`: a link to <https://cairn-proofs.github.io/oscal-bindings-python/> below the first paragraph.
   3. `AGENTS.md` "Config-Derived Facts", the CI item: the docs asset and `pages-deploy`.
@@ -73,7 +79,7 @@
 
 ## Workflow follow-up
 
-- Commit as `docs:` with `#90` in the message.
+- Commit as `docs:` with `#90` in the message. Commit only the files that the tasks name, and no build output.
 - On the pull request, verify that the CI `api-docs` artifact has the commit SHA in the edit links.
 - The user applies the settings of design D9 before the next release. The first published release after the merge
   tests the deploy path end to end.

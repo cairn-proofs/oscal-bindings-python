@@ -31,14 +31,14 @@ The current output also fails as a reference:
    4. `oscal_bindings.v1.models` has a page with an entry for each generated model. A field shows its type and its
       default, with no Pydantic internals.
    5. Each page links to its source file on GitHub at the commit or tag that CI built.
-   6. The build fails when its output has a duplicate entry or a Pydantic internal.
+   6. The build fails when its output has a duplicate entry, a Pydantic internal, or a dead local link.
 2. Each published release deploys its docs to the GitHub Pages site of the repo,
    <https://cairn-proofs.github.io/oscal-bindings-python/>. The site holds the docs of the latest published release.
    1. A `v*` tag build attaches the docs to the draft release as the asset `api-docs.zip`. The `attest` job signs it
       with the wheel and the sdist. Nothing rebuilds the docs after CI.
    2. When the release is published and the PyPI upload succeeds, a new `pages-deploy` job in `release.yml` verifies
       the provenance of `api-docs.zip` and deploys it. A failed PyPI upload deploys no docs.
-      A release that is not the latest release, such as a pre-release, deploys no docs.
+      A release that GitHub does not mark as the latest release, such as a pre-release, deploys no docs.
    3. Pushes to `main` and pull requests deploy no docs.
 3. The README links to the site. DEVELOPING.md tells how the deploy works and lists the one-time repo settings.
 
@@ -60,8 +60,9 @@ None. The change adds no binding behavior. It changes docstrings, the docs build
 2. Docstrings: the module docstrings of `oscal_bindings` and `oscal_bindings.v1`, and the Sphinx roles in eight
    hand-written modules under `src/oscal_bindings/`. No code changes.
 3. Tests: a new test that finds Sphinx roles in hand-written docstrings, and tests of `scripts/build_docs.py`.
+   The `hatch-test` env gets `pdoc`, so its four lockfiles change.
 4. CI: `.github/workflows/build.yml` (`checks`, `attest`, and `draft-release` jobs) and `.github/workflows/release.yml`
-   (new `pages-deploy` job).
+   (new `docs-latest` and `pages-deploy` jobs).
 5. Repo settings. A maintainer sets them one time by hand:
    1. GitHub Pages with the "GitHub Actions" source.
    2. A `github-pages` environment with a `v*` tag rule, a required reviewer, and a wait timer.
