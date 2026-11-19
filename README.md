@@ -2,6 +2,8 @@
 
 Typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Security Controls Assessment Language) v1.2.3, generated from the official NIST JSON Schema using datamodel-code-generator (Pydantic v2).
 
+API reference: <https://cairn-proofs.github.io/oscal-bindings-python/>
+
 ## Installation
 
 ```bash

@@ -28,7 +28,7 @@ hatch test --all --cover   # run tests with coverage across Python 3.11–3.15
 hatch run lint             # ruff check . && ruff format --check . (read-only)
 hatch run ruff format .    # apply formatting
 hatch run security         # bandit over src/ + scripts/, pip-audit over every lockfile
-hatch run docs             # generate pdoc API docs
+hatch run docs             # build the API docs (scripts/build_docs.py) and check them
 hatch run release          # full pipeline: generate + lint + typing + security + test + coverage + docs
 ```
 
@@ -97,6 +97,27 @@ a new black release could change `v1/models.py` with no change in this repo.
   `requirements-hatch-test.*.txt` files.
 - Do not add `mypy --install-types`: it installs stubs at run time, outside the lock.
   Declare any stub packages mypy needs in the default env's `dependencies`.
+
+## API docs
+
+`hatch run docs` runs `scripts/build_docs.py`. The script runs pdoc and writes the HTML site to `build/api-docs`:
+
+1. It corrects the way pdoc shows the generated Pydantic models: a field shows its plain type, a required field shows no
+   default, a scalar alias shows its base type, and a model takes no docstring or `Generic` base from Pydantic.
+2. It calls pdoc with `-d google` (docstrings are Google style) and the template directory `docs/pdoc-templates`, for
+   the modules `oscal_bindings`, `oscal_bindings.v1`, and `oscal_bindings.v1.models`. The template makes
+   `oscal_bindings.v1` the page of each public object. The `oscal_bindings` page is the home page and lists no object.
+3. It checks the output and exits non-zero with one line for each defect: an object on the home page, a search entry
+   outside `oscal_bindings.v1` or under two modules, a Pydantic internal in a page or in `search.js`, a missing page, or
+   a dead local link.
+
+The environment variable `DOCS_SOURCE_REF` sets the commit or tag that the "Edit on GitHub" links name. The default is
+`main`. CI sets it to the tag on a tag build, and to the commit SHA on each other build.
+
+Write docstrings in Google style, with Markdown code spans such as `` `parse_oscal` `` and no Sphinx roles such as
+`:func:`. `tests/test_docstring_markup.py` fails on a role. When a docstring names a member that a class takes from a
+base class outside the package (`datetime`, `OSError`), name the member with its base class, for example
+`` `datetime.timestamp()` ``. Otherwise pdoc links the name to an entry that does not exist, and the build fails.
 
 ## Code Generation Pipeline
 
@@ -291,6 +312,7 @@ scripts/
   pinned_archive.py        # Locked, sha256-checked download and safe extraction of a pinned archive
   manifest.py              # Validates names.json of the pinned artifact
   hoist_names.py           # Writes build/codegen/oscal_complete_schema.json with manifest-named definitions
+  build_docs.py            # Runs pdoc with corrections for the generated models, then checks the output
   postprocess_models.py    # Phase 1 structure fixes, added manifest types, and guards against the manifest
 tests/
   test_parser.py           # Parser / serializer / validator tests
@@ -344,16 +366,60 @@ artifact. Keep the CI matrix in `build.yml` in step with the hatch-test matrix.
 ## Releasing
 
 PyPI receives the exact wheel and sdist that CI built and tested; nothing rebuilds
-after CI.
+after CI. The same holds for the API docs: GitHub Pages receives the docs that CI built
+and signed.
 
 1. Bump `version` in `pyproject.toml` and merge it to `main`.
 2. Tag that commit `v<version>` (e.g. `v0.2.0`) and push the tag.
 3. CI (`build.yml`) fails fast if the tagged commit isn't on `main` or the tag isn't
    `v$(hatch version)` (the `tag-check` job). The `checks` job and one `test` job per
    Python run in parallel; `build` then builds the packages only if all passed, and
-   the tag run creates a **draft** GitHub release with the wheel and sdist attached.
-4. Review the draft and publish it. That triggers `release.yml`, which downloads the
-   attached files, checks their filenames match the tag, and uploads them to PyPI
-   via trusted publishing.
+   the tag run creates a **draft** GitHub release with the wheel, the sdist, and
+   `api-docs.zip` (the docs that the `checks` job built, with the tag in the source links)
+   attached. The `attest` job signs all three files.
+4. Review the draft. Publish it as the latest release. For a release of an older line,
+   clear "Set as the latest release" before you publish. A pre-release is never the
+   latest release. Publishing triggers `release.yml`, which downloads the wheel and the
+   sdist, checks their filenames match the tag, verifies their provenance, and uploads
+   them to PyPI via trusted publishing.
+5. When the upload succeeds, the `docs-latest` job checks that the tag is the release
+   that GitHub marks as the latest. If it is, the `pages-deploy` job waits for the
+   approval and the wait timer of the `github-pages` environment, verifies the
+   provenance of `api-docs.zip`, and deploys it to
+   <https://cairn-proofs.github.io/oscal-bindings-python/>. A release that is not the
+   latest deploys no docs and asks for no approval. A failed PyPI upload deploys no docs.
+   Pushes to `main` and pull requests deploy no docs.
 
-To retry a failed PyPI upload, run the `publish` workflow manually with the tag.
+To retry a failed PyPI upload, run the `publish` workflow manually with the tag. The
+docs deploy when the retry succeeds. If only `pages-deploy` fails, use "Re-run failed
+jobs" on that run. That deploys again and does not repeat the PyPI upload.
+
+### One-time settings for the docs deploy
+
+A workflow cannot enable Pages or create an environment with its own token. A maintainer
+runs these commands one time, before the first release that deploys docs:
+
+```bash
+# 1. Enable Pages with the "GitHub Actions" source.
+gh api -X POST repos/cairn-proofs/oscal-bindings-python/pages -f build_type=workflow
+
+# 2. Create (or update) the github-pages environment with the reviewer and the
+#    10-minute wait timer of the pypi environment, and custom deployment rules.
+gh api -X PUT repos/cairn-proofs/oscal-bindings-python/environments/github-pages \
+  --input - <<JSON
+{
+  "wait_timer": 10,
+  "reviewers": [{"type": "User", "id": $(gh api user --jq .id)}],
+  "deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}
+}
+JSON
+
+# 3. Let a run of a v* tag deploy. The ref of a release run is the tag, and the
+#    default rule of the environment allows only the default branch.
+gh api -X POST \
+  repos/cairn-proofs/oscal-bindings-python/environments/github-pages/deployment-branch-policies \
+  -f name='v*' -f type=tag
+```
+
+If a maintainer publishes a release before these settings exist, `pages-deploy` fails after
+the PyPI upload. Apply the settings, then use "Re-run failed jobs".

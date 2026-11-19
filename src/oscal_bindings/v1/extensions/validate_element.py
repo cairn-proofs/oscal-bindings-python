@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class OscalUnknownElementTypeError(Exception):
     """Raised when ``validate_element`` gets an unrecognized element type.
 
-    Not a subclass of :class:`OscalParseError`: it is a category of its own.
+    Not a subclass of `OscalParseError`: it is a category of its own.
     """
 
 

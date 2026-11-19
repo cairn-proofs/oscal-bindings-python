@@ -36,7 +36,7 @@ Managed through Hatch environments (`[tool.hatch.envs.default.dependencies]`) ra
 | `jsonschema-rs` | `==0.58.6` in the default env, where `hatch run generate` validates `names.json` against its JSON Schema (`scripts/manifest.py`). Also in `hatch-test` `extra-dependencies`, at the same version through the `default` constraint: validates serialized output against the OSCAL schema of the pinned spec artifact (`tests/test_schema_validation.py`) and the hoisted schema against the corpus (`tests/test_hoist_names.py`). Compiled, so it stays fast under coverage, and its regex engine supports the `\p{L}`/`\p{N}` classes in OSCAL patterns |
 | `mypy` | Static type checking (`hatch run typing`, over `src/oscal_bindings` including `v1`) |
 | `datamodel-code-generator[http,black,isort]` | `==0.83.0` in the default env for `hatch run generate` |
-| `pdoc` | API documentation (`hatch run docs` → `build/api-docs`) |
+| `pdoc` | API documentation (`hatch run docs` → `scripts/build_docs.py` → `build/api-docs`); also in the `hatch-test` env, because `tests/test_build_docs.py` imports the script |
 | `ruff` | Linting and formatting; configured in `pyproject.toml` (`[tool.ruff]`, line length 88, `py311` target, first-party `oscal_bindings`) and pinned (`ruff==0.16.8`) in the default env; `hatch run lint` is the single entry point |
 
 ## Build / Environment Tooling

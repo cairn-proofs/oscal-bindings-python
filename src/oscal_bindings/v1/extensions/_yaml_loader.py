@@ -1,4 +1,4 @@
-"""PyYAML-backed implementation of :mod:`oscal_bindings.v1.extensions.yaml_io`.
+"""PyYAML-backed implementation of `oscal_bindings.v1.extensions.yaml_io`.
 
 Private. The public functions in ``yaml_io`` import this module when they are
 called, so only a call needs PyYAML. See ``yaml_io`` for the contract, and the
@@ -817,7 +817,7 @@ def to_json_text(data: str | bytes) -> str:
 
 
 def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
-    """Implement :func:`oscal_bindings.v1.extensions.yaml_io.parse_oscal_yaml`."""
+    """Implement `parse_oscal_yaml`."""
     text, bad = _convert(data)
     if not bad:
         return parse_oscal(text)
@@ -833,7 +833,7 @@ def parse_oscal_yaml(data: str | bytes) -> OscalDocument:
 
 
 def parse_oscal_yaml_file(path: Path) -> OscalDocument:
-    """Implement :func:`oscal_bindings.v1.extensions.yaml_io.parse_oscal_yaml_file`."""
+    """Implement `parse_oscal_yaml_file`."""
     return parse_oscal_yaml(_read_oscal_file(path))
 
 
@@ -864,7 +864,7 @@ _DUMPER: Any = select_dumper()
 
 
 def serialize_oscal_yaml(model: OscalDocument) -> str:
-    """Implement :func:`oscal_bindings.v1.extensions.yaml_io.serialize_oscal_yaml`."""
+    """Implement `serialize_oscal_yaml`."""
     json_value = json.loads(model.model_dump_json(by_alias=True, exclude_none=True))
     dumped: str = yaml.dump(
         json_value,

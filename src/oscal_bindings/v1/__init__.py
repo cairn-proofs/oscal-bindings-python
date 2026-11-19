@@ -10,28 +10,37 @@ pinned schema regenerates this package in place rather than creating a new
 import path. ``__oscal_schema_version__`` records the exact release the bindings
 were generated from.
 
-Key Classes:
-    OscalDocument: The root model type representing any valid OSCAL document.
-    CatalogDocument: A catalog document wrapper.
-    ProfileDocument: A profile document wrapper.
-    OscalParseError: Exception raised when parsing or validation fails.
-    OscalDateTime: The ``datetime`` subclass of every OSCAL date-time field. It keeps
-        every fraction digit of the text; read its docstring for the arithmetic limits.
+Key classes:
 
-Key Functions:
-    parse_oscal: Parse an OSCAL JSON string into a typed model.
-    parse_oscal_file: Parse an OSCAL JSON file into a typed model.
-    serialize_oscal: Serialize an OSCAL model back to JSON.
-    validate_oscal: Validate a JSON string against the OSCAL schema.
-    parse_oscal_yaml: Parse an OSCAL YAML string into a typed model (``yaml`` extra).
-    parse_oscal_yaml_file: Parse an OSCAL YAML file into a typed model (``yaml`` extra).
-    serialize_oscal_yaml: Serialize an OSCAL model to YAML (``yaml`` extra).
-    parse_catalog: Parse JSON as a Catalog document.
-    parse_profile: Parse JSON as a Profile document.
-    parse_catalog_yaml: Parse YAML as a Catalog document (``yaml`` extra). Each of
-        the other seven document types has a ``parse_<type>_yaml`` too.
+1. `OscalDocument`: The root model type representing any valid OSCAL document.
+2. `CatalogDocument`: A catalog document wrapper.
+3. `ProfileDocument`: A profile document wrapper.
+4. `OscalParseError`: Exception raised when parsing or validation fails.
+5. `OscalDateTime`: The ``datetime`` subclass of every OSCAL date-time field. It
+   keeps every fraction digit of the text; read its docstring for the arithmetic
+   limits.
+
+Key functions:
+
+1. `parse_oscal`: Parse an OSCAL JSON string into a typed model.
+2. `parse_oscal_file`: Parse an OSCAL JSON file into a typed model.
+3. `serialize_oscal`: Serialize an OSCAL model back to JSON.
+4. `validate_oscal`: Validate a JSON string against the OSCAL schema.
+5. `parse_oscal_yaml`: Parse an OSCAL YAML string into a typed model (``yaml``
+   extra).
+6. `parse_oscal_yaml_file`: Parse an OSCAL YAML file into a typed model (``yaml``
+   extra).
+7. `serialize_oscal_yaml`: Serialize an OSCAL model to YAML (``yaml`` extra).
+8. `parse_catalog`: Parse JSON as a Catalog document.
+9. `parse_profile`: Parse JSON as a Profile document.
+10. `parse_catalog_yaml`: Parse YAML as a Catalog document (``yaml`` extra). Each
+    of the other seven document types has a ``parse_<type>_yaml`` too.
+
+The other generated models, such as `Catalog` and `Metadata`, are documented in
+`oscal_bindings.v1.models`.
 
 Example:
+
     >>> from oscal_bindings.v1 import parse_oscal_file, serialize_oscal
     >>> doc = parse_oscal_file("catalog.json")
     >>> json_str = serialize_oscal(doc)

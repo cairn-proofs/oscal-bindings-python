@@ -62,20 +62,19 @@ class OscalDateTime(datetime):
     - ``value + timedelta`` and ``value - timedelta`` keep the digits beyond the
       sixth, because a ``timedelta`` has no finer part to change them.
     - ``replace`` and ``astimezone`` keep the digits, unless ``replace`` sets
-      ``microsecond``.
+      ``datetime.microsecond``.
     - ``value - other`` gives a ``timedelta``, which holds microseconds. The
       digits beyond the sixth of both operands are **not** in the difference, so
       the difference of two values that differ only after the sixth digit is
       zero, while ``value == other`` is false. Compare values with ``<``, ``==``
       and ``>``, not by a difference, when digits beyond the sixth matter.
-    - ``timestamp()``, ``strftime()``, ``timetuple()``, ``time()``,
-      ``timetz()``, and ``isoformat(timespec=...)`` with a ``timespec`` other
-      than ``"auto"`` use the microsecond value only and drop the digits beyond
-      the sixth.
-    - ``fromisoformat`` keeps the digits of the text. ``combine``,
-      ``fromtimestamp``, ``now``, and the other constructors have no text to
-      keep them from.
-
+    - ``datetime.timestamp()``, ``datetime.strftime()``,
+      ``datetime.timetuple()``, ``datetime.time()``, ``datetime.timetz()``, and
+      ``isoformat(timespec=...)`` with a ``timespec`` other than ``"auto"`` use the
+      microsecond value only and drop the digits beyond the sixth.
+    - ``fromisoformat`` keeps the digits of the text. ``datetime.combine``,
+      ``datetime.fromtimestamp``, ``datetime.now``, and the other constructors
+      have no text to keep them from.
     A value is immutable and can be pickled and copied.
     """
 
@@ -100,13 +99,13 @@ class OscalDateTime(datetime):
         """Build a value like ``datetime``, with the digits of ``fraction``.
 
         ``fraction`` is the text after the decimal point of the seconds, with at
-        least the digits of ``microsecond`` as its first six (padded with
+        least the digits of ``datetime.microsecond`` as its first six (padded with
         zeros). It is empty for a whole second. Omit it to write the
         microseconds as ``datetime`` does.
 
         Raises:
             ValueError: If ``fraction`` is not a run of digits, or its first
-                six digits are not ``microsecond``.
+                six digits are not ``datetime.microsecond``.
         """
         self = super().__new__(
             cls,
@@ -154,7 +153,7 @@ class OscalDateTime(datetime):
         """The digits after the decimal point of the seconds, as the text wrote them.
 
         An empty string for a whole second. At least the six digits of
-        `microsecond` when a ``datetime`` was converted, and every digit of the
+        `datetime.microsecond` when a ``datetime`` was converted, and every digit of the
         text when the value was parsed: ``"1234567"`` for ``...05.1234567Z``.
         """
         return self._digits()
@@ -304,7 +303,7 @@ class OscalDateTime(datetime):
     def replace(self, *args: Any, **kwargs: Any) -> Self:  # type: ignore[override]
         """Return a copy with fields changed.
 
-        The digits stay unless ``microsecond`` is set.
+        The digits stay unless ``datetime.microsecond`` is set.
         """
         result = super().replace(*args, **kwargs)
         if "microsecond" not in kwargs and len(args) < _MICROSECOND_ARGUMENT:

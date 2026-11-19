@@ -1,0 +1,22 @@
+{#
+    The module template of the API docs. scripts/build_docs.py passes this directory to pdoc.
+
+    The default `is_public` macro stays the base. These members are not public here:
+    1. Each member of the module `oscal_bindings` that is not a module. `oscal_bindings.v1` is the
+       canonical page of each object.
+    2. Each member of `oscal_bindings.v1.models` whose name is in `oscal_bindings.v1.__all__`. Its entry
+       is on the `oscal_bindings.v1` page.
+    3. Each member whose name is not an identifier (a `RootModel[...]` parametrization), or starts with
+       `__pydantic`.
+
+    `v1_public_names` is a template global that scripts/build_docs.py sets.
+#}
+{% extends "default/module.html.jinja2" %}
+{% macro is_public(doc) %}
+    {% if doc.modulename == "oscal_bindings" and doc.kind != "module" %}
+    {% elif doc.modulename == "oscal_bindings.v1.models" and doc.qualname in v1_public_names %}
+    {% elif not doc.name.isidentifier() or doc.name.startswith("__pydantic") %}
+    {% else %}
+        {{ default_is_public(doc) }}
+    {% endif %}
+{% endmacro %}

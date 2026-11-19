@@ -1,6 +1,6 @@
 """Top-level module path for the hand-written extension helpers.
 
-The extensions live in :mod:`oscal_bindings.v1.extensions`; this module
+The extensions live in `oscal_bindings.v1.extensions`; this module
 re-exports their public surface so that
 ``from oscal_bindings.extensions import OscalDoc`` resolves. Re-export
 binds the same objects, so type identity holds across both paths.
