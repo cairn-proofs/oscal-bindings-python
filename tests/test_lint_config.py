@@ -207,7 +207,7 @@ def test_postprocess_script_still_prints() -> None:
 # --- Resource limits: the documented values match the constants (PRS-010) ----
 
 
-@pytest.mark.parametrize("doc", ["README.md", "DEVELOPING.md"])
+@pytest.mark.parametrize("doc", ["docs/limits.md", "DEVELOPING.md"])
 def test_yaml_limit_values_are_documented(doc: str) -> None:
     from oscal_bindings.v1.extensions.yaml_io import (
         ALIAS_CHAR_LIMIT,
@@ -221,7 +221,7 @@ def test_yaml_limit_values_are_documented(doc: str) -> None:
     assert f"{DEPTH_LIMIT} levels" in text
 
 
-@pytest.mark.parametrize("doc", ["README.md", "DEVELOPING.md"])
+@pytest.mark.parametrize("doc", ["docs/limits.md", "DEVELOPING.md"])
 def test_json_limit_values_are_documented(doc: str) -> None:
     from oscal_bindings.v1.parser import JSON_DEPTH_LIMIT, JSON_DIGIT_LIMIT
 
@@ -230,16 +230,16 @@ def test_json_limit_values_are_documented(doc: str) -> None:
     assert f"{JSON_DIGIT_LIMIT:,} digits" in text
 
 
-def _readme_limits_section() -> str:
-    text = (PYPROJECT.parent / "README.md").read_text(encoding="utf-8")
-    start = text.index("### Resource limits")
-    # The section ends at the next heading of level 2 or 3.
-    end = re.compile(r"\n#{2,3} ").search(text, start + 1)
+def _limits_section() -> str:
+    text = (PYPROJECT.parent / "docs" / "limits.md").read_text(encoding="utf-8")
+    start = text.index("# Resource limits")
+    # The section ends at the next heading of level 1 to 3.
+    end = re.compile(r"\n#{1,3} ").search(text, start + 1)
     assert end is not None
     return text[start : end.start()]
 
 
-def test_readme_limit_rows_state_values_and_operations() -> None:
+def test_documented_limit_rows_state_values_and_operations() -> None:
     # PRS-010: each documented limit names its measure and its operations.
     # ERR-002: a limit that applies to the validity check names the check.
     from oscal_bindings.v1.extensions.yaml_io import (
@@ -251,7 +251,7 @@ def test_readme_limit_rows_state_values_and_operations() -> None:
 
     rows = {
         line.split("|")[1].strip(): line
-        for line in _readme_limits_section().splitlines()
+        for line in _limits_section().splitlines()
         if line.startswith("| ") and not line.startswith("| Limit")
     }
     assert f"{JSON_DEPTH_LIMIT} levels" in rows["JSON depth"]
