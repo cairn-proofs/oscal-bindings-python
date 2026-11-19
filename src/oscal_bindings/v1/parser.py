@@ -96,7 +96,7 @@ class OscalParseError(Exception):
 class OscalDocumentTypeMismatchError(OscalParseError):
     """Raised when a typed parser reads a document of another type.
 
-    A subclass of :class:`OscalParseError`, so ``except OscalParseError`` also
+    A subclass of `OscalParseError`, so ``except OscalParseError`` also
     catches it. A parse error of another kind is not an instance of this class.
     """
 
@@ -104,14 +104,14 @@ class OscalDocumentTypeMismatchError(OscalParseError):
 class OscalReadError(OSError):
     """Raised when a file-path parse cannot read the file at a path (ERR-012).
 
-    A subclass of :class:`OSError`, so ``except OSError`` catches it and
-    :class:`FileNotFoundError`, the not-found error. It is not a parse error
+    A subclass of `OSError`, so ``except OSError`` catches it and
+    `FileNotFoundError`, the not-found error. It is not a parse error
     and not a not-found error: it is not an instance of
-    :class:`OscalParseError` or of :class:`FileNotFoundError`. A path that the
-    platform reports as missing raises :class:`FileNotFoundError`. Each other
+    `OscalParseError` or of `FileNotFoundError`. A path that the
+    platform reports as missing raises `FileNotFoundError`. Each other
     read failure (a directory, a permission failure, a loop of symbolic links,
-    an I/O error) raises this error. Its ``errno``, ``strerror``, and
-    ``filename`` come from the failure, and its message names the path.
+    an I/O error) raises this error. Its ``OSError.errno``, ``OSError.strerror``, and
+    ``OSError.filename`` come from the failure, and its message names the path.
     """
 
 
@@ -258,7 +258,7 @@ def parse_oscal_file(path: Path | str) -> OscalDocument:
 def _read_oscal_file(path: Path | str) -> bytes:
     """Read an OSCAL file for a file parser (PRS-002).
 
-    Shared by :func:`parse_oscal_file` and the YAML file parser, so both report
+    Shared by `parse_oscal_file` and the YAML file parser, so both report
     a missing file and a read failure the same way. The error of the read
     itself finds the category, with no ``exists()`` call before it.
 

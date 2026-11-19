@@ -1,31 +1,30 @@
-"""OSCAL Python data bindings — top-level re-export of :mod:`oscal_bindings.v1`.
+"""Typed Python data bindings for OSCAL (Open Security Controls Assessment Language).
 
-The implementation lives in the major-version package :mod:`oscal_bindings.v1`.
-This module defines no symbols of its own: it re-exports that package's public
-surface so callers can use the shorter ``oscal_bindings`` path, and it
-star-imports :mod:`oscal_bindings.v1.models` so every generated model name is
-importable directly from ``oscal_bindings``.
+The bindings read and write the eight OSCAL document types as Pydantic v2 models.
+They are generated from the OSCAL 1.2.3 JSON Schema. `__oscal_schema_version__`
+holds the exact OSCAL release.
 
-Because these are re-exports rather than wrappers, a name reached through this
-module is the *same object* as the one reached through :mod:`oscal_bindings.v1`,
-so ``isinstance`` agrees regardless of which path a class came from.
+Install the package. The `yaml` extra adds the YAML operations. The base install
+has one runtime dependency, `pydantic`.
 
-``__all__`` is taken from :attr:`oscal_bindings.v1.__all__` rather than
-restated, so the two surfaces cannot drift apart.
+```bash
+pip install oscal-bindings
+pip install "oscal-bindings[yaml]"
+```
 
-New code should prefer the explicit path::
-
-    >>> from oscal_bindings.v1 import parse_oscal_file, serialize_oscal
-
-The top-level path is equivalent::
+Example:
 
     >>> from oscal_bindings import parse_oscal_file, serialize_oscal
     >>> doc = parse_oscal_file("catalog.json")
     >>> json_str = serialize_oscal(doc)
 
-See :mod:`oscal_bindings.v1` for the documented API surface and
-``__oscal_schema_version__`` for the exact OSCAL release the models were
-generated from.
+The package `oscal_bindings` re-exports `oscal_bindings.v1`. A name that you
+reach through either path is the same object, so `isinstance` agrees. The
+reference for each class and function is on the page of `oscal_bindings.v1`.
+The page of `oscal_bindings.v1.models` documents each generated model.
+
+For the full guide, read the
+[README](https://github.com/cairn-proofs/oscal-bindings-python#readme).
 """
 
 from oscal_bindings import v1 as _v1

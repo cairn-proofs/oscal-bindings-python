@@ -100,7 +100,11 @@ jobs:
       - name: Security
         run: hatch run security
 
+      # The edit links of the docs name the tag on a tag build, and the commit on
+      # each other build (scripts/build_docs.py).
       - name: Docs
+        env:
+          DOCS_SOURCE_REF: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || github.sha }}
         run: hatch run docs
 
       - name: Upload API docs
@@ -189,10 +193,11 @@ jobs:
             build/*.tar.gz
           if-no-files-found: error
 
-  # Signs build provenance for the wheel and sdist, binding each file digest to
-  # this workflow, the commit, and the tag. release.yml verifies it before the
-  # PyPI upload, so files that this job did not sign are refused. Only this job
-  # holds id-token and attestations write.
+  # Signs build provenance for the wheel, the sdist, and the zip of the API docs,
+  # binding each file digest to this workflow, the commit, and the tag. release.yml
+  # verifies it before the PyPI upload and before the docs deploy, so files that
+  # this job did not sign are refused. Only this job holds id-token and
+  # attestations write.
   attest:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
@@ -209,15 +214,35 @@ jobs:
           name: python-packages
           path: dist/
 
+      # The docs that the checks job built for this tag. The zip has index.html at
+      # its root, because zip runs inside the directory of the docs.
+      - name: Download API docs
+        uses: actions/download-artifact@v4
+        with:
+          name: api-docs
+          path: api-docs/
+
+      - name: Zip API docs
+        run: (cd api-docs && zip -r -q ../dist/api-docs.zip .)
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
         with:
           subject-path: |
             dist/*.whl
             dist/*.tar.gz
+            dist/api-docs.zip
+
+      - name: Upload signed API docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-docs
+          path: dist/api-docs.zip
+          if-no-files-found: error
 
   draft-release:
     # Needs attest so that a draft release never exists without attestations.
+    # dist/ holds the wheel, the sdist, and api-docs.zip, and all three are attached.
     needs: [build, attest]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -229,6 +254,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: python-packages
+          path: dist/
+
+      - name: Download signed API docs
+        uses: actions/download-artifact@v4
+        with:
+          name: release-docs
           path: dist/
 
       # Draft only: a human reviews and publishes, which triggers release.yml.

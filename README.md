@@ -17,6 +17,8 @@ Typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Secu
 - **One runtime dependency.** Only `pydantic`. JSON and YAML input as `str`, `bytes`, or a file path, with YAML as an optional extra.
 - **Consistent interoperability.** The bindings implement the [language-neutral OSCAL bindings spec](https://github.com/cairn-proofs/oscal-bindings-specs) and the tests pass its full conformance corpus.
 
+API reference: <https://cairn-proofs.github.io/oscal-bindings-python/>
+
 ## Installation
 
 ```bash

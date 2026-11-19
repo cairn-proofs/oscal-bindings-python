@@ -88,7 +88,7 @@ dependencies = [
 
 [tool.hatch.envs.default.scripts]
 generate = "python scripts/hoist_names.py && datamodel-codegen --input ./build/codegen/oscal_complete_schema.json --output ./build/codegen/models.py --input-file-type jsonschema --output-model-type pydantic_v2.BaseModel --base-class oscal_bindings.v1._base.OscalBaseModel --collapse-root-models --use-annotated --field-constraints --target-python-version 3.11 --use-schema-description --disable-timestamp --formatters black isort && python scripts/postprocess_models.py --models ./build/codegen/models.py --output src/oscal_bindings/v1/models.py"
-docs = "pdoc oscal_bindings oscal_bindings.v1 -o build/api-docs"
+docs = "python scripts/build_docs.py"
 # No --install-types: it would pip-install stubs at run time, outside the lockfile.
 # Add any stub packages mypy needs to `dependencies` above instead.
 typing = "mypy src/oscal_bindings tests/typing"
@@ -137,7 +137,8 @@ pip-compile-constraint = "default"
 parallel = true
 # pyyaml: the YAML corpus cases and the yaml_io unit tests import it. Constrained
 # to default's pin (6.0.3). types-PyYAML is not here; stubs are a typing concern.
-extra-dependencies = ["hypothesis", "jsonschema-rs", "pyyaml"]
+# pdoc: tests/test_build_docs.py imports scripts/build_docs.py, which imports pdoc.
+extra-dependencies = ["hypothesis", "jsonschema-rs", "pdoc", "pyyaml"]
 
 # Hatch runs cov-combine and then cov-report once after `hatch test --cover`.
 # cov-report adds the HTML report ([tool.coverage.html] sets the directory)

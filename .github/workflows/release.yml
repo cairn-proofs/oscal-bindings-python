@@ -2,7 +2,9 @@ name: publish
 
 # Uploads the wheel and sdist attached to a GitHub release to PyPI. Those files
 # are the ones CI built and tested (build.yml's draft-release job); this
-# workflow never rebuilds.
+# workflow never rebuilds. After the upload succeeds, it deploys the API docs
+# (api-docs.zip, attached by the same job) to GitHub Pages, but only when the
+# release is the one that GitHub marks as the latest release.
 on:
   release:
     types: [published]
@@ -94,3 +96,85 @@ jobs:
           print-hash: true
           # uncomment for testing
           # repository-url: https://test.pypi.org/legacy/
+
+  # Compares the tag with the release that GitHub marks as the latest release. A
+  # pre-release is never the latest release. This job has no environment, so a
+  # release that is not the latest asks for no approval.
+  docs-latest:
+    name: Check that the release is the latest
+    needs: pypi-publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      latest: ${{ steps.compare.outputs.latest }}
+    steps:
+      - name: Compare the tag with the latest release
+        id: compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          latest="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          if [ "$latest" = "$TAG" ]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG is not the latest release ($latest). The docs are not deployed."
+          fi
+
+  # Deploys the API docs of the release to GitHub Pages. The environment
+  # github-pages holds the required reviewer and the wait timer. Only this job
+  # has pages write.
+  pages-deploy:
+    name: Deploy API docs to GitHub Pages
+    needs: docs-latest
+    if: needs.docs-latest.outputs.latest == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read   # download release assets
+      pages: write     # deploy to Pages
+      id-token: write  # mandatory for the Pages deploy and its OIDC check
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Download API docs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            -D dist/ \
+            --pattern "api-docs.zip"
+      # Same checks as the PyPI upload: build.yml signed the zip for this tag.
+      - name: Verify build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          digest="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)"
+          if ! [[ "$digest" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve tag $TAG to a commit"
+            exit 1
+          fi
+          gh attestation verify dist/api-docs.zip \
+            --repo cairn-proofs/oscal-bindings-python \
+            --signer-workflow cairn-proofs/oscal-bindings-python/.github/workflows/build.yml \
+            --source-ref "refs/tags/$TAG" \
+            --source-digest "$digest"
+      - name: Unzip API docs
+        run: |
+          unzip -q dist/api-docs.zip -d site/
+          test -f site/index.html
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: site/
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1
