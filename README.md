@@ -14,7 +14,7 @@ Typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Secu
 - **Valid OSCAL output.** Every serialization path writes OSCAL key names and never writes `null`.
 - **Measured performance.** [PERFORMANCE.md](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/PERFORMANCE.md) has the parse, memory, and serialization costs.
 - **One runtime dependency.** Only `pydantic`. JSON and YAML input as `str`, `bytes`, or a file path, with YAML as an optional extra.
-- **Implements oscal-bindings-specs.** The bindings follow the [language-neutral OSCAL bindings spec](https://github.com/cairn-proofs/oscal-bindings-specs): type names come from its naming manifest, and the tests pass its full conformance corpus. One known gap, a depth limit of `validate_element`, is tracked in [#89](https://github.com/cairn-proofs/oscal-bindings-python/issues/89).
+- **Implements oscal-bindings-specs.** The bindings implement the [language-neutral OSCAL bindings spec](https://github.com/cairn-proofs/oscal-bindings-specs) and the tests pass its full conformance corpus.
 
 ## Installation
 
