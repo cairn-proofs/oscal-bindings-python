@@ -14,6 +14,7 @@ Typed Python data bindings for [OSCAL](https://pages.nist.gov/OSCAL/) (Open Secu
 - **Valid OSCAL output.** Every serialization path writes OSCAL key names and never writes `null`.
 - **Measured performance.** [PERFORMANCE.md](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/PERFORMANCE.md) has the parse, memory, and serialization costs.
 - **One runtime dependency.** Only `pydantic`. JSON and YAML input as `str`, `bytes`, or a file path, with YAML as an optional extra.
+- **Implements oscal-bindings-specs.** The bindings follow the [language-neutral OSCAL bindings spec](https://github.com/cairn-proofs/oscal-bindings-specs): type names come from its naming manifest, and the tests pass its full conformance corpus. One known gap, a depth limit of `validate_element`, is tracked in [#89](https://github.com/cairn-proofs/oscal-bindings-python/issues/89).
 
 ## Installation
 
@@ -131,7 +132,6 @@ oscal-bindings is the typed data-binding layer for one OSCAL release: Pydantic m
 
 - [Source](https://github.com/cairn-proofs/oscal-bindings-python) · [Issues](https://github.com/cairn-proofs/oscal-bindings-python/issues) · [PyPI](https://pypi.org/project/oscal-bindings/) · [Releases](https://github.com/cairn-proofs/oscal-bindings-python/releases)
 - Contributing: [DEVELOPING.md](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/DEVELOPING.md) covers the code generation pipeline, the locked environments, and the architecture.
-- Names: every type name comes from the naming manifest of [oscal-bindings-specs](https://github.com/cairn-proofs/oscal-bindings-specs).
 - Other languages: [oscal-bindings (TypeScript)](https://github.com/cairn-proofs/oscal-bindings-typescript) follows the same [language-neutral contract](https://github.com/cairn-proofs/oscal-bindings-specs).
 
 ## License
