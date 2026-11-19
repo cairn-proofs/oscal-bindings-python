@@ -127,6 +127,7 @@ The bindings live in `oscal_bindings.v1`, named for the OSCAL major version, and
 - [Source](https://github.com/cairn-proofs/oscal-bindings-python) · [Issues](https://github.com/cairn-proofs/oscal-bindings-python/issues) · [PyPI](https://pypi.org/project/oscal-bindings/) · [Releases](https://github.com/cairn-proofs/oscal-bindings-python/releases)
 - Contributing: [DEVELOPING.md](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/DEVELOPING.md) covers the code generation pipeline, the locked environments, and the architecture.
 - Names: every type name comes from the naming manifest of [oscal-bindings-specs](https://github.com/cairn-proofs/oscal-bindings-specs).
+- Other languages: [oscal-bindings (TypeScript)](https://github.com/cairn-proofs/oscal-bindings-typescript) follows the same [language-neutral contract](https://github.com/cairn-proofs/oscal-bindings-specs).
 
 ## License
 
