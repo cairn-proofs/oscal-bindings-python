@@ -1,9 +1,7 @@
-[![oscal-bindings-specs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcairn-proofs%2Foscal-bindings-python%2Fmain%2Fspec-pin.json&query=%24.version&label=oscal-bindings-specs)](https://github.com/cairn-proofs/oscal-bindings-specs)
-[![conformance](https://img.shields.io/github/actions/workflow/status/cairn-proofs/oscal-bindings-python/build.yml?branch=main&label=conformance)](https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml)
-
 # oscal-bindings (Python)
 
 <p align="center">
+  <a href="https://github.com/cairn-proofs/oscal-bindings-specs"><img alt="oscal-bindings-specs" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcairn-proofs%2Foscal-bindings-python%2Fmain%2Fspec-pin.json&query=%24.version&label=oscal-bindings-specs"></a>
   <a href="https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml"><img alt="CI" src="https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml/badge.svg?branch=main"></a>
   <a href="https://pypi.org/project/oscal-bindings/"><img alt="PyPI" src="https://img.shields.io/pypi/v/oscal-bindings.svg"></a>
   <a href="https://pypi.org/project/oscal-bindings/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/oscal-bindings.svg"></a>
