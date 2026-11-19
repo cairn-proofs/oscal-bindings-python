@@ -1,4 +1,4 @@
-# oscal-bindings
+# oscal-bindings (Python)
 
 <p align="center">
   <a href="https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml"><img alt="CI" src="https://github.com/cairn-proofs/oscal-bindings-python/actions/workflows/build.yml/badge.svg?branch=main"></a>
