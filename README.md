@@ -108,9 +108,13 @@ yaml_text = serialize_oscal_yaml(doc)
 
 The bindings live in `oscal_bindings.v1`, named for the OSCAL major version, and the top-level package re-exports it, so `from oscal_bindings import parse_oscal` and `from oscal_bindings.v1 import parse_oscal` give the same object. A 1.x schema refresh regenerates `v1` in place and never changes your imports. See [Installation and versions](https://github.com/cairn-proofs/oscal-bindings-python/blob/main/docs/installation.md#import-paths).
 
-## Compared with compliance-trestle
+## Other Python OSCAL libraries
 
-[compliance-trestle](https://github.com/oscal-compass/compliance-trestle) is a compliance workflow tool: workspaces, document splitting, Markdown authoring, and CI governance, built on its own OSCAL object model. oscal-bindings is only the data-binding layer: typed models with strict parse, validate, and serialize, and no dependency beyond Pydantic. Use trestle to run an authoring workflow; use oscal-bindings when your code reads, builds, or checks OSCAL.
+- [compliance-trestle](https://github.com/oscal-compass/compliance-trestle) is a compliance workflow tool: workspaces, document splitting, Markdown authoring, and CI governance, built on its own OSCAL object model. Use it to run an authoring workflow.
+- [oscal](https://github.com/brian-ruf/oscal-class) loads, validates, converts, and queries OSCAL in XML, JSON, and YAML for every published OSCAL version, and resolves profiles and imports. Use it when you need XML, several OSCAL versions at once, or profile resolution.
+- [oscal-pydantic-v2](https://github.com/RS-Credentive/oscal-pydantic) provides Pydantic models for OSCAL. Its latest release covers the Catalog and Profile models, without parse or serialize helpers.
+
+oscal-bindings is the typed data-binding layer for one OSCAL release: Pydantic models for all eight document types that type checkers and IDEs understand, strict parsing that reports each failure with its location, valid OSCAL on every serialization path, and no dependency beyond Pydantic.
 
 ## Documentation
 
