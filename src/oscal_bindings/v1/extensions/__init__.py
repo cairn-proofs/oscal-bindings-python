@@ -12,6 +12,7 @@ from oscal_bindings.v1.extensions.document import (
 )
 from oscal_bindings.v1.extensions.validate_element import (
     ElementValidationResult,
+    OscalLimitExceededError,
     OscalUnknownElementTypeError,
     get_supported_element_types,
     validate_element,
@@ -44,6 +45,7 @@ __all__ = [
     "OscalBody",
     "OscalBuilderError",
     "OscalDoc",
+    "OscalLimitExceededError",
     "OscalUnknownElementTypeError",
     "OscalWrapper",
     "get_supported_element_types",

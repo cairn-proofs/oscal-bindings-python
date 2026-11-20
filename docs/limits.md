@@ -1,6 +1,6 @@
 # Resource limits
 
-The parse operations apply six documented limits (PRS-010 of the spec store). An input past any of them is an `OscalParseError`, also when the document is otherwise valid, and `validate_oscal` returns `False` for it. The error carries one entry whose `type` names the limit, and no entry holds the input text. The error also has the attribute `limit`, the identifier in the last column of the table. The two alias limits share an entry `type`, and `limit` tells them apart. For each other parse error, `limit` is `None`. Test an `OscalParseError` with `error.limit is not None`, and an error of any class with `getattr(error, "limit", None) is not None`.
+The parse operations apply six documented limits (PRS-010 of the spec store). An input past any of them is an `OscalParseError`, also when the document is otherwise valid, and `validate_oscal` returns `False` for it. The error carries one entry whose `type` names the limit, and no entry holds the input text. The error also has the attribute `limit`, the identifier in the last column of the table. The two alias limits share an entry `type`, and `limit` tells them apart. For each other parse error, `limit` is `None`. Test an `OscalParseError` with `error.limit is not None`, and an error of any class with `getattr(error, "limit", None) is not None`. `validate_element` has one more limit, the depth of an element. [Element validation](limits.md#element-validation) describes it.
 
 | Limit | Value | Measure | Operations | Entry `type` | `limit` |
 |---|---|---|---|---|---|
@@ -12,6 +12,16 @@ The parse operations apply six documented limits (PRS-010 of the spec store). An
 | Line-break placeholders | about 137,000 private-use characters | The free private-use characters that a YAML input with U+0085, U+2028, or U+2029 leaves for them | `parse_oscal_yaml`, `parse_oscal_yaml_file`, the eight typed YAML parsers | `yaml_line_break_placeholder` | `yaml_line_break_placeholders` |
 
 pydantic-core's JSON parser sets the two JSON limits, and the binding cannot change them. The YAML depth limit is lower than the JSON depth limit, so deep YAML input always gets the YAML depth error. For a JSON limit, the entry's `line` and `column` give the position in the JSON text, and `column` counts UTF-8 bytes. For a YAML input, they give the position in the YAML source. No limit bounds the input size. See [Performance](limits.md#performance) for the memory that a parse uses.
+
+## Element validation
+
+`validate_element` applies one documented limit (ELV-004 of the spec store), the depth of an element. It has no limit on the number of failures: the result lists every failure.
+
+1. **Operation.** `validate_element`. The parse operations do not apply this limit.
+2. **Measure.** The nested validations of a recursive type, for example the groups in the `groups` list of a group. The measure is not the number of levels of the element.
+3. **Value.** About 255 on CPython for Linux and macOS, and lower on Windows and PyPy (99) and on wasm (49). For `catalog-group-with-groups` on CPython for Linux and macOS, 255 levels of groups is the last level that passes. The values for `catalog-group` and `catalog-document` are one level lower.
+4. **Why the value is approximate.** pydantic-core sets the limit, not the binding. It counts nested validations of a recursive type, not levels of the element. The count at which it stops an element depends on the element type. The count depends on the platform. A release of pydantic-core can change the count.
+5. **Error.** An element over the limit raises `OscalLimitExceededError`, and `validate_element` returns no result. The attribute `limit` of the error is `element_depth`. The error is not an `OscalParseError`. A group that holds itself in its own `groups` list also raises it, because the limit cannot tell it from a deep element.
 
 ## Performance
 

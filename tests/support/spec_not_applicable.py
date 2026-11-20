@@ -70,18 +70,9 @@ NOT_APPLICABLE: dict[str, str] = {
     # -- element-validation -------------------------------------------------------
     "ELV-004.01": (
         "The scenario starts from a binding that documents a failure limit for element "
-        "validation; this binding documents none (the limit table of docs/limits.md "
-        "names no validate_element row), and ELV-004.03 pins that it lists every "
-        "failure."
-    ),
-    "ELV-004.02": (
-        "KNOWN GAP, not a rule that is out of scope: validate_element has a "
-        "depth limit that docs/limits.md does not document. pydantic-core's depth "
-        "limit stops an element nested about 500 levels or more, and the result "
-        "is an invalid result with a recursion error, where ELV-004 allows only "
-        "a documented limit and ERR-011 requires the limit-exceeded error. This "
-        "scenario needs a real test once the limit is documented and reported "
-        "(issue #89)."
+        "validation; this binding has no limit on the number of failures (its only "
+        "documented limit for element validation is the depth limit, which ELV-004.02 "
+        "covers), and ELV-004.03 pins that it lists every failure."
     ),
     # -- error-model --------------------------------------------------------------
     "ERR-001.08": (
@@ -93,24 +84,6 @@ NOT_APPLICABLE: dict[str, str] = {
         "The scenario compares two bindings in different languages; a single "
         "binding cannot show agreement between a raising binding and a "
         "returning binding."
-    ),
-    "ERR-011.01": (
-        "KNOWN GAP, not a rule that is out of scope: validate_element has a "
-        "depth limit that docs/limits.md does not document. pydantic-core's depth "
-        "limit stops an element nested about 500 levels or more, and the result "
-        "is an invalid result with a recursion error, where ELV-004 allows only "
-        "a documented limit and ERR-011 requires the limit-exceeded error. This "
-        "scenario needs a real test once the limit is documented and reported "
-        "(issue #89)."
-    ),
-    "ERR-011.02": (
-        "KNOWN GAP, not a rule that is out of scope: validate_element has a "
-        "depth limit that docs/limits.md does not document. pydantic-core's depth "
-        "limit stops an element nested about 500 levels or more, and the result "
-        "is an invalid result with a recursion error, where ELV-004 allows only "
-        "a documented limit and ERR-011 requires the limit-exceeded error. This "
-        "scenario needs a real test once the limit is documented and reported "
-        "(issue #89)."
     ),
     # -- model-derivation ---------------------------------------------------------
     "MDL-007.01": (

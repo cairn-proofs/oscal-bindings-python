@@ -84,6 +84,7 @@ Each check runs in pydantic-core with the Rust `regex` engine. The pattern liter
 - Type unions `OscalBody` and `OscalWrapper` (each an 8-way union), and the module-private `_WRAPPER_TO_BODY_ATTR` dispatch map.
 - `OscalAccessError` — raised when a typed accessor is used on the wrong document type.
 - `OscalUnknownElementTypeError` — raised by `validate_element` for an unrecognized element type; a category of its own, outside the parse errors.
+- `OscalLimitExceededError` — raised by `validate_element` for an element over the depth limit (`limit` = `element_depth`); a category of its own, outside the parse errors.
 - `OscalDocumentTypeMismatchError` (in `parser.py`) — a subclass of `OscalParseError` that the typed parsers raise for a document of another type. `OscalParseError.limit` names the documented limit that stopped a parse, else `None`.
 
 ## 4. `v1/extensions/builders.py` — back-matter builders
@@ -105,7 +106,7 @@ Each check runs in pydantic-core with the Rust `regex` engine. The pattern liter
 - `_build_element_map()` — introspects `oscal_bindings.v1.models` for each manifest type by its run-time form (a `BaseModel` subclass, an `Enum` subclass, or a `types.UnionType` alias that `models` defines), building `{kebab-name: type}`; result cached in module-level `_ELEMENT_MAP`. The set is pinned by the `element-types/all` corpus case.
 - `validate_element` calls `model_validate(element)` for a model, and a `TypeAdapter` (made on first use, cached in `_ADAPTERS`) for an enum or a union; dict input stays alias-only from the models' defaults.
 - `get_supported_element_types() -> list[str]` — sorted kebab names.
-- `validate_element(element: Any, element_type: str) -> ElementValidationResult` — raises `OscalUnknownElementTypeError` for an unrecognized type; otherwise returns a result with `valid` and a list of `ValidationError(path, message)`.
+- `validate_element(element: Any, element_type: str) -> ElementValidationResult` — raises `OscalUnknownElementTypeError` for an unrecognized type and `OscalLimitExceededError` for an element over the depth limit; otherwise returns a result with `valid` and a list of `ValidationError(path, message)`.
 - Dataclasses `ElementValidationResult` and `ValidationError` (re-exported as `ElementValidationError`).
 
 ## 6. `v1/__init__.py` — version package surface

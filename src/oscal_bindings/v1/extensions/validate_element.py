@@ -23,6 +23,28 @@ class OscalUnknownElementTypeError(Exception):
     """
 
 
+#: The ``limit`` identifier of the element depth limit (ERR-010).
+_ELEMENT_DEPTH_LIMIT = "element_depth"
+
+
+class OscalLimitExceededError(Exception):
+    """Raised when ``validate_element`` gets an element over its depth limit.
+
+    The limit is the recursion guard of pydantic-core. A group that holds itself
+    in its own ``groups`` list also exceeds it. See `docs/limits.md`.
+
+    Not a subclass of `OscalParseError`: it is a category of its own.
+
+    Attributes:
+        limit: The identifier of the limit that stopped the validation,
+            ``element_depth``.
+    """
+
+    def __init__(self, message: str, *, limit: str) -> None:
+        super().__init__(message)
+        self.limit = limit
+
+
 @dataclass
 class ValidationError:
     path: str
@@ -120,6 +142,10 @@ def validate_element(element: Any, element_type: str) -> ElementValidationResult
 
     Raises:
         OscalUnknownElementTypeError: If element_type is not recognized.
+        OscalLimitExceededError: If the element nests deeper than the depth
+            limit of pydantic-core, or holds itself at a position of its own
+            recursive type. Its ``limit`` is ``element_depth``. No result is
+            returned.
     """
     if element_type not in _ELEMENT_MAP:
         raise OscalUnknownElementTypeError(
@@ -128,20 +154,31 @@ def validate_element(element: Any, element_type: str) -> ElementValidationResult
             f"{', '.join(sorted(list(_ELEMENT_MAP.keys())[:10]))}..."
         )
 
+    depth_exceeded = False
     try:
         _validator(element_type)(element)
         return ElementValidationResult(valid=True)
     except PydanticValidationError as e:
-        errors = [
-            ValidationError(
-                path=".".join(str(loc) for loc in err["loc"]) or "/",
-                message=err["msg"],
-            )
-            for err in select_branch_errors(e.errors(), lambda: element)
-        ]
-        return ElementValidationResult(valid=False, errors=errors)
+        entries = e.errors()
+        # Only a flag leaves the block: the entries hold the element as
+        # ``input``, so the error must not chain to the ``ValidationError``.
+        depth_exceeded = any(err["type"] == "recursion_loop" for err in entries)
+        if not depth_exceeded:
+            errors = [
+                ValidationError(
+                    path=".".join(str(loc) for loc in err["loc"]) or "/",
+                    message=err["msg"],
+                )
+                for err in select_branch_errors(entries, lambda: element)
+            ]
+            return ElementValidationResult(valid=False, errors=errors)
     except Exception as e:
         return ElementValidationResult(
             valid=False,
             errors=[ValidationError(path="/", message=str(e))],
         )
+
+    raise OscalLimitExceededError(
+        "Element nesting exceeds the depth limit of element validation",
+        limit=_ELEMENT_DEPTH_LIMIT,
+    )
