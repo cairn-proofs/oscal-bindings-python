@@ -18,6 +18,7 @@ For each category in this list, an error SHALL be in the category exactly when i
 6. Read error: `OscalReadError`, a subclass of `OSError`, which is not a subclass of `OscalParseError` or of
    `FileNotFoundError`.
 7. Builder error: `OscalBuilderError`, a subclass of `ValueError`, which is not a subclass of `OscalParseError`.
+8. Limit exceeded: `OscalLimitExceededError`, which is not a subclass of `OscalParseError`.
 
 A caller tests a category with `isinstance`.
 
@@ -47,6 +48,11 @@ A caller tests a category with `isinstance`.
 - **WHEN** the caller builds a hash with the algorithm ` SHA-256`, which has a leading space
 - **THEN** the error is an instance of `OscalBuilderError` and an instance of `ValueError`
 - **AND** the error is not an instance of `OscalParseError`
+
+#### Scenario: A limit-exceeded error is not a parse error
+
+- **WHEN** the caller validates an element that nests deeper than the documented element depth limit
+- **THEN** the error is an instance of `OscalLimitExceededError` and not an instance of `OscalParseError`
 
 ### Requirement: A file-path parse finds the category of a read failure from the read
 
@@ -98,6 +104,7 @@ Each documented limit SHALL have the identifier in this list:
 4. YAML alias character limit: `yaml_alias_characters`.
 5. YAML depth limit: `yaml_depth`.
 6. YAML line-break placeholder limit: `yaml_line_break_placeholders`.
+7. Element depth limit: `element_depth`.
 
 No two limits have the same identifier.
 
@@ -114,8 +121,9 @@ The attribute `limit` of an `OscalParseError` SHALL be the limit property of the
 1. When a documented limit stopped the parse, `limit` is the identifier of that limit.
 2. For each other parse error, `limit` is `None`.
 
-A caller tests the property of an `OscalParseError` with `error.limit is not None`. Only `OscalParseError` and its
-subclasses have the attribute. For an error of any class, the test is `getattr(error, "limit", None) is not None`.
+A caller tests the property of an `OscalParseError` with `error.limit is not None`. Only `OscalParseError`, its
+subclasses, and `OscalLimitExceededError` have the attribute. For an error of any class, the test is
+`getattr(error, "limit", None) is not None`.
 
 #### Scenario: A JSON input over the depth limit
 

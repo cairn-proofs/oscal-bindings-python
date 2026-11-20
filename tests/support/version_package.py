@@ -45,6 +45,7 @@ PUBLISHED_ALL = frozenset(
         "OscalDoc",
         "OscalDocument",
         "OscalDocumentTypeMismatchError",
+        "OscalLimitExceededError",
         "OscalParseError",
         "OscalReadError",
         "OscalUnknownElementTypeError",

@@ -7,7 +7,7 @@ from oscal_bindings import (
     validate_element,
 )
 from oscal_bindings.parser import OscalParseError
-from oscal_bindings.v1 import OscalUnknownElementTypeError
+from oscal_bindings.v1 import OscalLimitExceededError, OscalUnknownElementTypeError
 
 # Minimal valid observation
 VALID_OBSERVATION = {
@@ -137,7 +137,7 @@ class TestGetSupportedElementTypes:
 
 
 class TestNoUndocumentedLimit:
-    """The binding documents no limit for element validation (ELV-004)."""
+    """The binding has no limit on the number of failures (ELV-004)."""
 
     @pytest.mark.spec("ELV-004.03")
     def test_ten_thousand_failures_are_all_listed(self):
@@ -149,3 +149,86 @@ class TestNoUndocumentedLimit:
         for i in range(10_000):
             assert f"resources.{i}.uuid" in paths
         assert len(result.errors) >= 10_000
+
+
+CATALOG_METADATA = {
+    "title": "Test Catalog",
+    "last-modified": "2026-01-01T00:00:00+00:00",
+    "version": "1.0",
+    "oscal-version": "1.2.3",
+}
+
+
+def _nested_group(levels: int) -> dict:
+    """A group with ``levels`` levels of groups in its ``groups`` list."""
+    group: dict = {"title": "leaf"}
+    for i in range(levels):
+        group = {"title": f"group {i}", "groups": [group]}
+    return group
+
+
+def _nested_catalog(levels: int) -> dict:
+    return {
+        "catalog": {
+            "uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            "metadata": CATALOG_METADATA,
+            "groups": [_nested_group(levels)],
+        }
+    }
+
+
+# The element types of the three forms of a recursive type: a model, a union, a
+# document. Each form has its own entry in the element map.
+_DEEP_ELEMENTS = [
+    pytest.param("catalog-group-with-groups", _nested_group, id="model"),
+    pytest.param("catalog-group", _nested_group, id="union"),
+    pytest.param("catalog-document", _nested_catalog, id="document"),
+]
+
+
+class TestElementDepthLimit:
+    """An element over the depth limit is a limit-exceeded error (ELV-004, ERR-011)."""
+
+    def test_error_keeps_its_limit(self):
+        error = OscalLimitExceededError("message", limit="element_depth")
+        assert error.limit == "element_depth"
+        assert str(error) == "message"
+
+    @pytest.mark.spec("ERR-011.02")
+    def test_error_is_not_a_parse_error(self):
+        with pytest.raises(OscalLimitExceededError) as excinfo:
+            validate_element(_nested_group(1_000), "catalog-group-with-groups")
+        assert not isinstance(excinfo.value, OscalParseError)
+        assert not issubclass(OscalLimitExceededError, OscalParseError)
+
+    @pytest.mark.spec("ELV-004.02", "ERR-011.01")
+    @pytest.mark.parametrize(("element_type", "build"), _DEEP_ELEMENTS)
+    def test_element_over_the_limit_raises(self, element_type, build):
+        with pytest.raises(OscalLimitExceededError) as excinfo:
+            validate_element(build(1_000), element_type)
+        error = excinfo.value
+        assert error.limit == "element_depth"
+        # The ValidationError holds the element as input; the error keeps no link to it.
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
+    @pytest.mark.parametrize(("element_type", "build"), _DEEP_ELEMENTS)
+    def test_element_within_the_limit_is_valid(self, element_type, build):
+        result = validate_element(build(20), element_type)
+        assert result.valid is True
+        assert result.errors is None
+
+    def test_failure_within_the_limit_is_an_invalid_result(self):
+        group = _nested_group(20)
+        group["props"] = [{}]  # a prop without its required name and value
+        result = validate_element(group, "catalog-group-with-groups")
+        assert result.valid is False
+        assert result.errors
+
+    @pytest.mark.parametrize("copies", [1, 2])
+    def test_group_that_holds_itself_raises_and_ends(self, copies):
+        group: dict = {"title": "self"}
+        group["groups"] = [group] * copies
+        with pytest.raises(OscalLimitExceededError) as excinfo:
+            validate_element(group, "catalog-group-with-groups")
+        assert excinfo.value.limit == "element_depth"

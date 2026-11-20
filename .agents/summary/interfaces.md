@@ -128,6 +128,7 @@ sequenceDiagram
 | `assessment_period()` on non-AP/AR | `OscalAccessError` |
 | `OscalDoc(...)` with unrelated object | `TypeError` |
 | `validate_element` unrecognized element type | `OscalUnknownElementTypeError` (outside the parse errors) |
+| `validate_element` element over the depth limit (nested too deep, or holds itself) | `OscalLimitExceededError` (outside the parse errors; `.limit` = `element_depth`) |
 | Builders with invalid input (also an empty `key`, or a `key` with a `uuid`) | `OscalBuilderError` (a `ValueError`, outside the parse errors; `.errors` = entries) |
 | `validate_oscal` on invalid input | returns `False` (never raises) |
 
